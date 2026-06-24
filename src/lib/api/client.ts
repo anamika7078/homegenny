@@ -11,7 +11,7 @@ const BASE_URL =
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 30_000,
+  timeout: 60_000,   // 60s — covers Render free-tier cold starts (can take 30-60s)
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -282,7 +282,7 @@ export interface ApiClient {
 
 export const api: ApiClient = {
   login: (phone: string, password: string, totp?: string) =>
-    apiClient.post('/auth/login', { phone, password, totp }),
+    apiClient.post('/auth/login', { phone, password, totp }, { timeout: 90_000 }), // 90s for cold-start
   logout: () => apiClient.post('/auth/logout').catch(() => { }),
   me: () => apiClient.get('/auth/me'),
 

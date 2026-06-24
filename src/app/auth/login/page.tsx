@@ -64,13 +64,22 @@ export default function LoginPage() {
       router.push(getDashboardPath(user.role));
     },
 
-    onError: (err: Error & { status?: number }) => {
+    onError: (err: Error & { status?: number; code?: string }) => {
       if (err.status === 409) {
         setDialog('other_system');
         return;
       }
       if (err.status === 401) {
         setDialog('invalid_credentials');
+        return;
+      }
+      // Axios timeout (ECONNABORTED) or network error — likely Render cold-start
+      if (
+        err.message?.toLowerCase().includes('timeout') ||
+        (err as any).code === 'ECONNABORTED' ||
+        err.message?.toLowerCase().includes('network')
+      ) {
+        toast.error('Server is waking up — please wait a few seconds and try again.', { duration: 6000 });
         return;
       }
       toast.error(err.message ?? 'Login failed');
