@@ -287,7 +287,9 @@ export default function AdminVideoCertificationsPage() {
                           <div className="flex items-center gap-2">
                             <Badge className={style.className}>{style.label}</Badge>
                             {cert.neverDelete && (
-                              <Lock className="h-3 w-3 text-amber-400" title="Fraud lock — never delete" />
+                              <span title="Fraud lock — never delete">
+                                <Lock className="h-3 w-3 text-amber-400" aria-hidden />
+                              </span>
                             )}
                           </div>
                         </td>
