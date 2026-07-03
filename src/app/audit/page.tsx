@@ -4,13 +4,13 @@ import { useQuery } from '@tanstack/react-query';
 import { AppShell } from '@/components/layout/app-shell';
 import { Card, CardContent } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/loading';
-import { apiClient } from '@/lib/api/client';
+import { api } from '@/lib/api/client';
 import { format } from 'date-fns';
 
 export default function AuditLogsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['audit', 'logs'],
-    queryFn: () => apiClient.get('/audit/logs?limit=30'),
+    queryFn: () => api.getAuditLogs({ limit: 30 }),
   });
 
   const payload = (data as { data?: { items?: Array<Record<string, unknown>> } })?.data ?? data;

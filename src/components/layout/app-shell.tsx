@@ -1,7 +1,7 @@
 'use client';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/lib/store/auth.store';
-import { apiClient } from '@/lib/api/client';
+import { api } from '@/lib/api/client';
 import { Sidebar } from './sidebar';
 import { RmSidebar } from './rm-sidebar';
 import { Topbar } from './topbar';
@@ -31,7 +31,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return;
     }
     if (!u) {
-      apiClient.get('/auth/me')
+      api.me()
         .then((body: any) => {
           const data = body?.data !== undefined ? body.data : body;
           if (data?.id) {

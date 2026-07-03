@@ -51,8 +51,8 @@ export default function StaffPipelinePage() {
   });
 
   const updateStageMutation = useMutation({
-    mutationFn: ({ id, stage }: { id: string, stage: string }) => 
-      api.updateStaff(id, { pipeline_stage: stage }),
+    mutationFn: ({ id, stage }: { id: string, stage: string }) =>
+      api.advanceRmPipeline(id, { to_stage: stage }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-staff'] });
       toast.success('Stage updated successfully');

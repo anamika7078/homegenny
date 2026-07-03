@@ -84,7 +84,7 @@ export const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
       { href: '/branches', label: 'Branches', icon: 'Building2', permission: 'system.branches.manage', roles: ['ADMIN'] },
       { href: '/payroll', label: 'Payroll', icon: 'DollarSign', permission: 'finance.payroll', roles: ['FINANCE', 'ADMIN'] },
       { href: '/invoices', label: 'Invoices', icon: 'Receipt', permission: 'finance.invoices', roles: ['FINANCE', 'ADMIN'] },
-      { href: '/monitoring', label: 'System Status', icon: 'Activity', permission: 'system.cron.monitor', roles: ['ADMIN'] },
+      { href: '/monitoring', label: 'System Status', icon: 'Activity', permission: 'system.cron.monitor', roles: ['BM', 'ADMIN'] },
     ],
   },
 ];

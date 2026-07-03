@@ -47,15 +47,19 @@ export default function EsicPfPage() {
 
   useEffect(() => { load(); }, [month, year]);
 
-  const handleExport = (type: 'ESIC' | 'PF') => {
-    const url = api.getEsicPfExportUrl(type, month, year);
-    const token = typeof window !== 'undefined' ? localStorage.getItem('hg_access_token_v2') : '';
-    // Build a temp anchor with auth token as query param (for CSV download)
-    const a = document.createElement('a');
-    a.href = `${url}&token=${token ?? ''}`;
-    a.download = `HomeGenny_${type}_${month}_${year}.csv`;
-    a.click();
-    showToast('success', `${type} report exported as CSV`);
+  const handleExport = async (type: 'ESIC' | 'PF') => {
+    try {
+      const blob = await api.exportEsicPf(type, month, year);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `HomeGenny_${type}_${month}_${year}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('success', `${type} report exported as CSV`);
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Export failed');
+    }
   };
 
   const years = Array.from({ length: 4 }, (_, i) => currentDate.getFullYear() - i);

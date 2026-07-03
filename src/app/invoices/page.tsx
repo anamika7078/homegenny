@@ -10,11 +10,12 @@ import { api } from '@/lib/api/client';
 export default function InvoicesPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['invoices'],
-    queryFn: () => api.getPlacements({ limit: 200 }),
+    queryFn: () => api.getFinanceInvoices({ page: 1 }),
     refetchInterval: 60000,
   });
 
-  const placements: any[] = (data as any)?.data?.items || [];
+  const payload = (data as any)?.data ?? data;
+  const invoices: any[] = Array.isArray(payload) ? payload : payload?.data ?? [];
 
   return (
     <AppShell>
@@ -26,27 +27,29 @@ export default function InvoicesPage() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-800/60">
                   <tr>
-                    {['Invoice No','Period','Amount','Status','Due Date','Actions'].map(h => (
+                    {['Invoice No','Period','Amount','Status','Due Date','Client'].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {placements.slice(0, 20).map((p: any) => (
-                    <tr key={p.id} className="hover:bg-slate-800/30">
-                      <td className="px-4 py-3 font-mono text-xs text-brand-400">INV-{p.id?.slice(0,8)}</td>
-                      <td className="px-4 py-3 text-xs text-slate-300">Current Month</td>
-                      <td className="px-4 py-3 text-xs text-slate-300">{fCurrency(p.staff_salary)}</td>
-                      <td className="px-4 py-3"><Badge variant="yellow">PENDING</Badge></td>
-                      <td className="px-4 py-3 text-xs text-slate-400">{fDate(p.billing_start_date)}</td>
-                      <td className="px-4 py-3">
-                        <button className="text-xs text-brand-400 hover:text-brand-300">View</button>
+                  {invoices.slice(0, 20).map((inv: any) => (
+                    <tr key={inv.id} className="hover:bg-slate-800/30">
+                      <td className="px-4 py-3 font-mono text-xs text-brand-400">{inv.invoice_number}</td>
+                      <td className="px-4 py-3 text-xs text-slate-300">
+                        {inv.period_month}/{inv.period_year}
                       </td>
+                      <td className="px-4 py-3 text-xs text-slate-300">{fCurrency(inv.total_amount)}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={inv.status === 'PAID' ? 'green' : 'yellow'}>{inv.status ?? 'PENDING'}</Badge>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-400">{fDate(inv.due_date)}</td>
+                      <td className="px-4 py-3 text-xs text-slate-300">{inv.client_name ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {placements.length === 0 && (
+              {invoices.length === 0 && (
                 <div className="text-center py-12 text-slate-500">No invoices yet</div>
               )}
             </div>

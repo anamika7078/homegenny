@@ -3,7 +3,7 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 // NEXT_PUBLIC_API_URL is baked at Docker build time via --build-arg
 // For local dev:   NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
 // For production:  NEXT_PUBLIC_API_URL=https://api.homegenny.com/api/v1
-const BASE_URL =
+export const BASE_URL =
   process.env['NEXT_PUBLIC_API_URL'] ||
   (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
     ? `${window.location.origin}/api/v1`
@@ -177,7 +177,11 @@ export interface ApiClient {
 
   calculatePayroll(grossSalary: number, feePercent: number): Promise<any>;
   queuePayrollBatch(body: { month: number; year: number; series?: string }): Promise<any>;
+  /** @deprecated Alias for queuePayrollBatch — /payroll/trigger does not exist on backend */
   triggerPayroll(month: number, year: number): Promise<any>;
+
+  getAuditLogs(params?: { limit?: number }): Promise<any>;
+  getAlarms(params?: { severity?: string; category?: string; status?: string }): Promise<any>;
 
   // ── Finance Role APIs ──────────────────────────────────────────────────────
   // Payroll
@@ -202,6 +206,8 @@ export interface ApiClient {
   // ESIC / PF
   getEsicChallan(month: number, year: number): Promise<any>;
   getPfEcr(month: number, year: number): Promise<any>;
+  exportEsicPf(type: 'ESIC' | 'PF', month: number, year: number): Promise<Blob>;
+  /** @deprecated Use exportEsicPf — raw URL downloads bypass Bearer auth */
   getEsicPfExportUrl(type: 'ESIC' | 'PF', month: number, year: number): string;
 
   // Deposits
@@ -356,7 +362,7 @@ export const api: ApiClient = {
     apiClient.get('/reports/rm-productivity', { params: rmId ? { rmId } : {} }),
 
   listInvoices: (params?: Record<string, unknown>) =>
-    apiClient.get('/invoices', { params }),
+    apiClient.get('/finance/invoices', { params }),
 
   calculatePayroll: (grossSalary: number, feePercent: number) =>
     apiClient.post('/payroll/calculate', {
@@ -366,7 +372,7 @@ export const api: ApiClient = {
   queuePayrollBatch: (body: { month: number; year: number; series?: string }) =>
     apiClient.post('/payroll/queue-batch', body),
   triggerPayroll: (month: number, year: number) =>
-    apiClient.post('/payroll/trigger', { month, year }),
+    apiClient.post('/payroll/queue-batch', { month, year }),
 
   // ── Finance Role APIs ──────────────────────────────────────────────────────
   // Payroll
@@ -407,7 +413,16 @@ export const api: ApiClient = {
   getPfEcr: (month: number, year: number) =>
     apiClient.get('/finance/esic/pf-ecr', { params: { month, year } }),
   getEsicPfExportUrl: (type: 'ESIC' | 'PF', month: number, year: number): string =>
-    `${process.env['NEXT_PUBLIC_API_URL'] || 'http://localhost:3001/api/v1'}/finance/esic/export?type=${type}&month=${month}&year=${year}`,
+    `${BASE_URL}/finance/esic/export?type=${type}&month=${month}&year=${year}`,
+  exportEsicPf: async (type: 'ESIC' | 'PF', month: number, year: number): Promise<Blob> => {
+    const token = tokenStore.getAccess();
+    const res = await axios.get(`${BASE_URL}/finance/esic/export`, {
+      params: { type, month, year },
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      responseType: 'blob',
+    });
+    return res.data as Blob;
+  },
 
   // Deposits
   getFinanceDeposits: (status?: string) =>
@@ -432,8 +447,12 @@ export const api: ApiClient = {
     apiClient.get('/finance/analytics/invoice-aging'),
   // ───────────────────────────────────────────────────────────────────────────
 
-  listUsers: (params?: Record<string, unknown>) => apiClient.get('/users', { params }),
-  createUser: (body: Record<string, unknown>) => apiClient.post('/users', body),
+  listUsers: (params?: Record<string, unknown>) => apiClient.get('/admin/users', { params }),
+  createUser: (body: Record<string, unknown>) => apiClient.post('/admin/users/create', body),
+  getAuditLogs: (params?: { limit?: number }) =>
+    apiClient.get('/audit/logs', { params }),
+  getAlarms: (params?: { severity?: string; category?: string; status?: string }) =>
+    apiClient.get('/alarms', { params }),
   health: () => apiClient.get('/health'),
 
   // Monitoring
