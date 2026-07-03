@@ -79,7 +79,7 @@ export default function TwoFactorPage() {
         };
 
         if (body.requires_totp_setup && body.otpauth_url && body.totp_secret) {
-          applySetupPayload({ secret: body.totp_secret, otpauth_url: body.otpauth_url });
+          applySetupPayload({ totp_secret: body.totp_secret, otpauth_url: body.otpauth_url });
           return;
         }
 
@@ -117,7 +117,7 @@ export default function TwoFactorPage() {
         toast.error('Could not generate a new QR code');
         return;
       }
-      applySetupPayload({ secret: body.totp_secret, otpauth_url: body.otpauth_url });
+      applySetupPayload({ totp_secret: body.totp_secret, otpauth_url: body.otpauth_url });
       toast.success('New QR code ready — remove the old HomeGenny entry in your app, then scan this one');
     } catch (e) {
       toast.error((e as Error).message ?? 'Failed to generate new QR code');
@@ -153,7 +153,7 @@ export default function TwoFactorPage() {
 
       // Backend still returning setup-required (shouldn't happen after setup, but guard)
       if (body.requires_totp_setup && body.otpauth_url && body.totp_secret) {
-        applySetupPayload({ secret: body.totp_secret, otpauth_url: body.otpauth_url });
+        applySetupPayload({ totp_secret: body.totp_secret, otpauth_url: body.otpauth_url });
         return;
       }
 
