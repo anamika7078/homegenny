@@ -39,14 +39,39 @@ export default function TwoFactorPage() {
   const { setAuth } = useAuthStore();
   const router = useRouter();
 
-  /* Detect first-time Admin setup from session storage */
+  /* Detect first-time Admin setup from session storage or backend state */
   useEffect(() => {
     const otpauth = sessionStorage.getItem('hg_totp_otpauth');
     const secret  = sessionStorage.getItem('hg_totp_secret');
     if (otpauth && secret) {
       setMode('setup');
       setSetupData({ otpauth_url: otpauth, secret });
+      return;
     }
+
+    const phone    = sessionStorage.getItem('hg_2fa_phone') ?? '';
+    const password = sessionStorage.getItem('hg_2fa_password') ?? '';
+    if (!phone || !password) return;
+
+    void (async () => {
+      try {
+        const res     = await api.login(phone.replace(/\D/g, ''), password);
+        const payload = (res as { data?: Record<string, unknown> })?.data ?? res;
+        const body    = payload as {
+          requires_totp_setup?: boolean;
+          totp_secret?: string;
+          otpauth_url?: string;
+        };
+        if (body.requires_totp_setup && body.otpauth_url && body.totp_secret) {
+          setMode('setup');
+          setSetupData({ secret: body.totp_secret, otpauth_url: body.otpauth_url });
+          sessionStorage.setItem('hg_totp_otpauth', body.otpauth_url);
+          sessionStorage.setItem('hg_totp_secret', body.totp_secret);
+        }
+      } catch {
+        // User may still have a configured authenticator — stay on verify screen
+      }
+    })();
   }, []);
 
   /* ── Copy-to-clipboard helper ──────────────────────────────────────────── */
