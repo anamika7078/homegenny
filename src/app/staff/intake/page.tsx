@@ -127,7 +127,7 @@ export default function StaffIntakePage() {
 
   return (
     <AppShell>
-      <div className="pt-2 px-6 pb-6 max-w-[1400px] mx-auto">
+      <div className="page-padding pt-2 max-w-[1400px] mx-auto">
         <div className="mb-4">
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             S1 Intake <span className="text-secondary-foreground font-normal">— New Staff Applicant</span>
@@ -144,7 +144,7 @@ export default function StaffIntakePage() {
             <CardHeader className="border-b border-border/20 px-6 py-5">
               <CardTitle className="text-base font-bold text-white">Applicant Details</CardTitle>
             </CardHeader>
-            <CardContent className="p-6 space-y-5">
+            <CardContent className="page-padding space-y-5">
               {error && (
                 <div className="p-3 bg-danger/10 border border-danger/20 rounded-lg flex items-center gap-3">
                   <AlertCircle className="w-4 h-4 text-danger shrink-0" />
@@ -255,7 +255,7 @@ export default function StaffIntakePage() {
               <CardHeader className="border-b border-border/20 px-6 py-5">
                 <CardTitle className="text-base font-bold text-white">Series Requirements</CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-5">
+              <CardContent className="page-padding space-y-5">
                 <div className="flex items-start gap-4">
                   <div className="w-8 shrink-0 text-xs font-bold" style={{ color: SERIES_COLORS['DR'] }}>DR</div>
                   <div className="text-sm text-secondary-foreground leading-relaxed">

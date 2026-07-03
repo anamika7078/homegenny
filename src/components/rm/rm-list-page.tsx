@@ -28,7 +28,7 @@ export function RmListPage({
     : ((data as { data?: unknown[] })?.data ?? (data as { items?: unknown[] })?.items ?? []);
 
   return (
-    <div className="p-6">
+    <div className="page-padding">
       <RmPageHeader title={title} description={description} />
       {isLoading ? (
         <TableSkeleton rows={6} />

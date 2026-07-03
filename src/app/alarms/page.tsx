@@ -353,7 +353,7 @@ function AlarmsPageContent() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-[1600px] px-6 py-8 lg:px-8">
+      <div className="page-padding mx-auto max-w-[1600px]">
         {/* Page header */}
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>

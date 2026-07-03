@@ -91,6 +91,20 @@
     mask-composite: exclude;
     pointer-events: none;
   }
+
+  /* Consistent responsive page padding across all modules */
+  .page-padding {
+    @apply p-4 sm:p-6 lg:p-8;
+  }
+
+  /* Horizontal scroll wrapper for data tables on mobile */
+  .table-scroll {
+    @apply -mx-4 w-[calc(100%+2rem)] overflow-x-auto sm:mx-0 sm:w-full;
+  }
+
+  .table-scroll > table {
+    @apply min-w-[640px] w-full;
+  }
 }
 
 @layer utilities {

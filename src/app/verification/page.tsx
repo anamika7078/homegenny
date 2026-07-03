@@ -344,7 +344,7 @@ export default function VerificationCenterPage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="p-6 max-w-4xl mx-auto space-y-6"
+        className="page-padding max-w-4xl mx-auto space-y-6"
       >
         {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">

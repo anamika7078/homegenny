@@ -25,6 +25,7 @@ import {
   Calendar,
   BarChart2,
   TrendingUp,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -266,13 +267,20 @@ const FINANCE_NAV: NavSection[] = [
 ];
 
 // ─── reusable nav-link ───────────────────────────────────────────────────────
-function NavLink({ href, label, icon: Icon, badge, pathname }: NavItem & { pathname: string }) {
+function NavLink({
+  href,
+  label,
+  icon: Icon,
+  badge,
+  pathname,
+  onNavigate,
+}: NavItem & { pathname: string; onNavigate?: () => void }) {
   const active = pathname === href || (href !== '/' && pathname.startsWith(href + '/')) ||
-    // exact-prefix match for paths like /rm/video#queue
     (href.includes('#') && pathname === href.split('#')[0]);
   return (
     <Link
-      href={href.split('#')[0]}   // strip hash for actual navigation
+      href={href.split('#')[0]}
+      onClick={onNavigate}
       className={cn(
         'relative flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
         active
@@ -301,7 +309,12 @@ function NavLink({ href, label, icon: Icon, badge, pathname }: NavItem & { pathn
 }
 
 // ─── main component ──────────────────────────────────────────────────────────
-export function Sidebar() {
+interface SidebarProps {
+  open?: boolean;
+  onClose?: () => void;
+}
+
+export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuthStore();
   const [mounted, setMounted] = useState(false);
@@ -327,17 +340,31 @@ export function Sidebar() {
     : BM_NAV;
 
   return (
-    <aside className="z-40 flex h-full w-[280px] shrink-0 flex-col border-r border-[#1e293b] bg-[#0f1523] transition-colors duration-300">
+    <aside
+      className={cn(
+        'z-50 flex h-full w-[min(280px,85vw)] shrink-0 flex-col border-r border-[#1e293b] bg-[#0f1523] transition-transform duration-300 ease-in-out',
+        'fixed inset-y-0 left-0 lg:relative lg:z-40 lg:w-[280px] lg:translate-x-0',
+        open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+      )}
+    >
       {/* Logo */}
-      <div className="pt-6 pb-8 px-6">
-        <Link href="/" className="flex flex-col">
-          <span className="font-syne font-bold text-2xl tracking-tight">
+      <div className="flex items-start justify-between px-4 pb-6 pt-5 sm:px-6 sm:pt-6">
+        <Link href="/" className="flex flex-col" onClick={onClose}>
+          <span className="font-syne text-xl font-bold tracking-tight sm:text-2xl">
             <span className="text-white">Home</span><span className="text-[#FF5A1F]">Genny</span>
           </span>
-          <span className="text-[9px] font-bold text-secondary-foreground uppercase tracking-widest mt-1 opacity-70">
+          <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-secondary-foreground opacity-70">
             DOMESTIC STAFFING · GCP ·<br />DELHI NCR
           </span>
         </Link>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close navigation menu"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-secondary-foreground transition-colors hover:bg-white/10 hover:text-white lg:hidden"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Role badge */}
@@ -393,7 +420,7 @@ export function Sidebar() {
             </h4>
             <div className="space-y-0.5">
               {section.items.map((item) => (
-                <NavLink key={item.href} {...item} pathname={pathname} />
+                <NavLink key={item.href} {...item} pathname={pathname} onNavigate={onClose} />
               ))}
             </div>
           </div>

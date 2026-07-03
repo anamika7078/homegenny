@@ -97,7 +97,7 @@ export default function VideoSelfCertPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto min-h-0 max-w-[1600px] px-6 py-8 lg:px-8">
+      <div className="page-padding mx-auto min-h-0 max-w-[1600px]">
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>

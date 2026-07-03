@@ -34,15 +34,15 @@ export default function AssessmentsQueue() {
   const sc = rows.filter((r) => r.assessment_type === 'SC');
 
   return (
-    <>
-      <div className="flex items-center justify-between mb-8 pt-2 pb-2">
-        <div className="px-1">
-          <h1 className="text-2xl font-bold text-white">Assessment Queue</h1>
+    <div className="page-padding">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pt-2 pb-2">
+        <div className="min-w-0 px-1">
+          <h1 className="text-xl font-bold text-white sm:text-2xl">Assessment Queue</h1>
           <p className="text-sm text-secondary-foreground mt-2">
             {isLoading ? 'Loading…' : `${rows.length} pending assessment${rows.length !== 1 ? 's' : ''}`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => router.push('/assessor/assessments/driver')}
             className="flex items-center gap-2 rounded-xl bg-info/10 border border-info/25 px-4 py-2 text-xs font-bold text-info hover:bg-info/20 transition-colors"
@@ -90,7 +90,7 @@ export default function AssessmentsQueue() {
           )}
         </div>
       )}
-    </>
+    </div>
   );
 }
 

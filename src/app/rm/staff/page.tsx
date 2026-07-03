@@ -15,7 +15,7 @@ export default function RmStaffListPage() {
     [];
 
   return (
-    <div className="p-6">
+    <div className="page-padding">
       <RmPageHeader
         title="Staff Management"
         description="Assigned staff — branch isolated"

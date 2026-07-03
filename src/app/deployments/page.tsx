@@ -11,7 +11,7 @@ export default function DeploymentsPage() {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="p-6 max-w-6xl mx-auto space-y-6"
+        className="page-padding max-w-6xl mx-auto space-y-6"
       >
         <motion.div>
           <h1 className="text-2xl font-bold text-foreground">Deployment Management</h1>
@@ -20,7 +20,7 @@ export default function DeploymentsPage() {
           </p>
         </motion.div>
         <Card className="bg-card border-border/50">
-          <CardContent className="p-6 space-y-4">
+          <CardContent className="page-padding space-y-4">
             <div className="flex items-center justify-between border-b border-border/50 pb-4">
               <div>
                 <p className="font-semibold text-foreground">HG-SC-20250512-0041</p>

@@ -128,7 +128,7 @@ export default function AdminAnalyticsPage() {
   };
 
   return (
-    <div className="p-8 space-y-8 min-h-screen text-[#E8EDF8]">
+    <div className="page-padding space-y-6 sm:space-y-8 min-h-screen text-[#E8EDF8]">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>

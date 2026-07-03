@@ -9,7 +9,7 @@ export default function RmSettingsPage() {
   const { user, logout } = useAuthStore();
 
   return (
-    <div className="p-6">
+    <div className="page-padding">
       <RmPageHeader title="Profile Settings" description="Session, 2FA, and device management" />
       <div className="glass-card max-w-lg space-y-4 rounded-xl p-6">
         <div>

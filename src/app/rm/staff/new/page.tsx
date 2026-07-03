@@ -5,7 +5,7 @@ import { IntakeForm } from '@/components/rm/intake-form';
 
 export default function AddStaffPage() {
   return (
-    <div className="p-6">
+    <div className="page-padding">
       <RmPageHeader title="Add Staff" description="Create a new staff applicant via S1 intake workflow" />
       <IntakeForm />
     </div>

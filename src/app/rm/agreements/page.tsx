@@ -154,7 +154,7 @@ export default function AgreementsPage() {
   const pending = AGREEMENTS.filter(a=>a.overallStatus==='pending'||a.overallStatus==='sent').length;
 
   return (
-    <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} className="p-6 max-w-4xl mx-auto space-y-6">
+    <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} className="page-padding max-w-4xl mx-auto space-y-6">
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Agreements Module</h1>

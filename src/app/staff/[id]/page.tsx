@@ -73,7 +73,7 @@ export default function StaffProfilePage() {
 
   return (
     <AppShell>
-      <motion.div className="p-6 max-w-5xl mx-auto space-y-6">
+      <motion.div className="page-padding max-w-5xl mx-auto space-y-6">
         <button
           type="button"
           onClick={() => router.back()}

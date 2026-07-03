@@ -45,7 +45,7 @@ const TRIAL_SUCCESS = [
 export default function ReportsPage() {
   return (
     <AppShell>
-      <div className="p-8 max-w-[1600px] mx-auto space-y-8 min-h-0 bg-[#0B0F17]">
+      <div className="page-padding mx-auto max-w-[1600px] space-y-6 sm:space-y-8 min-h-0 bg-[#0B0F17]">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/5 pb-6">
           <div>

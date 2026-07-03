@@ -79,7 +79,7 @@ export default function DriverTestModule() {
   const previewResult = score && !isNaN(numScore) ? computeResult(numScore) : null;
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="page-padding space-y-6 sm:space-y-8">
       <h1 className="text-3xl font-bold tracking-tight">Driver Practical Assessment</h1>
 
       {success && (

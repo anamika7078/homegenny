@@ -35,15 +35,15 @@ export default function AssessmentSchedules() {
   }, {});
 
   return (
-    <>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Assessment Schedules</h1>
+    <div className="page-padding">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-white sm:text-2xl">Assessment Schedules</h1>
           <p className="text-sm text-secondary-foreground mt-1">
             {isLoading ? 'Loading…' : `${rows.length} upcoming slot${rows.length !== 1 ? 's' : ''}`}
           </p>
         </div>
-        <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-primary bg-primary/10 border border-primary/25 px-3 py-2 rounded-xl">
+        <div className="flex shrink-0 items-center gap-2 self-start text-[11px] font-bold uppercase tracking-widest text-primary bg-primary/10 border border-primary/25 px-3 py-2 rounded-xl">
           <Calendar className="h-3.5 w-3.5" /> Live Schedule
         </div>
       </div>
@@ -126,6 +126,6 @@ export default function AssessmentSchedules() {
           ))}
         </div>
       )}
-    </>
+    </div>
   );
 }

@@ -87,7 +87,7 @@ export default function StaffDetailPage() {
 
 function MotionLoading() {
   return (
-    <div className="p-6">
+    <div className="page-padding">
       <TableSkeleton rows={6} />
     </div>
   );

@@ -31,7 +31,7 @@ const CLIENTS_MOCK = [
 export default function ClientsPage() {
   return (
     <AppShell>
-      <div className="p-8 max-w-[1600px] mx-auto space-y-8">
+      <div className="page-padding mx-auto max-w-[1600px] space-y-6 sm:space-y-8">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
             <h1 className="text-3xl font-syne font-bold text-gradient tracking-tight">Client Relationship Management</h1>

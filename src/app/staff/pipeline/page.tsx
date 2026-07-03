@@ -123,7 +123,7 @@ export default function StaffPipelinePage() {
     <AppShell>
       <div className="flex h-full min-h-0 flex-col bg-[#0B0F17]">
         {/* Header */}
-        <div className="px-8 py-6 flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5">
+        <div className="page-padding flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5">
           <div className="flex items-center gap-4">
             <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
               Pipeline Kanban <span className="text-white/40">—</span> <span className="text-white/80">RM Pooja Mishra</span>

@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils/cn';
-import { LogOut, Plus } from 'lucide-react';
+import { LogOut, Plus, Menu } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth.store';
 import { api } from '@/lib/api/client';
 import { disconnectSocket } from '@/lib/api/socket';
+import { useShell } from './shell-context';
 
 /** BM header counts — replace with API / store when alarms are live */
 const CRITICAL_COUNT = 3;
@@ -21,6 +22,7 @@ export function Topbar() {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const { toggleSidebar } = useShell();
   const [isScrolled, setIsScrolled] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -63,30 +65,41 @@ export function Topbar() {
   return (
     <header
       className={cn(
-        'z-30 flex shrink-0 items-center justify-between px-6 transition-all duration-300 lg:px-8',
+        'z-30 flex shrink-0 items-center justify-between gap-3 px-4 transition-all duration-300 sm:px-6 lg:px-8',
         'bg-[#0b0f19]',
-        isDashboardHome ? 'h-[88px]' : 'h-14',
+        isDashboardHome ? 'h-[72px] sm:h-[88px]' : 'h-14',
         isScrolled ? 'border-b border-border/50 shadow-xl' : ''
       )}
     >
-      <div className="flex min-w-0 flex-col justify-center">
-        <h2
-          className={cn(
-            'truncate font-bold tracking-tight text-white',
-            isDashboardHome ? 'text-xl sm:text-2xl' : 'text-base sm:text-lg'
-          )}
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label="Open navigation menu"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-[#151c2c] text-secondary-foreground transition-colors hover:bg-white/10 hover:text-white lg:hidden"
         >
-          Namaskar, {displayName} ji 🙏
-        </h2>
-        {isDashboardHome ? (
-          <p className="mt-1 text-[11px] font-medium text-secondary-foreground">
-            {dateLine} · Delhi NCR Branch · Last sync: 2 min ago
-          </p>
-        ) : (
-          <p className="mt-0.5 truncate text-[10px] font-medium text-secondary-foreground">
-            {user?.role?.replace('_', ' ') ?? 'HomeGenny'} · Delhi NCR
-          </p>
-        )}
+          <Menu className="h-5 w-5" />
+        </button>
+
+        <div className="flex min-w-0 flex-col justify-center">
+          <h2
+            className={cn(
+              'truncate font-bold tracking-tight text-white',
+              isDashboardHome ? 'text-lg sm:text-2xl' : 'text-base sm:text-lg'
+            )}
+          >
+            Namaskar, {displayName} ji 🙏
+          </h2>
+          {isDashboardHome ? (
+            <p className="mt-0.5 hidden text-[11px] font-medium text-secondary-foreground sm:block">
+              {dateLine} · Delhi NCR Branch · Last sync: 2 min ago
+            </p>
+          ) : (
+            <p className="mt-0.5 truncate text-[10px] font-medium text-secondary-foreground">
+              {user?.role?.replace('_', ' ') ?? 'HomeGenny'} · Delhi NCR
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">

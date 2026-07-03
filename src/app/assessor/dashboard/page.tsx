@@ -98,16 +98,16 @@ export default function AssessorDashboard() {
   const scQueue: any[] = body?.scQueue ?? [];
 
   return (
-    <>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Assessor Dashboard</h1>
+    <div className="page-padding">
+      <div className="mb-4 sm:mb-6">
+        <h1 className="text-xl font-bold text-white sm:text-2xl">Assessor Dashboard</h1>
         <p className="text-sm text-secondary-foreground mt-1">
           Welcome, {user?.full_name ?? 'Assessor'}. Live assessment overview below.
         </p>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2 sm:mb-8 lg:grid-cols-4">
         <StatCard
           label="Pending Assessments"
           value={kpis.pending_assessments ?? 0}
@@ -153,6 +153,6 @@ export default function AssessorDashboard() {
           loading={isLoading}
         />
       </div>
-    </>
+    </div>
   );
 }

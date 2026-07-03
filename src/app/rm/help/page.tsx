@@ -12,7 +12,7 @@ const TOPICS = [
 
 export default function RmHelpPage() {
   return (
-    <div className="p-6">
+    <div className="page-padding">
       <RmPageHeader title="Help Center" description="RM workflow reference" />
       <ul className="space-y-3">
         {TOPICS.map(([title, body]) => (

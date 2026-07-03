@@ -19,7 +19,7 @@ export default function InvoicesPage() {
 
   return (
     <AppShell>
-      <div className="p-6 space-y-6">
+      <div className="page-padding space-y-6">
         <PageHeader title="Invoices" subtitle="Client billing and payment tracking" />
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
           {isLoading ? <div className="p-4"><TableSkeleton rows={6} /></div> : (

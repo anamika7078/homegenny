@@ -204,7 +204,7 @@ export default function AgreementsPage() {
   }, []);
 
   const renderContent = (
-    <div className="mx-auto max-w-[1600px] px-6 py-8 lg:px-8">
+    <div className="page-padding mx-auto max-w-[1600px]">
       <div className="mb-8">
         <h1 className="font-syne text-3xl font-bold tracking-tight text-white lg:text-4xl">Agreements – eSign Status</h1>
         <p className="mt-2 max-w-3xl text-sm text-secondary-foreground">

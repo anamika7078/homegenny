@@ -5,7 +5,7 @@ import { IntakeForm } from '@/components/rm/intake-form';
 
 export default function RmIntakePage() {
   return (
-    <div className="p-6">
+    <div className="page-padding">
       <RmPageHeader
         title="S1 Intake"
         description="Restricted-list check runs first. Valid intakes advance to S2 Verification."

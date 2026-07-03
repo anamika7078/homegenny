@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge';
 import { Spinner } from '@/components/ui/loading';
 import { ReactNode } from 'react';
+import { cn } from '@/lib/utils/cn';
 
 export interface MetricItem {
   label: string;
@@ -18,10 +19,15 @@ export function DashboardMetrics({
   title,
   metrics,
   loading,
+  embedded,
+  className,
 }: {
   title: string;
   metrics: MetricItem[];
   loading?: boolean;
+  /** When true, skip outer page padding (parent provides it). */
+  embedded?: boolean;
+  className?: string;
 }) {
   if (loading) {
     return (
@@ -32,7 +38,11 @@ export function DashboardMetrics({
   }
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto space-y-8 relative">
+    <div className={cn(
+      embedded ? 'space-y-6 sm:space-y-8' : 'page-padding max-w-[1600px] mx-auto space-y-6 sm:space-y-8',
+      'relative',
+      className,
+    )}>
       {/* Subtle background glow for premium feel */}
       <div className="absolute top-0 left-0 w-full h-[300px] bg-gradient-to-b from-primary/10 to-transparent pointer-events-none rounded-t-3xl -z-10" />
 
@@ -42,15 +52,15 @@ export function DashboardMetrics({
         transition={{ duration: 0.5, ease: "easeOut" }}
         className="flex flex-col gap-2"
       >
-        <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-foreground to-foreground/70 tracking-tight">
+        <h1 className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-foreground to-foreground/70 tracking-tight sm:text-3xl lg:text-4xl">
           {title}
         </h1>
-        <p className="text-base text-secondary-foreground font-medium">
+        <p className="text-sm font-medium text-secondary-foreground sm:text-base">
           Live operational KPIs · HomeGenny Platform
         </p>
       </motion.div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4">
         {metrics.map((m, i) => (
           <motion.div
             key={m.label}
@@ -78,7 +88,7 @@ export function DashboardMetrics({
                 
                 <div className="flex items-baseline gap-2 mb-2">
                   <motion.div 
-                    className="text-4xl font-black text-foreground tracking-tight"
+                    className="text-2xl font-black text-foreground tracking-tight sm:text-3xl lg:text-4xl"
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.08 + 0.2 }}

@@ -99,7 +99,7 @@ export default function PayrollRunPage() {
   const years = Array.from({ length: 4 }, (_, i) => currentDate.getFullYear() - i);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="page-padding space-y-6">
       {/* Toast */}
       {toast && (
         <div className={`fixed top-5 right-5 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-medium border

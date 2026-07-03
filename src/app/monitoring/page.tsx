@@ -102,7 +102,7 @@ export default function MonitoringPage() {
 
   return (
     <AppShell>
-      <div className="p-8 max-w-[1600px] mx-auto space-y-8">
+      <div className="page-padding mx-auto max-w-[1600px] space-y-6 sm:space-y-8">
 
         {/* ── Header ──────────────────────────────────────────────── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

@@ -66,17 +66,17 @@ export default function AssessmentReports() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+      <div className="page-padding flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   return (
-    <>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Reports & Analytics</h1>
+    <div className="page-padding">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-white sm:text-2xl">Reports & Analytics</h1>
           <p className="text-sm text-secondary-foreground mt-1">
             Assessment pass/fail ratios and weekly completion trends
           </p>
@@ -173,6 +173,6 @@ export default function AssessmentReports() {
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 }
