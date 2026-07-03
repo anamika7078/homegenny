@@ -271,11 +271,18 @@ export interface ApiClient {
   
   getAdminSystemHealth(): Promise<any>;
   getAdminQueueStatus(): Promise<any>;
+  getAdminFailedQueueJobs(limit?: number): Promise<any>;
+  retryAdminFailedQueueJobs(): Promise<any>;
   getAdminCronStatus(): Promise<any>;
   
   getAdminRevenueAnalytics(): Promise<any>;
   getAdminPipelineAnalytics(): Promise<any>;
+  getAdminPipelineOverview(): Promise<any>;
   getAdminPlacementAnalytics(): Promise<any>;
+
+  getAdminVideoCertifications(params?: { status?: string; search?: string; page?: number; limit?: number }): Promise<any>;
+  reviewAdminVideoCertification(id: string, body: { status: 'APPROVED' | 'REJECTED'; notes?: string }): Promise<any>;
+  getVideoCertViewUrl(key: string): Promise<any>;
   
   submitAdminDeleteRequest(body: Record<string, unknown>): Promise<any>;
   getAdminPrivacyRequests(): Promise<any>;
@@ -501,11 +508,20 @@ export const api: ApiClient = {
 
   getAdminSystemHealth: () => apiClient.get('/admin/system-health'),
   getAdminQueueStatus: () => apiClient.get('/admin/queues'),
+  getAdminFailedQueueJobs: (limit = 20) => apiClient.get('/admin/queues/failed', { params: { limit } }),
+  retryAdminFailedQueueJobs: () => apiClient.post('/admin/queues/retry-failed'),
   getAdminCronStatus: () => apiClient.get('/admin/cron-status'),
 
   getAdminRevenueAnalytics: () => apiClient.get('/admin/analytics/revenue'),
   getAdminPipelineAnalytics: () => apiClient.get('/admin/analytics/pipeline'),
+  getAdminPipelineOverview: () => apiClient.get('/admin/pipeline/overview'),
   getAdminPlacementAnalytics: () => apiClient.get('/admin/analytics/placements'),
+
+  getAdminVideoCertifications: (params?: { status?: string; search?: string; page?: number; limit?: number }) =>
+    apiClient.get('/admin/video-certifications', { params }),
+  reviewAdminVideoCertification: (id: string, body: { status: 'APPROVED' | 'REJECTED'; notes?: string }) =>
+    apiClient.put(`/admin/video-certifications/${id}/review`, body),
+  getVideoCertViewUrl: (key: string) => apiClient.post('/video-cert/view-url', { key }),
 
   submitAdminDeleteRequest: (body: Record<string, unknown>) => apiClient.post('/admin/privacy/delete-request', body),
   getAdminPrivacyRequests: () => apiClient.get('/admin/privacy/requests'),
