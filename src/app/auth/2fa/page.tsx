@@ -35,41 +35,60 @@ export default function TwoFactorPage() {
   const [setupData, setSetupData] = useState<{ secret: string; otpauth_url: string } | null>(null);
   const [setupStep, setSetupStep] = useState<1 | 2>(1);   // 1 = scan QR, 2 = enter code
   const [copied, setCopied]     = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const { setAuth } = useAuthStore();
   const router = useRouter();
 
-  /* Detect first-time Admin setup from session storage or backend state */
-  useEffect(() => {
-    const otpauth = sessionStorage.getItem('hg_totp_otpauth');
-    const secret  = sessionStorage.getItem('hg_totp_secret');
-    if (otpauth && secret) {
-      setMode('setup');
-      setSetupData({ otpauth_url: otpauth, secret });
-      return;
-    }
+  const applySetupPayload = (body: { totp_secret: string; otpauth_url: string }) => {
+    setMode('setup');
+    setSetupStep(1);
+    setCode('');
+    setSetupData({ secret: body.totp_secret, otpauth_url: body.otpauth_url });
+    sessionStorage.setItem('hg_totp_otpauth', body.otpauth_url);
+    sessionStorage.setItem('hg_totp_secret', body.totp_secret);
+  };
 
+  const clearSetupSession = () => {
+    sessionStorage.removeItem('hg_totp_otpauth');
+    sessionStorage.removeItem('hg_totp_secret');
+    setSetupData(null);
+    setMode('verify');
+    setSetupStep(1);
+    setCode('');
+  };
+
+  /* Sync with backend — avoid stale QR from sessionStorage after setup is complete */
+  useEffect(() => {
     const phone    = sessionStorage.getItem('hg_2fa_phone') ?? '';
     const password = sessionStorage.getItem('hg_2fa_password') ?? '';
-    if (!phone || !password) return;
+    if (!phone || !password) {
+      if (sessionStorage.getItem('hg_totp_otpauth')) clearSetupSession();
+      return;
+    }
 
     void (async () => {
       try {
         const res     = await api.login(phone.replace(/\D/g, ''), password);
         const payload = (res as { data?: Record<string, unknown> })?.data ?? res;
         const body    = payload as {
+          requires_2fa?: boolean;
           requires_totp_setup?: boolean;
           totp_secret?: string;
           otpauth_url?: string;
         };
+
         if (body.requires_totp_setup && body.otpauth_url && body.totp_secret) {
-          setMode('setup');
-          setSetupData({ secret: body.totp_secret, otpauth_url: body.otpauth_url });
-          sessionStorage.setItem('hg_totp_otpauth', body.otpauth_url);
-          sessionStorage.setItem('hg_totp_secret', body.totp_secret);
+          applySetupPayload({ secret: body.totp_secret, otpauth_url: body.otpauth_url });
+          return;
+        }
+
+        if (body.requires_2fa) {
+          clearSetupSession();
         }
       } catch {
         // User may still have a configured authenticator — stay on verify screen
+        clearSetupSession();
       }
     })();
   }, []);
@@ -80,6 +99,31 @@ export default function TwoFactorPage() {
     await navigator.clipboard.writeText(setupData.secret);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const regenerateQr = async () => {
+    const phone    = sessionStorage.getItem('hg_2fa_phone') ?? '';
+    const password = sessionStorage.getItem('hg_2fa_password') ?? '';
+    if (!phone || !password) {
+      router.push('/auth/login');
+      return;
+    }
+    setResetting(true);
+    try {
+      const res     = await api.reset2faSetup(phone.replace(/\D/g, ''), password);
+      const payload = (res as { data?: Record<string, unknown> })?.data ?? res;
+      const body    = payload as { totp_secret?: string; otpauth_url?: string };
+      if (!body.otpauth_url || !body.totp_secret) {
+        toast.error('Could not generate a new QR code');
+        return;
+      }
+      applySetupPayload({ secret: body.totp_secret, otpauth_url: body.otpauth_url });
+      toast.success('New QR code ready — remove the old HomeGenny entry in your app, then scan this one');
+    } catch (e) {
+      toast.error((e as Error).message ?? 'Failed to generate new QR code');
+    } finally {
+      setResetting(false);
+    }
   };
 
   /* ── Submit TOTP code (both verify & setup-confirm modes) ─────────────── */
@@ -109,10 +153,7 @@ export default function TwoFactorPage() {
 
       // Backend still returning setup-required (shouldn't happen after setup, but guard)
       if (body.requires_totp_setup && body.otpauth_url && body.totp_secret) {
-        setMode('setup');
-        setSetupData({ secret: body.totp_secret, otpauth_url: body.otpauth_url });
-        sessionStorage.setItem('hg_totp_otpauth', body.otpauth_url);
-        sessionStorage.setItem('hg_totp_secret', body.totp_secret);
+        applySetupPayload({ secret: body.totp_secret, otpauth_url: body.otpauth_url });
         return;
       }
 
@@ -252,6 +293,15 @@ export default function TwoFactorPage() {
                 >
                   I've scanned the code →
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => void regenerateQr()}
+                  disabled={resetting}
+                  className="w-full py-2 text-sm text-slate-500 hover:text-orange-300 transition-colors disabled:opacity-50"
+                >
+                  {resetting ? 'Generating new QR…' : 'Use a new authenticator account (new QR code)'}
+                </button>
               </div>
             ) : (
               /* ── Step 2: Confirm OTP ───────────────────────────────────────── */
@@ -387,6 +437,15 @@ export default function TwoFactorPage() {
           >
             ← Use another account
           </Link>
+
+          <button
+            type="button"
+            onClick={() => void regenerateQr()}
+            disabled={resetting}
+            className="block w-full text-center text-sm text-slate-500 hover:text-orange-300 transition-colors disabled:opacity-50"
+          >
+            {resetting ? 'Generating new QR…' : 'Set up with a new authenticator (new QR code)'}
+          </button>
         </div>
 
         {/* Session notice */}

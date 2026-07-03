@@ -120,6 +120,7 @@ apiClient.interceptors.response.use(
  *  raw `.post`/`.get` methods into the inferred type of `api`. */
 export interface ApiClient {
   login(phone: string, password: string, totp?: string): Promise<any>;
+  reset2faSetup(phone: string, password: string): Promise<any>;
   logout(): Promise<any>;
   me(): Promise<any>;
 
@@ -245,6 +246,7 @@ export interface ApiClient {
   // Trainer Role Module
   getTrainerDashboard(): Promise<any>;
   getTrainerBatches(): Promise<any>;
+  reviewTrainerVideoCert(id: string, body: { status: 'APPROVED' | 'REJECTED'; notes?: string }): Promise<any>;
   updateTrainerAssessment(traineeId: string, body: Record<string, unknown>): Promise<any>;
 
   // Assessor Role Module
@@ -296,6 +298,8 @@ export interface ApiClient {
 export const api: ApiClient = {
   login: (phone: string, password: string, totp?: string) =>
     apiClient.post('/auth/login', { phone, password, totp }, { timeout: 90_000 }), // 90s for cold-start
+  reset2faSetup: (phone: string, password: string) =>
+    apiClient.post('/auth/2fa/reset-setup', { phone, password }, { timeout: 90_000 }),
   logout: () => apiClient.post('/auth/logout').catch(() => { }),
   me: () => apiClient.get('/auth/me'),
 
@@ -480,6 +484,8 @@ export const api: ApiClient = {
   // Trainer Role Module
   getTrainerDashboard: () => apiClient.get('/trainer/dashboard'),
   getTrainerBatches: () => apiClient.get('/trainer/batches'),
+  reviewTrainerVideoCert: (id: string, body: { status: 'APPROVED' | 'REJECTED'; notes?: string }) =>
+    apiClient.put(`/trainer/video-certifications/${id}/review`, body),
   updateTrainerAssessment: (traineeId: string, body: Record<string, unknown>) => apiClient.put(`/trainer/assessment/${traineeId}`, body),
 
   // Assessor Role Module

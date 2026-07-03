@@ -118,7 +118,7 @@ export default function TrainerVideoCertPage() {
   useEffect(() => { load(); }, [load]);
 
   const handleDecision = async (id: string, status: 'APPROVED' | 'REJECTED', notes: string) => {
-    // Update local state optimistically
+    await api.reviewTrainerVideoCert(id, { status, notes });
     setCerts(prev => prev.map(c => c.id === id ? { ...c, reviewStatus: status, reviewNotes: notes } : c));
   };
 

@@ -27,6 +27,10 @@ export default function LoginPage() {
     onSuccess: (res: any) => {
       const payload = res?.data !== undefined ? res.data : res;
 
+      // Clear any stale TOTP setup from a previous login attempt
+      sessionStorage.removeItem('hg_totp_otpauth');
+      sessionStorage.removeItem('hg_totp_secret');
+
       // First-time Admin: backend provisioned a TOTP secret — show QR wizard
       if (payload?.requires_totp_setup) {
         sessionStorage.setItem('hg_2fa_phone', phone.trim());
