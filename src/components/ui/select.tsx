@@ -45,7 +45,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           className="sr-only"
           value={controlledValue}
           disabled={disabled}
-          readOnly
+          onChange={() => {
+            // Hidden select: Radix SelectMenu controls the UI.
+            // This handler prevents React from complaining about controlled value.
+          }}
           aria-hidden="true"
           tabIndex={-1}
           {...props}
