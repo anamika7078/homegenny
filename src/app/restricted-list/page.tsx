@@ -43,19 +43,23 @@ export default function RestrictedListPage() {
             </p>
           </div>
           
-          <div className="flex items-center gap-2 bg-secondary/50 p-1 rounded-xl border border-border">
-            {['ALL', 'STAFF', 'CLIENTS'].map((t) => (
-              <button
-                key={t}
-                onClick={() => setActiveType(t)}
-                className={cn(
-                  "px-6 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all",
-                  activeType === t ? "bg-danger text-white shadow-lg" : "text-secondary-foreground hover:text-foreground"
-                )}
-              >
-                {t}
-              </button>
-            ))}
+          <div className="min-w-0">
+            <div className="overflow-x-auto scrollbar-hide">
+              <div className="inline-flex items-center gap-2 whitespace-nowrap bg-secondary/50 p-1 rounded-xl border border-border">
+                {['ALL', 'STAFF', 'CLIENTS'].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setActiveType(t)}
+                    className={cn(
+                      "px-3 sm:px-6 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-all",
+                      activeType === t ? "bg-danger text-white shadow-lg" : "text-secondary-foreground hover:text-foreground"
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 

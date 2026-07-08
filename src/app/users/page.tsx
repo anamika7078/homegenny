@@ -45,19 +45,23 @@ export default function UsersPage() {
             </p>
           </div>
           
-          <div className="flex items-center gap-2 bg-secondary/50 p-1 rounded-xl border border-border">
-            {['USERS', 'ROLES', 'AUDIT'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={cn(
-                  "px-6 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all",
-                  activeTab === tab ? "bg-primary text-white shadow-lg" : "text-secondary-foreground hover:text-foreground"
-                )}
-              >
-                {tab}
-              </button>
-            ))}
+          <div className="min-w-0">
+            <div className="overflow-x-auto scrollbar-hide">
+              <div className="inline-flex items-center gap-2 whitespace-nowrap bg-secondary/50 p-1 rounded-xl border border-border">
+                {['USERS', 'ROLES', 'AUDIT'].map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={cn(
+                      "px-3 sm:px-6 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-all",
+                      activeTab === tab ? "bg-primary text-white shadow-lg" : "text-secondary-foreground hover:text-foreground"
+                    )}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -116,7 +120,7 @@ export default function UsersPage() {
                                   <CardTitle>Administrative Personnel</CardTitle>
                                   <CardDescription>Accounts with access to the HomeGenny control panel.</CardDescription>
                                </div>
-                               <button className="flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-xl text-xs font-bold shadow-xl shadow-primary/20 hover:bg-accent transition-all">
+                               <button className="hidden sm:flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-xl text-xs font-bold shadow-xl shadow-primary/20 hover:bg-accent transition-all">
                                   <UserPlus className="w-4 h-4" />
                                   Provision Account
                                </button>
@@ -132,7 +136,7 @@ export default function UsersPage() {
                                />
                             </div>
 
-                            <div className="overflow-x-auto">
+                            <div className="table-scroll">
                                <table className="w-full">
                                   <thead>
                                      <tr className="text-left border-b border-border">
@@ -193,7 +197,8 @@ export default function UsersPage() {
                              <CardDescription>Configure granular access control for each role.</CardDescription>
                           </CardHeader>
                           <CardContent>
-                             <div className="grid grid-cols-5 border border-border rounded-2xl overflow-hidden">
+                             <div className="table-scroll">
+                               <div className="min-w-[720px] grid grid-cols-5 border border-border rounded-2xl overflow-hidden">
                                 <div className="p-4 bg-secondary/50 border-r border-b border-border text-[10px] font-bold uppercase">Capability</div>
                                 {['SYS', 'BM', 'RM', 'FIN'].map(r => (
                                   <div key={r} className="p-4 bg-secondary/30 border-r border-b border-border text-[10px] font-bold uppercase text-center">{r}</div>
@@ -216,6 +221,7 @@ export default function UsersPage() {
                                     ))}
                                   </React.Fragment>
                                 ))}
+                               </div>
                              </div>
                           </CardContent>
                        </Card>

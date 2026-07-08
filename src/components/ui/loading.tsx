@@ -4,10 +4,10 @@ export function Spinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 }
 export function PageLoader() {
   return (
-    <div className="flex h-screen items-center justify-center bg-slate-950">
-      <div className="text-center space-y-4">
+    <div className="flex min-h-[100dvh] w-full items-center justify-center bg-slate-950 px-4">
+      <div className="text-center space-y-4" aria-live="polite" aria-busy="true">
         <Spinner size="lg" />
-        <p className="text-sm text-slate-400">Loading HomeGenny...</p>
+        <p className="text-sm sm:text-base text-slate-400 leading-tight">Loading HomeGenny...</p>
       </div>
     </div>
   );
