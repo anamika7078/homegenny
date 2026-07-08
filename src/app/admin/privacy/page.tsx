@@ -23,6 +23,7 @@ import {
   Scale
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
 export default function AdminPrivacyPage() {
   const queryClient = useQueryClient();
@@ -326,15 +327,16 @@ export default function AdminPrivacyPage() {
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-[#8D9AB5]">Compliance Request Type</label>
-            <select
-              className="flex h-10 w-full rounded-md border border-border bg-[#0F172A]/50 px-3 py-2 text-sm text-[#E8EDF8] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
+            <SelectMenu
               value={formData.requestType}
-              onChange={e => setFormData({...formData, requestType: e.target.value})}
+              onValueChange={(v) => setFormData({ ...formData, requestType: v })}
+              placeholder="Select request type"
+              className="bg-[#0F172A]/50 border-border"
             >
-              <option value="DELETION" className="bg-[#080D1A]">PII Permanent Deletion (Right to Erasure)</option>
-              <option value="MASKING" className="bg-[#080D1A]">PII Masking &amp; Anonymization (Right to Restriction)</option>
-              <option value="ACCESS_REQUEST" className="bg-[#080D1A]">Subject Access Request (Right to Access)</option>
-            </select>
+              <SelectMenuItem value="DELETION">PII Permanent Deletion (Right to Erasure)</SelectMenuItem>
+              <SelectMenuItem value="MASKING">PII Masking &amp; Anonymization (Right to Restriction)</SelectMenuItem>
+              <SelectMenuItem value="ACCESS_REQUEST">Subject Access Request (Right to Access)</SelectMenuItem>
+            </SelectMenu>
           </div>
 
           <div className="space-y-2">

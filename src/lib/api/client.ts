@@ -11,7 +11,9 @@ export const BASE_URL =
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 60_000,   // 60s — covers Render free-tier cold starts (can take 30-60s)
+  // Keep a reasonable upper bound so the UI doesn't sit “stuck” for a full minute.
+  // Backend cold-starts should be fixed server-side; here we fail fast and show a toast.
+  timeout: 25_000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -297,9 +299,9 @@ export interface ApiClient {
 
 export const api: ApiClient = {
   login: (phone: string, password: string, totp?: string) =>
-    apiClient.post('/auth/login', { phone, password, totp }, { timeout: 90_000 }), // 90s for cold-start
+    apiClient.post('/auth/login', { phone, password, totp }, { timeout: 35_000 }),
   reset2faSetup: (phone: string, password: string) =>
-    apiClient.post('/auth/2fa/reset-setup', { phone, password }, { timeout: 90_000 }),
+    apiClient.post('/auth/2fa/reset-setup', { phone, password }, { timeout: 35_000 }),
   logout: () => apiClient.post('/auth/logout').catch(() => { }),
   me: () => apiClient.get('/auth/me'),
 

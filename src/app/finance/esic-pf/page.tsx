@@ -3,9 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
 import {
-  Loader2, ShieldCheck, Download, ChevronDown,
+  Loader2, ShieldCheck, Download,
   RefreshCw, FileCheck,
 } from 'lucide-react';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
 function fmt(n: number | string) {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(Number(n));
@@ -84,19 +85,33 @@ export default function EsicPfPage() {
           <p className="text-sm text-slate-400 mt-0.5">Monthly challan · PF ECR · Government filing export</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative">
-            <select value={month} onChange={(e) => setMonth(Number(e.target.value))}
-              className="appearance-none bg-[#131c2e] border border-white/10 text-white text-sm rounded-xl pl-4 pr-8 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-              {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          <div className="min-w-[110px]">
+            <SelectMenu
+              value={String(month)}
+              onValueChange={(v) => setMonth(Number(v))}
+              placeholder="Month"
+              className="bg-[#131c2e] border-white/10 text-sm rounded-xl"
+            >
+              {MONTHS.map((m, i) => (
+                <SelectMenuItem key={m} value={String(i + 1)}>
+                  {m}
+                </SelectMenuItem>
+              ))}
+            </SelectMenu>
           </div>
-          <div className="relative">
-            <select value={year} onChange={(e) => setYear(Number(e.target.value))}
-              className="appearance-none bg-[#131c2e] border border-white/10 text-white text-sm rounded-xl pl-4 pr-8 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-              {years.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          <div className="min-w-[110px]">
+            <SelectMenu
+              value={String(year)}
+              onValueChange={(v) => setYear(Number(v))}
+              placeholder="Year"
+              className="bg-[#131c2e] border-white/10 text-sm rounded-xl"
+            >
+              {years.map((y) => (
+                <SelectMenuItem key={y} value={String(y)}>
+                  {y}
+                </SelectMenuItem>
+              ))}
+            </SelectMenu>
           </div>
           <button id="btn-refresh-esic-pf" onClick={load} className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition">
             <RefreshCw className="w-4 h-4 text-slate-400" />

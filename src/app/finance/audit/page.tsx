@@ -6,6 +6,7 @@ import {
   Loader2, Activity, RefreshCw, Calendar, Search, Filter,
   FileText, CreditCard, Banknote, ShieldCheck, Database,
 } from 'lucide-react';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleString('en-IN', {
@@ -106,17 +107,19 @@ export default function AuditTrailPage() {
         <div className="flex items-center gap-2">
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-            <select
-              value={filterAction}
-              onChange={(e) => setFilterAction(e.target.value)}
-              className="appearance-none bg-[#131c2e] border border-white/10 text-white text-sm rounded-xl pl-9 pr-8 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-            >
-              <option value="">All Actions</option>
-              <option value="PAYROLL">Payroll Actions</option>
-              <option value="INVOICE">Invoice Actions</option>
-              <option value="PAYMENT">Settlement Actions</option>
-              <option value="DEPOSIT">Deposit Actions</option>
-            </select>
+            <div className="w-[220px]">
+              <SelectMenu
+                value={filterAction}
+                onValueChange={setFilterAction}
+                placeholder="All Actions"
+                className="bg-[#131c2e] border-white/10 rounded-xl pl-8"
+              >
+                <SelectMenuItem value="PAYROLL">Payroll Actions</SelectMenuItem>
+                <SelectMenuItem value="INVOICE">Invoice Actions</SelectMenuItem>
+                <SelectMenuItem value="PAYMENT">Settlement Actions</SelectMenuItem>
+                <SelectMenuItem value="DEPOSIT">Deposit Actions</SelectMenuItem>
+              </SelectMenu>
+            </div>
           </div>
         </div>
         <div className="relative">

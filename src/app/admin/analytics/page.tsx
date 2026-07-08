@@ -31,6 +31,7 @@ import {
   Cell 
 } from 'recharts';
 import toast from 'react-hot-toast';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
 export default function AdminAnalyticsPage() {
   const [timeRange, setTimeRange] = useState("30d");
@@ -140,16 +141,19 @@ export default function AdminAnalyticsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3 self-stretch md:self-auto">
-          <select
-            value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value)}
-            className="rounded-md border border-border/60 bg-[#0F172A]/60 px-3 py-2 text-sm text-[#E8EDF8] focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
-          >
-            <option value="7d" className="bg-[#080D1A]">Last 7 Days</option>
-            <option value="30d" className="bg-[#080D1A]">Last 30 Days</option>
-            <option value="90d" className="bg-[#080D1A]">Last 90 Days</option>
-            <option value="12m" className="bg-[#080D1A]">Last 12 Months</option>
-          </select>
+          <div className="min-w-[160px]">
+            <SelectMenu
+              value={timeRange}
+              onValueChange={setTimeRange}
+              placeholder="Time range"
+              className="bg-[#0F172A]/60 border-border/60 shadow-sm"
+            >
+              <SelectMenuItem value="7d">Last 7 Days</SelectMenuItem>
+              <SelectMenuItem value="30d">Last 30 Days</SelectMenuItem>
+              <SelectMenuItem value="90d">Last 90 Days</SelectMenuItem>
+              <SelectMenuItem value="12m">Last 12 Months</SelectMenuItem>
+            </SelectMenu>
+          </div>
           <Button onClick={handleExport} className="flex-1 md:flex-initial shadow-md hover:shadow-lg transition-all">
             <Download className="mr-2 h-4 w-4" /> Export Report
           </Button>

@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GraduationCap, Users, Calendar, ChevronDown, Plus, RefreshCw, AlertTriangle, Check, X } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
 type Series = 'DR' | 'SC' | 'UC' | 'M3X';
 type BatchStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED';
@@ -220,10 +221,18 @@ function NewBatchModal({ onClose, onCreate }: { onClose: () => void; onCreate: (
         <div className="space-y-3">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Series *</label>
-            <select value={form.series} onChange={e => setForm(p => ({ ...p, series: e.target.value }))}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-[#FF5A1F]/50">
-              {['DR', 'SC', 'UC', 'M3X'].map(s => <option key={s} value={s} className="bg-[#0e1420] text-white">{s}</option>)}
-            </select>
+            <SelectMenu
+              value={form.series}
+              onValueChange={(v) => setForm((p) => ({ ...p, series: v }))}
+              placeholder="Select series"
+              className="bg-white/5 border-white/10"
+            >
+              {['DR', 'SC', 'UC', 'M3X'].map((s) => (
+                <SelectMenuItem key={s} value={s}>
+                  {s}
+                </SelectMenuItem>
+              ))}
+            </SelectMenu>
           </div>
           {[
             { key: 'trainer_name', label: 'Trainer Name', type: 'text' },

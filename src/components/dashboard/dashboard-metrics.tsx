@@ -60,7 +60,7 @@ export function DashboardMetrics({
         </p>
       </motion.div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
         {metrics.map((m, i) => (
           <motion.div
             key={m.label}
@@ -70,11 +70,11 @@ export function DashboardMetrics({
             whileHover={{ y: -5, scale: 1.02 }}
             className="group"
           >
-            <Card className="relative overflow-hidden bg-background/40 backdrop-blur-xl border border-white/10 dark:border-white/5 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] transition-all duration-300 group-hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] dark:group-hover:shadow-[0_20px_40px_rgba(255,255,255,0.05)]">
+            <Card className="relative overflow-hidden p-0 bg-background/40 backdrop-blur-xl border border-white/10 dark:border-white/5 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] transition-all duration-300 group-hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] dark:group-hover:shadow-[0_20px_40px_rgba(255,255,255,0.05)]">
               {/* Card glowing accent line */}
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/50 to-primary opacity-50 group-hover:opacity-100 transition-opacity duration-300" />
               
-              <CardContent className="p-6 relative z-10">
+              <CardContent className="relative z-10 p-5 sm:p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div className="text-xs font-bold text-secondary-foreground/80 uppercase tracking-widest">
                     {m.label}

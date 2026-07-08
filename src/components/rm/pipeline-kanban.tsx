@@ -23,11 +23,13 @@ import type { StaffApplicant, PipelineStage } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 import { cn } from '@/lib/utils/cn';
 
 export function PipelineKanban() {
   const [search, setSearch] = useState('');
   const [series, setSeries] = useState('');
+  const [activeStage, setActiveStage] = useState<PipelineStage>(PIPELINE_STAGES[0] as PipelineStage);
   const [advanceTarget, setAdvanceTarget] = useState<StaffApplicant | null>(null);
   const [toStage, setToStage] = useState<PipelineStage | ''>('');
   const [dragStaff, setDragStaff] = useState<StaffApplicant | null>(null);
@@ -52,6 +54,13 @@ export function PipelineKanban() {
   const payload = (data as { data?: { columns?: Record<string, StaffApplicant[]> } })?.data ?? data;
   const columns = (payload as { columns?: Record<string, StaffApplicant[]> })?.columns ?? {};
   const allStaff = PIPELINE_STAGES.flatMap((st) => columns[st] ?? []);
+
+  useEffect(() => {
+    // Keep activeStage valid if backend changes stage list order (defensive)
+    if (!PIPELINE_STAGES.includes(activeStage)) {
+      setActiveStage(PIPELINE_STAGES[0] as PipelineStage);
+    }
+  }, [activeStage]);
 
   const onDragEnd = (event: DragEndEvent) => {
     setDragStaff(null);
@@ -104,11 +113,85 @@ export function PipelineKanban() {
           }}
           onDragEnd={onDragEnd}
         >
-          <div className="flex gap-3 overflow-x-auto pb-4">
+          {/* Mobile: show one stage at a time */}
+          <div className="lg:hidden space-y-3">
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              {PIPELINE_STAGES.map((stage) => {
+                const isActive = activeStage === stage;
+                const count = (columns[stage] ?? []).length;
+                return (
+                  <button
+                    key={stage}
+                    type="button"
+                    onClick={() => setActiveStage(stage as PipelineStage)}
+                    className={cn(
+                      'inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold transition-colors',
+                      isActive
+                        ? 'bg-[#FF6B00] text-white shadow-md shadow-[#FF6B00]/25'
+                        : 'border border-white/10 bg-card/30 text-secondary-foreground hover:border-white/20 hover:text-foreground',
+                    )}
+                    aria-current={isActive ? 'page' : undefined}
+                  >
+                    <span className="whitespace-nowrap">{STAGE_LABELS[stage as PipelineStage]}</span>
+                    <span className={cn('tabular-nums', isActive ? 'text-white/90' : 'text-muted-foreground')}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                variant="outline"
+                className="h-9 rounded-full border-white/15 bg-transparent px-3 text-xs text-foreground hover:bg-white/5"
+                onClick={() => {
+                  const idx = PIPELINE_STAGES.indexOf(activeStage);
+                  const prev = PIPELINE_STAGES[Math.max(0, idx - 1)] as PipelineStage;
+                  setActiveStage(prev);
+                }}
+                disabled={PIPELINE_STAGES.indexOf(activeStage) <= 0}
+              >
+                Prev
+              </Button>
+              <div className="min-w-0 text-center">
+                <div className="truncate text-xs font-bold text-foreground">
+                  {STAGE_LABELS[activeStage]}
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  {(columns[activeStage] ?? []).length} cards
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                className="h-9 rounded-full border-white/15 bg-transparent px-3 text-xs text-foreground hover:bg-white/5"
+                onClick={() => {
+                  const idx = PIPELINE_STAGES.indexOf(activeStage);
+                  const next = PIPELINE_STAGES[Math.min(PIPELINE_STAGES.length - 1, idx + 1)] as PipelineStage;
+                  setActiveStage(next);
+                }}
+                disabled={PIPELINE_STAGES.indexOf(activeStage) >= PIPELINE_STAGES.length - 1}
+              >
+                Next
+              </Button>
+            </div>
+
+            <KanbanColumn
+              stage={activeStage}
+              items={columns[activeStage] ?? []}
+              onAdvance={(s) => {
+                setAdvanceTarget(s);
+                setToStage('');
+              }}
+            />
+          </div>
+
+          {/* Desktop/tablet: keep horizontal multi-column */}
+          <div className="hidden lg:flex gap-3 overflow-x-auto pb-4">
             {PIPELINE_STAGES.map((stage) => (
               <KanbanColumn
                 key={stage}
-                stage={stage}
+                stage={stage as PipelineStage}
                 items={columns[stage] ?? []}
                 onAdvance={(s) => {
                   setAdvanceTarget(s);
@@ -131,18 +214,20 @@ export function PipelineKanban() {
         <p className="mb-3 text-sm text-muted-foreground">
           Current: {advanceTarget && STAGE_LABELS[advanceTarget.pipeline_stage]}
         </p>
-        <select
-          className="mb-4 w-full rounded-lg border border-white/10 bg-background px-3 py-2"
-          value={toStage}
-          onChange={(e) => setToStage(e.target.value as PipelineStage)}
-        >
-          <option value="">Select target stage</option>
-          {(FSM_NEXT[advanceTarget?.pipeline_stage as PipelineStage] ?? []).map((s) => (
-            <option key={s} value={s}>
-              {STAGE_LABELS[s]}
-            </option>
-          ))}
-        </select>
+        <div className="mb-4">
+          <SelectMenu
+            value={toStage}
+            onValueChange={(v) => setToStage(v as PipelineStage)}
+            placeholder="Select target stage"
+            className="bg-background border-white/10"
+          >
+            {(FSM_NEXT[advanceTarget?.pipeline_stage as PipelineStage] ?? []).map((s) => (
+              <SelectMenuItem key={s} value={s}>
+                {STAGE_LABELS[s]}
+              </SelectMenuItem>
+            ))}
+          </SelectMenu>
+        </div>
         <Button onClick={handleAdvance} disabled={!toStage || advance.isPending}>
           Confirm transition
         </Button>
@@ -173,17 +258,17 @@ function KanbanFilters({
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
-      <select
-        className="rounded-lg border border-white/10 bg-card px-3 py-2 text-sm"
+      <SelectMenu
         value={series}
-        onChange={(e) => setSeries(e.target.value)}
+        onValueChange={setSeries}
+        placeholder="All series"
+        className="h-10 bg-card border-white/10 text-sm"
       >
-        <option value="">All series</option>
-        <option value="MAID">M3X</option>
-        <option value="SKILLED_CARE">SC</option>
-        <option value="UNSKILLED_CARE">UC</option>
-        <option value="DRIVER">DR</option>
-      </select>
+        <SelectMenuItem value="MAID">M3X</SelectMenuItem>
+        <SelectMenuItem value="SKILLED_CARE">SC</SelectMenuItem>
+        <SelectMenuItem value="UNSKILLED_CARE">UC</SelectMenuItem>
+        <SelectMenuItem value="DRIVER">DR</SelectMenuItem>
+      </SelectMenu>
     </div>
   );
 }
@@ -200,7 +285,7 @@ function KanbanColumn({
   const { setNodeRef, isOver } = useDroppable({ id: stage });
 
   return (
-    <div className="w-72 shrink-0">
+    <div className="w-full max-w-[22rem] lg:w-72 shrink-0">
       <div className={cn('rounded-t-lg bg-gradient-to-r px-3 py-2', STAGE_COLORS[stage])}>
         <span className="text-sm font-semibold text-white">{STAGE_LABELS[stage]}</span>
         <span className="ml-2 text-xs text-white/70">({items.length})</span>

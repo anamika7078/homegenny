@@ -6,6 +6,7 @@ import {
   Loader2, Wallet, CheckCircle2, XCircle,
   RefreshCw, AlertTriangle, Filter,
 } from 'lucide-react';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
 function fmt(n: number | string) {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(Number(n));
@@ -103,14 +104,18 @@ export default function DepositsPage() {
             <p className="text-sm text-slate-400">Staff: <span className="text-white font-medium">{modal.full_name}</span> · ₹{fmt(modal.deposit_amount)}</p>
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Event Type</label>
-              <select
-                id="select-event-type"
+              <SelectMenu
                 value={event}
-                onChange={(e) => setEvent(e.target.value)}
-                className="w-full appearance-none bg-[#131c2e] border border-white/10 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                onValueChange={setEvent}
+                placeholder="Select event"
+                className="bg-[#131c2e] border-white/10 rounded-xl"
               >
-                {EVENT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+                {EVENT_OPTIONS.map((o) => (
+                  <SelectMenuItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectMenuItem>
+                ))}
+              </SelectMenu>
             </div>
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Scenario Code (optional, e.g. DR-07)</label>

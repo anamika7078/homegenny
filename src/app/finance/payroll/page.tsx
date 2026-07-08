@@ -4,8 +4,9 @@ import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
 import {
   Loader2, PlayCircle, CheckCircle2, AlertTriangle,
-  RefreshCw, ChevronDown, IndianRupee, Calendar,
+  RefreshCw, IndianRupee, Calendar,
 } from 'lucide-react';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
 function fmt(n: number | string) {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(Number(n));
@@ -121,31 +122,35 @@ export default function PayrollRunPage() {
 
         <div className="flex items-center gap-3 flex-wrap">
           {/* Month selector */}
-          <div className="relative">
-            <select
-              id="payroll-month"
-              value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
-              className="appearance-none bg-[#131c2e] border border-white/10 text-white text-sm rounded-xl pl-4 pr-8 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          <div className="min-w-[110px]">
+            <SelectMenu
+              value={String(month)}
+              onValueChange={(v) => setMonth(Number(v))}
+              placeholder="Month"
+              className="bg-[#131c2e] border-white/10 text-sm rounded-xl"
             >
               {MONTHS.map((m, i) => (
-                <option key={m} value={i + 1}>{m}</option>
+                <SelectMenuItem key={m} value={String(i + 1)}>
+                  {m}
+                </SelectMenuItem>
               ))}
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            </SelectMenu>
           </div>
 
           {/* Year selector */}
-          <div className="relative">
-            <select
-              id="payroll-year"
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="appearance-none bg-[#131c2e] border border-white/10 text-white text-sm rounded-xl pl-4 pr-8 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          <div className="min-w-[110px]">
+            <SelectMenu
+              value={String(year)}
+              onValueChange={(v) => setYear(Number(v))}
+              placeholder="Year"
+              className="bg-[#131c2e] border-white/10 text-sm rounded-xl"
             >
-              {years.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              {years.map((y) => (
+                <SelectMenuItem key={y} value={String(y)}>
+                  {y}
+                </SelectMenuItem>
+              ))}
+            </SelectMenu>
           </div>
 
           <button

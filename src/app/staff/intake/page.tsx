@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api/client';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
 const SERIES_COLORS: Record<string, string> = {
   DR: '#38BDF8', 
@@ -182,29 +183,30 @@ export default function StaffIntakePage() {
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-secondary-foreground">Series</label>
-                  <select 
+                  <SelectMenu
                     value={formData.series}
-                    onChange={(e) => setFormData({...formData, series: e.target.value})}
-                    className="w-full bg-[#0f1523] border border-border/50 rounded-lg py-2.5 px-3 text-sm text-white focus:outline-none focus:border-[#FF5A1F]/50 appearance-none transition-colors"
+                    onValueChange={(v) => setFormData({ ...formData, series: v })}
+                    placeholder="Select"
+                    className="border-border/50 bg-[#0f1523] py-2.5"
                   >
-                    <option value="" disabled>Select</option>
-                    <option value="DR">DR - Driver</option>
-                    <option value="SC">SC - Skilled Caretaker</option>
-                    <option value="UC">UC - Unskilled Caretaker</option>
-                    <option value="MAID">MAID - Maid</option>
-                  </select>
+                    <SelectMenuItem value="DR">DR - Driver</SelectMenuItem>
+                    <SelectMenuItem value="SC">SC - Skilled Caretaker</SelectMenuItem>
+                    <SelectMenuItem value="UC">UC - Unskilled Caretaker</SelectMenuItem>
+                    <SelectMenuItem value="MAID">MAID - Maid</SelectMenuItem>
+                  </SelectMenu>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-secondary-foreground">Language Tier</label>
-                  <select 
+                  <SelectMenu
                     value={formData.languageTier}
-                    onChange={(e) => setFormData({...formData, languageTier: e.target.value})}
-                    className="w-full bg-[#0f1523] border border-border/50 rounded-lg py-2.5 px-3 text-sm text-white focus:outline-none focus:border-[#FF5A1F]/50 appearance-none transition-colors"
+                    onValueChange={(v) => setFormData({ ...formData, languageTier: v })}
+                    placeholder="Select"
+                    className="border-border/50 bg-[#0f1523] py-2.5"
                   >
-                    <option>Tier 1 — Hindi + English</option>
-                    <option>Tier 2 — Hindi Only</option>
-                    <option>Tier 3 — Regional</option>
-                  </select>
+                    <SelectMenuItem value="Tier 1 — Hindi + English">Tier 1 — Hindi + English</SelectMenuItem>
+                    <SelectMenuItem value="Tier 2 — Hindi Only">Tier 2 — Hindi Only</SelectMenuItem>
+                    <SelectMenuItem value="Tier 3 — Regional">Tier 3 — Regional</SelectMenuItem>
+                  </SelectMenu>
                 </div>
 
                 <div className="space-y-2">

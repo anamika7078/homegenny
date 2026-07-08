@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api, tokenStore } from '@/lib/api/client';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
 function computeResult(score: number): string {
   return score >= 70 ? 'PASS' : 'FAIL';
@@ -115,19 +116,22 @@ export default function SCCompetencyModule() {
           </div>
           <div>
             <label className="text-sm font-medium">Competency Area</label>
-            <select 
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 mt-1"
-              value={competencyArea}
-              onChange={(e) => setCompetencyArea(e.target.value)}
-              disabled={loading}
-            >
-              <option value="Patient Mobility">Patient Mobility</option>
-              <option value="Hygiene Protocol">Hygiene Protocol</option>
-              <option value="Emergency Response">Emergency Response</option>
-              <option value="Medication Handling">Medication Handling</option>
-              <option value="Wound Care">Wound Care</option>
-              <option value="Documentation">Documentation</option>
-            </select>
+            <div className="mt-1">
+              <SelectMenu
+                value={competencyArea}
+                onValueChange={setCompetencyArea}
+                placeholder="Select competency area"
+                disabled={loading}
+                className="h-9 border-input bg-transparent"
+              >
+                <SelectMenuItem value="Patient Mobility">Patient Mobility</SelectMenuItem>
+                <SelectMenuItem value="Hygiene Protocol">Hygiene Protocol</SelectMenuItem>
+                <SelectMenuItem value="Emergency Response">Emergency Response</SelectMenuItem>
+                <SelectMenuItem value="Medication Handling">Medication Handling</SelectMenuItem>
+                <SelectMenuItem value="Wound Care">Wound Care</SelectMenuItem>
+                <SelectMenuItem value="Documentation">Documentation</SelectMenuItem>
+              </SelectMenu>
+            </div>
           </div>
           <div>
             <label className="text-sm font-medium">Score (0-100)</label>

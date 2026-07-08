@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
@@ -10,6 +10,7 @@ import { api } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/store/auth.store';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 import { useRouter } from 'next/navigation';
 
 const schema = z.object({
@@ -40,6 +41,7 @@ export function IntakeForm() {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -102,26 +104,42 @@ export function IntakeForm() {
           <Input {...register('aadhaar_number')} placeholder="12 digits" maxLength={12} />
         </Field>
         <Field label="Series" error={errors.series?.message}>
-          <select
-            className="w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-sm"
-            {...register('series')}
-          >
-            <option value="MAID">M3X — Maid</option>
-            <option value="UNSKILLED_CARE">UC — Unskilled Caretaker</option>
-            <option value="SKILLED_CARE">SC — Skilled Caretaker</option>
-            <option value="DRIVER">DR — Driver</option>
-          </select>
+          <Controller
+            control={control}
+            name="series"
+            render={({ field }) => (
+              <SelectMenu
+                value={field.value}
+                onValueChange={field.onChange}
+                placeholder="Select series"
+                className="h-10 border-white/10 bg-card text-sm"
+              >
+                <SelectMenuItem value="MAID">M3X — Maid</SelectMenuItem>
+                <SelectMenuItem value="UNSKILLED_CARE">UC — Unskilled Caretaker</SelectMenuItem>
+                <SelectMenuItem value="SKILLED_CARE">SC — Skilled Caretaker</SelectMenuItem>
+                <SelectMenuItem value="DRIVER">DR — Driver</SelectMenuItem>
+              </SelectMenu>
+            )}
+          />
         </Field>
         <Field label="Language tier" error={errors.language_tier?.message}>
-          <select
-            className="w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-sm"
-            {...register('language_tier')}
-          >
-            <option value="T1">T1</option>
-            <option value="T2">T2</option>
-            <option value="T3">T3</option>
-            <option value="T4">T4</option>
-          </select>
+          <Controller
+            control={control}
+            name="language_tier"
+            render={({ field }) => (
+              <SelectMenu
+                value={field.value ?? ''}
+                onValueChange={field.onChange}
+                placeholder="Select tier"
+                className="h-10 border-white/10 bg-card text-sm"
+              >
+                <SelectMenuItem value="T1">T1</SelectMenuItem>
+                <SelectMenuItem value="T2">T2</SelectMenuItem>
+                <SelectMenuItem value="T3">T3</SelectMenuItem>
+                <SelectMenuItem value="T4">T4</SelectMenuItem>
+              </SelectMenu>
+            )}
+          />
         </Field>
         <Field label="Hometown" className="md:col-span-2">
           <Input {...register('hometown')} />

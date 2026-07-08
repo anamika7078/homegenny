@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/modal";
 import { api } from '@/lib/api/client';
 import { Search, Plus, Edit2, ShieldBan, ShieldCheck, Mail, Phone, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
 export default function AdminUsersPage() {
   const queryClient = useQueryClient();
@@ -225,21 +226,22 @@ export default function AdminUsersPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-[#8D9AB5]">Role</label>
-              <select 
-                className="flex h-10 w-full rounded-md border border-border bg-[#0F172A]/50 px-3 py-2 text-sm text-[#E8EDF8] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
-                value={formData.role} 
-                onChange={e => setFormData({...formData, role: e.target.value})}
+              <SelectMenu
+                value={formData.role}
+                onValueChange={(v) => setFormData({ ...formData, role: v })}
+                placeholder="Select role"
+                className="bg-[#0F172A]/50 border-border"
               >
-                <option value="STAFF" className="bg-[#080D1A] text-[#E8EDF8]">Staff</option>
-                <option value="CLIENT" className="bg-[#080D1A] text-[#E8EDF8]">Client</option>
-                <option value="RM" className="bg-[#080D1A] text-[#E8EDF8]">Relationship Manager</option>
-                <option value="BM" className="bg-[#080D1A] text-[#E8EDF8]">Branch Manager</option>
-                <option value="FINANCE" className="bg-[#080D1A] text-[#E8EDF8]">Finance</option>
-                <option value="ADMIN" className="bg-[#080D1A] text-[#E8EDF8]">Admin</option>
-                <option value="TRAINER" className="bg-[#080D1A] text-[#E8EDF8]">Trainer</option>
-                <option value="ASSESSOR" className="bg-[#080D1A] text-[#E8EDF8]">Assessor</option>
-                <option value="SUPPORT" className="bg-[#080D1A] text-[#E8EDF8]">Support</option>
-              </select>
+                <SelectMenuItem value="STAFF">Staff</SelectMenuItem>
+                <SelectMenuItem value="CLIENT">Client</SelectMenuItem>
+                <SelectMenuItem value="RM">Relationship Manager</SelectMenuItem>
+                <SelectMenuItem value="BM">Branch Manager</SelectMenuItem>
+                <SelectMenuItem value="FINANCE">Finance</SelectMenuItem>
+                <SelectMenuItem value="ADMIN">Admin</SelectMenuItem>
+                <SelectMenuItem value="TRAINER">Trainer</SelectMenuItem>
+                <SelectMenuItem value="ASSESSOR">Assessor</SelectMenuItem>
+                <SelectMenuItem value="SUPPORT">Support</SelectMenuItem>
+              </SelectMenu>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-[#8D9AB5]">Branch ID (Optional)</label>
@@ -275,21 +277,22 @@ export default function AdminUsersPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-[#8D9AB5]">Role</label>
-              <select 
-                className="flex h-10 w-full rounded-md border border-border bg-[#0F172A]/50 px-3 py-2 text-sm text-[#E8EDF8] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
-                value={formData.role} 
-                onChange={e => setFormData({...formData, role: e.target.value})}
+              <SelectMenu
+                value={formData.role}
+                onValueChange={(v) => setFormData({ ...formData, role: v })}
+                placeholder="Select role"
+                className="bg-[#0F172A]/50 border-border"
               >
-                <option value="STAFF" className="bg-[#080D1A] text-[#E8EDF8]">Staff</option>
-                <option value="CLIENT" className="bg-[#080D1A] text-[#E8EDF8]">Client</option>
-                <option value="RM" className="bg-[#080D1A] text-[#E8EDF8]">Relationship Manager</option>
-                <option value="BM" className="bg-[#080D1A] text-[#E8EDF8]">Branch Manager</option>
-                <option value="FINANCE" className="bg-[#080D1A] text-[#E8EDF8]">Finance</option>
-                <option value="ADMIN" className="bg-[#080D1A] text-[#E8EDF8]">Admin</option>
-                <option value="TRAINER" className="bg-[#080D1A] text-[#E8EDF8]">Trainer</option>
-                <option value="ASSESSOR" className="bg-[#080D1A] text-[#E8EDF8]">Assessor</option>
-                <option value="SUPPORT" className="bg-[#080D1A] text-[#E8EDF8]">Support</option>
-              </select>
+                <SelectMenuItem value="STAFF">Staff</SelectMenuItem>
+                <SelectMenuItem value="CLIENT">Client</SelectMenuItem>
+                <SelectMenuItem value="RM">Relationship Manager</SelectMenuItem>
+                <SelectMenuItem value="BM">Branch Manager</SelectMenuItem>
+                <SelectMenuItem value="FINANCE">Finance</SelectMenuItem>
+                <SelectMenuItem value="ADMIN">Admin</SelectMenuItem>
+                <SelectMenuItem value="TRAINER">Trainer</SelectMenuItem>
+                <SelectMenuItem value="ASSESSOR">Assessor</SelectMenuItem>
+                <SelectMenuItem value="SUPPORT">Support</SelectMenuItem>
+              </SelectMenu>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-[#8D9AB5]">Branch ID (Optional)</label>

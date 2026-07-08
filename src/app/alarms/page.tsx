@@ -6,6 +6,7 @@ import { AppShell } from '@/components/layout/app-shell';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/loading';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 import {
   AlertCircle,
   ArrowUp,
@@ -353,7 +354,7 @@ function AlarmsPageContent() {
 
   return (
     <AppShell>
-      <div className="page-padding mx-auto max-w-[1600px]">
+      <div className="page-padding mx-auto flex min-h-0 max-w-[1600px] flex-col">
         {/* Page header */}
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -382,7 +383,8 @@ function AlarmsPageContent() {
         </div>
 
         {/* Category tabs */}
-        <div className="mb-6 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        <div className="sticky top-0 z-20 -mx-4 mb-6 border-b border-white/[0.06] bg-[#0B111B]/85 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:mx-0 lg:rounded-xl lg:border lg:border-white/[0.06] lg:bg-[#121926]/50 lg:px-4">
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {TAB_DEFS.map((t) => {
             const Icon = t.icon;
             const active = tab === t.id;
@@ -404,16 +406,17 @@ function AlarmsPageContent() {
               </button>
             );
           })}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
           {/* Issues list */}
-          <div className="rounded-xl border border-white/[0.08] bg-[#121926]/60">
+          <div className="flex min-h-0 flex-col rounded-xl border border-white/[0.08] bg-[#121926]/60">
             <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
               <h2 className="font-syne text-lg font-bold text-white">All Issues & Alarms</h2>
               <span className="text-sm tabular-nums text-secondary-foreground">{filtered.length} total</span>
             </div>
-            <div className="max-h-[calc(100vh-16rem)] divide-y divide-white/[0.06] overflow-y-auto">
+            <div className="min-h-0 flex-1 divide-y divide-white/[0.06] overflow-y-auto">
               <AnimatePresence mode="popLayout">
                 {filtered.map((issue, idx) => (
                   <motion.button
@@ -530,24 +533,17 @@ function AlarmsPageContent() {
                             >
                               Update status
                             </label>
-                            <div className="relative">
-                              <select
-                                id={`alarm-status-${selected.id}`}
-                                value={draftStatus}
-                                onChange={(e) => setDraftStatus(e.target.value)}
-                                className="w-full appearance-none rounded-lg border border-white/15 bg-[#0B111B]/80 py-2.5 pl-3 pr-10 text-sm text-white outline-none focus:border-[#FF6B00]/50 focus:ring-2 focus:ring-[#FF6B00]/35"
-                              >
-                                {STATUS_OPTIONS.map((o) => (
-                                  <option key={o.value || 'placeholder'} value={o.value}>
-                                    {o.label}
-                                  </option>
-                                ))}
-                              </select>
-                              <ChevronDown
-                                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                                aria-hidden
-                              />
-                            </div>
+                            <SelectMenu
+                              value={draftStatus}
+                              onValueChange={setDraftStatus}
+                              placeholder="— Select action —"
+                            >
+                              {STATUS_OPTIONS.filter((o) => o.value !== '').map((o) => (
+                                <SelectMenuItem key={o.value} value={o.value}>
+                                  {o.label}
+                                </SelectMenuItem>
+                              ))}
+                            </SelectMenu>
                           </div>
                           <div className="flex flex-col gap-2 pt-1 sm:flex-row">
                             <Button

@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { AppShell } from '@/components/layout/app-shell';
 import { api } from '@/lib/api/client';
 import toast from 'react-hot-toast';
-import { ChevronDown } from 'lucide-react';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
 const PERIOD = { month: 4 as const, year: 2026 };
 
@@ -158,21 +158,18 @@ export default function PayrollPage() {
                 >
                   Staff series
                 </label>
-                <div className="relative">
-                  <select
-                    id="payroll-series"
-                    value={series}
-                    onChange={(e) => setSeries(e.target.value as SeriesValue)}
-                    className="w-full appearance-none rounded-lg border border-white/15 bg-[#0B111B]/90 py-3 pl-3 pr-10 text-sm font-medium text-white outline-none focus:border-[#FF6B00]/50 focus:ring-2 focus:ring-[#FF6B00]/35"
-                  >
-                    {SERIES_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                </div>
+                <SelectMenu
+                  value={series}
+                  onValueChange={(v) => setSeries(v as SeriesValue)}
+                  placeholder="Select series"
+                  className="bg-[#0B111B]/90"
+                >
+                  {SERIES_OPTIONS.map((o) => (
+                    <SelectMenuItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectMenuItem>
+                  ))}
+                </SelectMenu>
               </div>
             </div>
 
