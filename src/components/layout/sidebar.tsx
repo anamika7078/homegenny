@@ -46,6 +46,7 @@ function roleLabel(role?: string | null): string {
     TRAINER: 'Trainer',
     ASSESSOR: 'Assessor',
     SUPPORT: 'Support',
+    HR: 'HR Admin',
   };
   return map[role ?? ''] ?? role ?? 'User';
 }
@@ -174,14 +175,42 @@ const ASSESSOR_NAV: NavSection[] = [
   {
     section: 'Assessments',
     items: [
-      { href: '/assessor/assessments', label: 'Assessment Queue', icon: ClipboardCheck },
-      { href: '/assessor/schedules',   label: 'Schedules',         icon: Calendar        },
+      { href: '/assessor/assessments', label: 'My Assessments', icon: ClipboardCheck },
+      { href: '/assessor/schedule', label: 'Schedule', icon: Calendar },
     ],
   },
   {
     section: 'Analytics',
     items: [
       { href: '/assessor/reports', label: 'Reports', icon: BarChart2 },
+    ],
+  },
+];
+
+const HR_NAV: NavSection[] = [
+  {
+    section: 'Overview',
+    items: [
+      { href: '/hr/dashboard', label: 'HR Dashboard', icon: LayoutDashboard },
+    ],
+  },
+  {
+    section: 'Employee Management',
+    items: [
+      { href: '/hr/employees', label: 'Employees', icon: Users },
+    ],
+  },
+  {
+    section: 'Attendance',
+    items: [
+      { href: '/hr/attendance', label: 'Attendance', icon: Calendar },
+    ],
+  },
+  {
+    section: 'Communications',
+    items: [
+      { href: '/hr/notifications', label: 'Notifications', icon: Bell },
+      { href: '/hr/reports', label: 'Reports', icon: BarChart2 },
     ],
   },
 ];
@@ -329,6 +358,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const isAdmin     = role === 'ADMIN';
   const isFinance   = role === 'FINANCE';
   const isSupport   = role === 'SUPPORT';
+  const isHr        = role === 'HR';
 
   const navSections =
     isRm       ? RM_NAV
@@ -337,6 +367,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
     : isAdmin    ? ADMIN_NAV
     : isFinance  ? FINANCE_NAV
     : isSupport  ? SUPPORT_NAV
+    : isHr       ? HR_NAV
     : BM_NAV;
 
   return (
@@ -404,7 +435,13 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <span className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider">Support Portal</span>
         </div>
       )}
-      {!isRm && !isTrainer && !isAssessor && !isAdmin && !isFinance && !isSupport && (
+      {isHr && (
+        <div className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-pink-500/10 border border-pink-500/20 px-3 py-2">
+          <Users className="w-3.5 h-3.5 text-pink-400" />
+          <span className="text-[11px] font-semibold text-pink-400 uppercase tracking-wider">HR Portal</span>
+        </div>
+      )}
+      {!isRm && !isTrainer && !isAssessor && !isAdmin && !isFinance && !isSupport && !isHr && (
         <div className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
           <LayoutDashboard className="w-3.5 h-3.5 text-amber-400" />
           <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">BM Portal</span>

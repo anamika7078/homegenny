@@ -70,6 +70,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: 'Operations',
     items: [
+      { href: '/rm/attendance', label: 'Attendance', icon: Calendar },
       { href: '/rm/incidents', label: 'Incidents', icon: AlertTriangle },
       { href: '/rm/notifications', label: 'Notifications', icon: Bell },
       { href: '/rm/reports', label: 'Reports', icon: BarChart3 },

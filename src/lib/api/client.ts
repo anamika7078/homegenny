@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+import type { StaffAttendanceStatus } from '@/lib/types';
 
 // NEXT_PUBLIC_API_URL is baked at Docker build time via --build-arg
 // For local dev:   NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
@@ -130,6 +131,10 @@ export interface ApiClient {
   getStaff(id: string): Promise<any>;
   createStaff(body: Record<string, unknown>): Promise<any>;
   updateStaff(id: string, body: Record<string, unknown>): Promise<any>;
+  getAttendanceStats(params?: { date?: string; branchId?: string }): Promise<any>;
+  markAttendance(body: { employeeId: string; date: string; status: string }): Promise<any>;
+  uploadDocument(id: string, formData: FormData): Promise<any>;
+  getDocuments(id: string): Promise<any>;
   checkRestricted(aadhaar: string, phone: string): Promise<any>;
 
   getPlacements(params?: Record<string, unknown>): Promise<any>;
@@ -163,6 +168,17 @@ export interface ApiClient {
   createRmIncident(body: Record<string, unknown>): Promise<any>;
   getRmShifts(status?: string): Promise<any>;
   reviewRmShift(id: string, body: { action: string; notes?: string }): Promise<any>;
+  getRmLocations(): Promise<any>;
+  getRmAttendance(params: { branchId: string; month: number; year: number; branchCode?: string }): Promise<any>;
+  markRmAttendance(body: {
+    staff_id: string;
+    date: string;
+    status?: StaffAttendanceStatus | null;
+    overtime_hours?: number;
+    branch_id?: string;
+  }): Promise<any>;
+  previewRmAttendanceInvoice(staffId: string, month: number, year: number): Promise<any>;
+  generateRmAttendanceInvoice(staffId: string, month: number, year: number): Promise<any>;
   getRmUpgrades(): Promise<any>;
   rmIntake(body: Record<string, unknown>): Promise<any>;
 
@@ -265,20 +281,20 @@ export interface ApiClient {
   createAdminUser(body: Record<string, unknown>): Promise<any>;
   updateAdminUser(id: string, body: Record<string, unknown>): Promise<any>;
   deactivateAdminUser(id: string): Promise<any>;
-  
+
   getAdminBranches(): Promise<any>;
   createAdminBranch(body: Record<string, unknown>): Promise<any>;
   updateAdminBranch(id: string, body: Record<string, unknown>): Promise<any>;
-  
+
   getAdminAuditLogs(): Promise<any>;
   getAdminAuditLogDetails(id: string): Promise<any>;
-  
+
   getAdminSystemHealth(): Promise<any>;
   getAdminQueueStatus(): Promise<any>;
   getAdminFailedQueueJobs(limit?: number): Promise<any>;
   retryAdminFailedQueueJobs(): Promise<any>;
   getAdminCronStatus(): Promise<any>;
-  
+
   getAdminRevenueAnalytics(): Promise<any>;
   getAdminPipelineAnalytics(): Promise<any>;
   getAdminPipelineOverview(): Promise<any>;
@@ -287,7 +303,7 @@ export interface ApiClient {
   getAdminVideoCertifications(params?: { status?: string; search?: string; page?: number; limit?: number }): Promise<any>;
   reviewAdminVideoCertification(id: string, body: { status: 'APPROVED' | 'REJECTED'; notes?: string }): Promise<any>;
   getVideoCertViewUrl(key: string): Promise<any>;
-  
+
   submitAdminDeleteRequest(body: Record<string, unknown>): Promise<any>;
   getAdminPrivacyRequests(): Promise<any>;
 
@@ -313,6 +329,15 @@ export const api: ApiClient = {
     apiClient.post('/staff', body),
   updateStaff: (id: string, body: Record<string, unknown>) =>
     apiClient.patch(`/staff/${id}`, body),
+  getAttendanceStats: (params?: { date?: string; branchId?: string }) =>
+    apiClient.get('/attendance/stats', { params }),
+  markAttendance: (body: { employeeId: string; date: string; status: string }) =>
+    apiClient.post('/attendance/mark', body),
+  uploadDocument: (id: string, formData: FormData) =>
+    apiClient.post(`/documents/${id}/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  getDocuments: (id: string) => apiClient.get(`/documents/${id}`),
   checkRestricted: (aadhaar: string, phone: string) =>
     apiClient.post('/restricted-list/check', { aadhaar_number: aadhaar, phone }),
 
@@ -359,6 +384,13 @@ export const api: ApiClient = {
   getRmShifts: (status?: string) =>
     apiClient.get('/rm/shifts', { params: status ? { status } : {} }),
   reviewRmShift: (id, body) => apiClient.patch(`/rm/shifts/${id}/review`, body),
+  getRmLocations: () => apiClient.get('/rm/locations'),
+  getRmAttendance: (params) => apiClient.get('/rm/attendance', { params }),
+  markRmAttendance: (body) => apiClient.put('/rm/attendance', body),
+  previewRmAttendanceInvoice: (staffId, month, year) =>
+    apiClient.get(`/rm/attendance/${staffId}/invoice-preview`, { params: { month, year } }),
+  generateRmAttendanceInvoice: (staffId, month, year) =>
+    apiClient.post(`/rm/attendance/${staffId}/generate-invoice`, null, { params: { month, year } }),
   getRmUpgrades: () => apiClient.get('/rm/upgrades'),
   rmIntake: (body) => apiClient.post('/rm/intake', body),
 

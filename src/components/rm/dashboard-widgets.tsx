@@ -37,7 +37,7 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils/cn';
 
-type StatCategory = 'all' | 'onboarding' | 'operations' | 'concerns';
+type StatCategory = 'all' | 'onboarding' | 'operations' | 'concerns' | 'finance';
 
 export function RmDashboardWidgets() {
   const { data, isLoading } = useRmDashboard();
@@ -51,6 +51,60 @@ export function RmDashboardWidgets() {
 
   // Grouped stats configurations with customized styles
   const stats = useMemo(() => [
+    { 
+      label: 'Active Staff', 
+      value: kpis.active_placements ?? 0, 
+      icon: Users, 
+      href: '/rm/staff', 
+      color: 'success' as const,
+      category: 'all',
+      desc: 'Currently active staff'
+    },
+    { 
+      label: 'Total Pipeline', 
+      value: kpis.total_staff ?? 0, 
+      icon: TrendingUp, 
+      href: '/rm/pipeline', 
+      color: 'info' as const,
+      category: 'all',
+      desc: 'Overall pipeline count'
+    },
+    { 
+      label: 'Invoice Generated', 
+      value: (kpis as any).invoice_generated ?? 0, 
+      icon: FileText, 
+      href: '/rm/finance', 
+      color: 'success' as const,
+      category: 'finance',
+      desc: 'Successfully generated invoices'
+    },
+    { 
+      label: 'Invoice Pending', 
+      value: (kpis as any).invoice_pending ?? 0, 
+      icon: Clock, 
+      href: '/rm/finance', 
+      color: 'warning' as const,
+      category: 'finance',
+      desc: 'Pending for generation'
+    },
+    { 
+      label: 'Invoice Submitted', 
+      value: (kpis as any).invoice_submitted ?? 0, 
+      icon: CheckCircle, 
+      href: '/rm/finance', 
+      color: 'primary' as const,
+      category: 'finance',
+      desc: 'Submitted to clients'
+    },
+    { 
+      label: 'Correction Pending', 
+      value: (kpis as any).correction_pending ?? 0, 
+      icon: AlertTriangle, 
+      href: '/rm/finance', 
+      color: 'danger' as const,
+      category: 'finance',
+      desc: 'Invoices requiring corrections'
+    },
     { 
       label: 'Total Staff', 
       value: kpis.total_staff ?? 0, 
@@ -247,6 +301,7 @@ export function RmDashboardWidgets() {
             { id: 'onboarding', label: 'Onboarding & Training' },
             { id: 'operations', label: 'Field Placements' },
             { id: 'concerns', label: 'Risks & Oversight' },
+            { id: 'finance', label: 'Finance' },
           ].map((tab) => (
             <button
               key={tab.id}

@@ -46,19 +46,21 @@ export function DashboardMetrics({
       {/* Subtle background glow for premium feel */}
       <div className="absolute top-0 left-0 w-full h-[300px] bg-gradient-to-b from-primary/10 to-transparent pointer-events-none rounded-t-3xl -z-10" />
 
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }} 
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className="flex flex-col gap-2"
-      >
-        <h1 className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-foreground to-foreground/70 tracking-tight sm:text-3xl lg:text-4xl">
-          {title}
-        </h1>
-        <p className="text-sm font-medium text-secondary-foreground sm:text-base">
-          Live operational KPIs · HomeGenny Platform
-        </p>
-      </motion.div>
+      {title && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }} 
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="flex flex-col gap-2"
+        >
+          <h1 className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-foreground to-foreground/70 tracking-tight sm:text-3xl lg:text-4xl">
+            {title}
+          </h1>
+          <p className="text-sm font-medium text-secondary-foreground sm:text-base">
+            Live operational KPIs · HomeGenny Platform
+          </p>
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
         {metrics.map((m, i) => (

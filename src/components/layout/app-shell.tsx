@@ -74,7 +74,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [sidebarOpen]);
 
   if (!isAuthenticated) return <PageLoader />;
-  if (!user)            return <PageLoader />;
+  if (!user) return <PageLoader />;
 
   return (
     <ShellContext.Provider value={shellValue}>

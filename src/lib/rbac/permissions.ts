@@ -19,6 +19,7 @@ export const ROLE_HOME: Record<UserRole, string> = {
   SUPPORT: '/support/dashboard',
   STAFF: '/',
   CLIENT: '/',
+  HR: '/hr/dashboard',
 };
 
 export const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [

@@ -19,7 +19,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (!isPublic && pathname.startsWith('/rm') && !hasSession) {
+  // Protected route prefixes — redirect to login if no session
+  const PROTECTED_PREFIXES = ['/rm', '/hr', '/bm', '/admin', '/finance', '/trainer', '/assessor', '/support'];
+  if (!isPublic && PROTECTED_PREFIXES.some((p) => pathname.startsWith(p)) && !hasSession) {
     const login = new URL('/auth/login', request.url);
     login.searchParams.set('next', pathname);
     return NextResponse.redirect(login);
