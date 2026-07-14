@@ -210,11 +210,7 @@ export default function HrCreateEmployeePage() {
             </div>
           </div>
 
-          <div className="rounded-lg bg-blue-500/10 p-4 border border-blue-500/20">
-            <p className="text-sm text-blue-200">
-              Employee ID is auto-generated from the name (e.g. anamika001, anamika002).
-            </p>
-          </div>
+          
 
           <div className="flex justify-end pt-2">
             <Button type="submit" disabled={createMutation.isPending || categoriesLoading}>
