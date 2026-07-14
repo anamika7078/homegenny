@@ -6,78 +6,59 @@ import { Users, Calendar, Bell, BarChart2, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
+import { unwrapData, unwrapItems } from '@/lib/hr/utils';
 
 const QUICK_LINKS = [
-  { href: '/hr/employees',     label: 'Employees',     icon: Users,     color: 'text-blue-400',   bg: 'bg-blue-500/10' },
-  { href: '/hr/attendance',    label: 'Attendance',    icon: Calendar,  color: 'text-green-400',  bg: 'bg-green-500/10' },
-  { href: '/hr/categories',    label: 'Categories',    icon: FileText,  color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
-  { href: '/hr/notifications', label: 'Notifications', icon: Bell,      color: 'text-purple-400', bg: 'bg-purple-500/10' },
-  { href: '/hr/reports',       label: 'Reports',       icon: BarChart2, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+  { href: '/hr/employees', label: 'Employees', icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  { href: '/hr/attendance', label: 'Attendance', icon: Calendar, color: 'text-green-400', bg: 'bg-green-500/10' },
+  { href: '/hr/categories', label: 'Categories', icon: FileText, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+  { href: '/hr/notifications', label: 'Notifications', icon: Bell, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+  { href: '/hr/reports', label: 'Reports', icon: BarChart2, color: 'text-orange-400', bg: 'bg-orange-500/10' },
 ];
 
 export default function HrDashboardPage() {
   const { user } = useAuthStore();
+  const today = new Date().toISOString().split('T')[0];
 
-  // Fetch admin dashboard stats (total_staff, pending_verifications, open_alerts, active_deployments)
-  const { data: dashRaw } = useQuery({
-    queryKey: ['dashboard', 'admin'],
-    queryFn: () => api.getDashboardAdmin(),
+  const { data: employeesRaw } = useQuery({
+    queryKey: ['employees', 'hr', 'dashboard'],
+    queryFn: () => api.listEmployees({ limit: 500 }),
     staleTime: 60_000,
   });
 
-  // Fetch full staff list to derive accurate total + category count
-  const { data: staffRaw } = useQuery({
-    queryKey: ['staff', 'hr'],
-    queryFn: () => api.listStaff({ limit: 500 }),
+  const { data: categoriesRaw } = useQuery({
+    queryKey: ['categories', 'hr'],
+    queryFn: () => api.listCategories(),
     staleTime: 60_000,
   });
 
-  // Fetch open alarms for unread notifications count
-  const { data: alarmsRaw } = useQuery({
-    queryKey: ['alarms', 'open'],
-    queryFn: () => api.getAlarms({ status: 'OPEN' }),
-    staleTime: 60_000,
-  });
-
-  // Fetch actual attendance stats
   const { data: attStatsRaw } = useQuery({
-    queryKey: ['attendance', 'stats'],
-    queryFn: () => api.getAttendanceStats({ date: new Date().toISOString().split('T')[0] }),
+    queryKey: ['attendance', 'stats', today],
+    queryFn: () => api.getAttendanceStats({ date: today }),
     staleTime: 60_000,
   });
 
-  const dash = dashRaw?.data ?? dashRaw ?? {};
+  const { data: notifCountRaw } = useQuery({
+    queryKey: ['hr-notifications', 'unread'],
+    queryFn: () => api.getHrNotifications(),
+    staleTime: 60_000,
+  });
 
-  const employees: any[] = Array.isArray(staffRaw)
-    ? staffRaw
-    : (staffRaw as any)?.data?.items ?? (staffRaw as any)?.data ?? [];
+  const employees = unwrapItems(employeesRaw);
+  const categories = unwrapItems(categoriesRaw);
+  const attStats = unwrapData(attStatsRaw) ?? {};
+  const notifications = unwrapItems(notifCountRaw);
+  const unreadNotifications = notifications.filter((n: any) => !n.readAt).length;
 
-  const alarms: any[] = Array.isArray(alarmsRaw)
-    ? alarmsRaw
-    : (alarmsRaw as any)?.data?.items ?? (alarmsRaw as any)?.data ?? [];
+  const totalEmployees = employees.length;
+  const presentToday = Number(attStats.Present ?? 0);
+  const absentToday = Number(attStats.Absent ?? 0);
+  const onLeaveToday = Number(attStats.Leave ?? 0);
 
-  // Derive counts
-  const totalEmployees = Number(dash.total_staff ?? employees.length) || 0;
-  const pendingActions  = Number(dash.pending_verifications ?? 0);
-  const openAlerts      = Number(dash.open_alerts ?? alarms.length) || 0;
-  const activeDeployments = Number(dash.active_deployments ?? 0);
-
-  const attStats = attStatsRaw?.data ?? attStatsRaw ?? {};
-
-  // Unique series/categories from staff list
-  const categories = employees.length
-    ? new Set(employees.map((e: any) => e.series).filter(Boolean)).size
-    : 0;
-
-  // Present/Absent: use actual attendance stats
-  const presentToday = Number(attStats.present ?? 0);
-  const absentToday  = Number(attStats.absent ?? 0);
-
-  const fmt = (n: number) => n > 0 ? String(n) : n === 0 ? '0' : '—';
+  const fmt = (n: number) => String(n);
 
   return (
     <div className="page-padding max-w-[1600px] mx-auto space-y-8">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-extrabold text-white sm:text-3xl">HR Dashboard</h1>
         <p className="text-sm text-secondary-foreground mt-1">
@@ -85,21 +66,19 @@ export default function HrDashboardPage() {
         </p>
       </div>
 
-      {/* Metrics */}
       <DashboardMetrics
         embedded
         title=""
         metrics={[
-          { label: 'Total Employees',      value: fmt(totalEmployees),   sub: 'All active staff' },
-          { label: 'Present Today',        value: fmt(presentToday),     tone: 'in_progress', sub: 'Actively deployed' },
-          { label: 'Absent Today',         value: fmt(absentToday),      tone: 'pending',     sub: 'Not deployed' },
-          { label: 'Pending Actions',      value: fmt(pendingActions),   tone: 'escalated',   sub: 'Verification queue' },
-          { label: 'Categories',           value: fmt(categories),       sub: 'Job categories' },
-          { label: 'Unread Notifications', value: fmt(openAlerts),       tone: 'pending',     sub: 'Open alerts' },
+          { label: 'Total Employees', value: fmt(totalEmployees), sub: 'Active HR records' },
+          { label: 'Present Today', value: fmt(presentToday), tone: 'in_progress', sub: 'Marked present' },
+          { label: 'Absent Today', value: fmt(absentToday), tone: 'pending', sub: 'Marked absent' },
+          { label: 'On Leave', value: fmt(onLeaveToday), tone: 'escalated', sub: 'Leave today' },
+          { label: 'Categories', value: fmt(categories.length), sub: 'Job categories' },
+          { label: 'Unread Notifications', value: fmt(unreadNotifications), tone: 'pending', sub: 'In-app alerts' },
         ]}
       />
 
-      {/* Quick Links */}
       <div>
         <h2 className="text-base font-semibold text-white mb-4">Quick Access</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">

@@ -131,10 +131,19 @@ export interface ApiClient {
   getStaff(id: string): Promise<any>;
   createStaff(body: Record<string, unknown>): Promise<any>;
   updateStaff(id: string, body: Record<string, unknown>): Promise<any>;
+  listEmployees(params?: Record<string, unknown>): Promise<any>;
+  getEmployee(id: string): Promise<any>;
+  createEmployee(body: Record<string, unknown>): Promise<any>;
+  listCategories(): Promise<any>;
   getAttendanceStats(params?: { date?: string; branchId?: string }): Promise<any>;
   markAttendance(body: { employeeId: string; date: string; status: string }): Promise<any>;
-  uploadDocument(id: string, formData: FormData): Promise<any>;
-  getDocuments(id: string): Promise<any>;
+  previewEmployeePayroll(employeeId: string, month: number, year: number): Promise<any>;
+  generateEmployeePayroll(employeeId: string, month: number, year: number): Promise<any>;
+  getEmployeePayrolls(): Promise<any>;
+  uploadDocument(employeeId: string, formData: FormData): Promise<any>;
+  getEmployeeDocuments(employeeId: string): Promise<any>;
+  getHrNotifications(): Promise<any>;
+  markHrNotificationRead(id: string): Promise<any>;
   checkRestricted(aadhaar: string, phone: string): Promise<any>;
 
   getPlacements(params?: Record<string, unknown>): Promise<any>;
@@ -205,6 +214,10 @@ export interface ApiClient {
   // ── Finance Role APIs ──────────────────────────────────────────────────────
   // Payroll
   getFinancePayroll(params?: { month?: number; year?: number }): Promise<any>;
+  lookupFinanceStaffByCode(code: string): Promise<any>;
+  previewFinanceAttendancePayroll(code: string, month: number, year: number): Promise<any>;
+  generateFinanceAttendancePayroll(code: string, month: number, year: number): Promise<any>;
+  downloadFinanceAttendancePreview(code: string, month: number, year: number): Promise<Blob>;
   previewFinancePayroll(placementId: string, month: number, year: number): Promise<any>;
   confirmPayrollBatch(month: number, year: number): Promise<any>;
   disbursePayroll(payrollId: string): Promise<any>;
@@ -212,6 +225,7 @@ export interface ApiClient {
   // Invoices
   getFinanceInvoices(params?: { status?: string; page?: number }): Promise<any>;
   getFinanceInvoice(id: string): Promise<any>;
+  downloadFinanceInvoice(id: string): Promise<Blob>;
   getFinanceInvoiceSummary(): Promise<any>;
   approveFinanceInvoice(id: string): Promise<any>;
   sendFinanceInvoice(id: string): Promise<any>;
@@ -328,16 +342,32 @@ export const api: ApiClient = {
   createStaff: (body: Record<string, unknown>) =>
     apiClient.post('/staff', body),
   updateStaff: (id: string, body: Record<string, unknown>) =>
-    apiClient.patch(`/staff/${id}`, body),
+    apiClient.put(`/staff/${id}`, body).then(res => res.data),
+  listEmployees: (params?: Record<string, unknown>) =>
+    apiClient.get('/employees', { params }).then((res) => res.data),
+  getEmployee: (id: string) => apiClient.get(`/employees/${id}`).then((res) => res.data),
+  createEmployee: (body: Record<string, unknown>) =>
+    apiClient.post('/employees', body).then((res) => res.data),
+  listCategories: () => apiClient.get('/categories').then((res) => res.data),
   getAttendanceStats: (params?: { date?: string; branchId?: string }) =>
     apiClient.get('/attendance/stats', { params }),
   markAttendance: (body: { employeeId: string; date: string; status: string }) =>
-    apiClient.post('/attendance/mark', body),
-  uploadDocument: (id: string, formData: FormData) =>
-    apiClient.post(`/documents/${id}/upload`, formData, {
+    apiClient.post(`/attendance/mark`, body).then((res) => res.data),
+  previewEmployeePayroll: (employeeId: string, month: number, year: number) =>
+    apiClient.get(`/attendance/${employeeId}/payroll-preview`, { params: { month, year } }).then((res) => res.data),
+  generateEmployeePayroll: (employeeId: string, month: number, year: number) =>
+    apiClient.post(`/attendance/${employeeId}/generate-payroll`, null, { params: { month, year } }).then((res) => res.data),
+  getEmployeePayrolls: () =>
+    apiClient.get(`/attendance/payrolls/all`).then((res) => res.data),
+  uploadDocument: (employeeId: string, formData: FormData) =>
+    apiClient.post(`/documents/${employeeId}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
-  getDocuments: (id: string) => apiClient.get(`/documents/${id}`),
+  getEmployeeDocuments: (employeeId: string) =>
+    apiClient.get(`/documents/employee/${employeeId}`).then((res) => res.data),
+  getHrNotifications: () => apiClient.get('/notifications/in-app'),
+  markHrNotificationRead: (id: string) =>
+    apiClient.patch(`/notifications/in-app/${id}/read`),
   checkRestricted: (aadhaar: string, phone: string) =>
     apiClient.post('/restricted-list/check', { aadhaar_number: aadhaar, phone }),
 
@@ -423,6 +453,21 @@ export const api: ApiClient = {
   // Payroll
   getFinancePayroll: (params?: { month?: number; year?: number }) =>
     apiClient.get('/finance/payroll', { params }),
+  lookupFinanceStaffByCode: (code: string) =>
+    apiClient.get('/finance/payroll/lookup', { params: { code } }),
+  previewFinanceAttendancePayroll: (code: string, month: number, year: number) =>
+    apiClient.get('/finance/payroll/attendance-preview', { params: { code, month, year } }),
+  generateFinanceAttendancePayroll: (code: string, month: number, year: number) =>
+    apiClient.post('/finance/payroll/attendance-generate', { code, month, year }),
+  downloadFinanceAttendancePreview: async (code: string, month: number, year: number): Promise<Blob> => {
+    const token = tokenStore.getAccess();
+    const res = await axios.get(`${BASE_URL}/finance/payroll/attendance-preview/download`, {
+      params: { code, month, year },
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      responseType: 'blob',
+    });
+    return res.data as Blob;
+  },
   previewFinancePayroll: (placementId: string, month: number, year: number) =>
     apiClient.post('/finance/payroll/preview', { placement_id: placementId, month, year }),
   confirmPayrollBatch: (month: number, year: number) =>
@@ -435,6 +480,14 @@ export const api: ApiClient = {
     apiClient.get('/finance/invoices', { params }),
   getFinanceInvoice: (id: string) =>
     apiClient.get(`/finance/invoices/${id}`),
+  downloadFinanceInvoice: async (id: string): Promise<Blob> => {
+    const token = tokenStore.getAccess();
+    const res = await axios.get(`${BASE_URL}/finance/invoices/${id}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      responseType: 'blob',
+    });
+    return res.data as Blob;
+  },
   getFinanceInvoiceSummary: () =>
     apiClient.get('/finance/invoices/summary'),
   approveFinanceInvoice: (id: string) =>

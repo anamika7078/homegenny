@@ -25,6 +25,7 @@ import {
   Calendar,
   BarChart2,
   TrendingUp,
+  Calculator,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -280,6 +281,7 @@ const FINANCE_NAV: NavSection[] = [
     section: 'Finance',
     items: [
       { href: '/finance/payroll',     label: 'Payroll',     icon: DollarSign },
+      { href: '/finance/payroll/attendance', label: 'Attendance Payroll', icon: Calculator },
       { href: '/finance/invoices',    label: 'Invoices',    icon: FileText   },
       { href: '/finance/deposits',    label: 'Deposits',    icon: TrendingUp },
       { href: '/finance/settlements', label: 'Settlements', icon: DollarSign },

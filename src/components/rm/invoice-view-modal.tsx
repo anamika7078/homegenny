@@ -46,12 +46,24 @@ export function InvoiceViewModal({ data, onClose, title }: InvoiceViewModalProps
           <Row label="Prorated gross" value={fmtRs(preview.prorated_gross)} highlight />
           {calc && (
             <>
-              <Row label="Management fee" value={fmtRs(calc.managementFee)} />
-              <Row label="GST on fee (18%)" value={fmtRs(calc.gstOnFee)} />
-              <Row label="ESIC (employee)" value={fmtRs(calc.esicEmployee)} />
-              <Row label="PF (employee)" value={fmtRs(calc.pfEmployee)} />
-              <Row label="Net salary" value={fmtRs(calc.netSalary)} />
-              <Row label="Client total" value={fmtRs(calc.clientTotalCharge)} highlight />
+              {calc.managementFee != null && (
+                <Row label="Management fee" value={fmtRs(calc.managementFee)} />
+              )}
+              {calc.gstOnFee != null && (
+                <Row label="GST on fee (18%)" value={fmtRs(calc.gstOnFee)} />
+              )}
+              {calc.esicEmployee != null && calc.esicEmployee > 0 && (
+                <Row label="ESIC (employee)" value={fmtRs(calc.esicEmployee)} />
+              )}
+              {calc.pfEmployee != null && calc.pfEmployee > 0 && (
+                <Row label="PF (employee)" value={fmtRs(calc.pfEmployee)} />
+              )}
+              {calc.netSalary != null && (
+                <Row label="Net salary" value={fmtRs(calc.netSalary)} />
+              )}
+              {calc.clientTotalCharge != null && (
+                <Row label="Client total" value={fmtRs(calc.clientTotalCharge)} highlight />
+              )}
             </>
           )}
         </div>

@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { Spinner } from '@/components/ui/loading';
-import { Calendar, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react';
+import { Calendar, CheckCircle, XCircle, Clock, AlertTriangle, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { unwrapItems } from '@/lib/hr/utils';
 
 const STATUS_ICONS = {
   PRESENT: <CheckCircle className="h-4 w-4 text-green-400" />,
@@ -14,22 +16,25 @@ const STATUS_ICONS = {
   HALF_DAY: <AlertTriangle className="h-4 w-4 text-orange-400" />,
 };
 
-export default function HrAttendancePage() {
-  const [date] = useState(new Date().toISOString().split('T')[0]); // Today's date by default
+function unwrapEmployees(data: unknown): any[] {
+  return unwrapItems(data);
+}
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['staff', 'hr'],
-    queryFn: () => api.listStaff({ limit: 100 }),
+export default function HrAttendancePage() {
+  const [date] = useState(new Date().toISOString().split('T')[0]);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['employees', 'hr', 'attendance'],
+    queryFn: () => api.listEmployees({ limit: 100, status: 'Active' }),
   });
 
-  const employees: any[] = Array.isArray(data)
-    ? data
-    : (data as any)?.data?.items ?? (data as any)?.data ?? [];
+  const employees = unwrapEmployees(data);
 
   const [attendance, setAttendance] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   const handleStatusChange = (empId: string, status: string) => {
-    setAttendance(prev => ({
+    setAttendance((prev) => ({
       ...prev,
       [empId]: status,
     }));
@@ -49,21 +54,29 @@ export default function HrAttendancePage() {
       HALF_DAY: 'Half Day',
     };
 
+    setSaving(true);
     try {
-      const promises = changes.map(([empId, status]) =>
-        api.markAttendance({
-          employeeId: empId,
-          date,
-          status: statusMap[status] || 'Present',
-        })
+      await Promise.all(
+        changes.map(([empId, status]) =>
+          api.markAttendance({
+            employeeId: empId,
+            date,
+            status: statusMap[status] || 'Present',
+          }),
+        ),
       );
-      await Promise.all(promises);
       toast.success('Attendance records saved successfully');
-      // Clear tracking after save
       setAttendance({});
-    } catch (error: any) {
-      console.error('Save failed:', error);
-      toast.error(error?.response?.data?.message || 'Failed to save attendance');
+    } catch (err: any) {
+      console.error('Save failed:', err);
+      const message =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        'Failed to save attendance';
+      toast.error(Array.isArray(message) ? message.join(', ') : message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -75,6 +88,14 @@ export default function HrAttendancePage() {
     return (
       <div className="flex justify-center py-24">
         <Spinner />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="page-padding max-w-[1600px] mx-auto py-24 text-center">
+        <p className="text-red-400 text-sm">Failed to load employees. Please try again.</p>
       </div>
     );
   }
@@ -92,60 +113,86 @@ export default function HrAttendancePage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={handleExport}
             className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
           >
             Export Report
           </button>
-          <button 
+          <button
             onClick={handleSave}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+            disabled={saving || employees.length === 0}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
-            Save All
+            {saving ? 'Saving…' : 'Save All'}
           </button>
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-white/10 bg-background/40 backdrop-blur-xl">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-white/10">
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-secondary-foreground">Employee ID</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-secondary-foreground">Name</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-secondary-foreground">Category</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-secondary-foreground">Status (Today)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {employees.map((emp: any) => {
-              const currentStatus = attendance[emp.id] || 'PRESENT';
-              return (
-                <tr key={emp.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                  <td className="px-4 py-3 text-secondary-foreground">{emp.staff_code ?? '—'}</td>
-                  <td className="px-4 py-3 font-medium text-white">{emp.full_name ?? emp.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-secondary-foreground">{emp.series ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={currentStatus}
-                        onChange={(e) => handleStatusChange(emp.id, e.target.value)}
-                        className="rounded-lg border border-white/10 bg-background px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      >
-                        <option value="PRESENT">Present</option>
-                        <option value="HALF_DAY">Half Day</option>
-                        <option value="LEAVE">Leave</option>
-                        <option value="ABSENT">Absent</option>
-                      </select>
-                      {STATUS_ICONS[currentStatus as keyof typeof STATUS_ICONS]}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {employees.length === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-background/40 p-12 text-center">
+          <Users className="mx-auto h-10 w-10 text-secondary-foreground/40 mb-3" />
+          <p className="text-secondary-foreground text-sm mb-4">
+            No employees found. Add employees first, then mark attendance.
+          </p>
+          <Link
+            href="/hr/employees/create"
+            className="inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          >
+            Add Employee
+          </Link>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-background/40 backdrop-blur-xl">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-secondary-foreground">
+                  Employee ID
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-secondary-foreground">
+                  Name
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-secondary-foreground">
+                  Category
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-secondary-foreground">
+                  Status (Today)
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {employees.map((emp: any) => {
+                const currentStatus = attendance[emp.id] || 'PRESENT';
+                return (
+                  <tr key={emp.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                    <td className="px-4 py-3 text-secondary-foreground">{emp.employeeId ?? '—'}</td>
+                    <td className="px-4 py-3 font-medium text-white">{emp.fullName ?? '—'}</td>
+                    <td className="px-4 py-3 text-secondary-foreground">
+                      {emp.category?.name ?? emp.department ?? '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={currentStatus}
+                          onChange={(e) => handleStatusChange(emp.id, e.target.value)}
+                          className="rounded-lg border border-white/10 bg-background px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        >
+                          <option value="PRESENT">Present</option>
+                          <option value="HALF_DAY">Half Day</option>
+                          <option value="LEAVE">Leave</option>
+                          <option value="ABSENT">Absent</option>
+                        </select>
+                        {STATUS_ICONS[currentStatus as keyof typeof STATUS_ICONS]}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -153,7 +153,7 @@ export default function LoginPage() {
         <div className="text-center text-xs text-slate-500 mt-6 space-y-1">
           <p className="font-medium text-slate-400">Password for all: HomeGenny@2024</p>
           <p>9800000001 Branch Manager (BM) · 9800000002 Relationship Manager (RM) · 9800000003 Admin</p>
-          <p>9800000004 Finance · 9800000005 Trainer · 9800000006 Assessor</p>
+          <p>9800000004 Finance · 9800000005 Trainer · 9800000006 Assessor  9800000008 HR</p>
         </div>
       </div>
 

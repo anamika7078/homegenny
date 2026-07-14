@@ -4,8 +4,10 @@ import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
 import {
   Loader2, FileText, CheckCircle2, Send, Search,
-  AlertTriangle, RefreshCw, Eye,
+  AlertTriangle, RefreshCw, Eye, Download,
 } from 'lucide-react';
+import axios from 'axios';
+import { BASE_URL, tokenStore } from '@/lib/api/client';
 
 function fmt(n: number | string) {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(Number(n));
@@ -47,6 +49,7 @@ export default function InvoicesPage() {
   const [loading, setLoading]       = useState(false);
   const [search, setSearch]         = useState('');
   const [actioning, setActioning]   = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
   const [selected, setSelected]     = useState<any | null>(null);
   const [toast, setToast]           = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
@@ -102,6 +105,27 @@ export default function InvoicesPage() {
       setSelected(res);
     } catch (e: any) {
       showToast('error', e.message ?? 'Failed to load detail');
+    }
+  };
+
+  const handleDownload = async (id: string, invoiceNumber: string) => {
+    setDownloading(id);
+    try {
+      const token = tokenStore.getAccess();
+      const res = await axios.get(`${BASE_URL}/finance/invoices/${id}/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `invoice-${invoiceNumber || id}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Download failed');
+    } finally {
+      setDownloading(null);
     }
   };
 
@@ -288,6 +312,18 @@ export default function InvoicesPage() {
                             title="View line items"
                           >
                             <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            id={`btn-download-inv-${inv.id}`}
+                            onClick={() => handleDownload(inv.id, inv.invoice_number)}
+                            disabled={downloading === inv.id}
+                            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition disabled:opacity-50"
+                            title="Download invoice"
+                          >
+                            {downloading === inv.id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Download className="w-3.5 h-3.5" />
+                            }
                           </button>
                           {inv.status === 'PENDING' && (
                             <button
