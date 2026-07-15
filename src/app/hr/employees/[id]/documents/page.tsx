@@ -46,17 +46,28 @@ function getUnavailableRemark(doc: any): string {
   return String(doc?.metadata?.remark ?? '').trim();
 }
 
-function emptyPending() {
+type PendingUpload = {
+  file: File | null;
+  expiry?: string;
+  issue?: string;
+};
+
+type UnavailableState = {
+  checked: boolean;
+  remark: string;
+};
+
+function emptyPending(): Record<string, PendingUpload> {
   return {
-    aadhaar: { file: null as File | null },
-    pan: { file: null as File | null },
-    photo: { file: null as File | null },
-    police_verification: { file: null as File | null },
-    driving_license: { file: null as File | null, expiry: '', issue: '' },
+    aadhaar: { file: null },
+    pan: { file: null },
+    photo: { file: null },
+    police_verification: { file: null },
+    driving_license: { file: null, expiry: '', issue: '' },
   };
 }
 
-function emptyUnavailable() {
+function emptyUnavailable(): Record<string, UnavailableState> {
   return {
     aadhaar: { checked: false, remark: '' },
     pan: { checked: false, remark: '' },
@@ -113,12 +124,12 @@ export default function EmployeeDocumentsPage({ params }: { params: { id: string
   const handleFileChange = (docType: string, file: File | null) => {
     setPendingUploads((prev) => ({
       ...prev,
-      [docType]: { ...prev[docType as keyof typeof prev], file },
+      [docType]: { ...prev[docType], file },
     }));
     if (file) {
       setUnavailable((prev) => ({
         ...prev,
-        [docType]: { ...prev[docType as keyof typeof prev], checked: false },
+        [docType]: { ...prev[docType], checked: false },
       }));
     }
   };
@@ -129,8 +140,8 @@ export default function EmployeeDocumentsPage({ params }: { params: { id: string
       [key]: {
         checked,
         remark: checked
-          ? prev[key as keyof typeof prev]?.remark || getUnavailableRemark(docsByUiKey[key])
-          : prev[key as keyof typeof prev]?.remark || '',
+          ? prev[key]?.remark || getUnavailableRemark(docsByUiKey[key])
+          : prev[key]?.remark || '',
       },
     }));
     if (checked) {
@@ -139,7 +150,7 @@ export default function EmployeeDocumentsPage({ params }: { params: { id: string
         [key]:
           key === 'driving_license'
             ? { file: null, expiry: '', issue: '' }
-            : { ...prev[key as keyof typeof prev], file: null },
+            : { ...prev[key], file: null },
       }));
     }
   };
@@ -286,16 +297,16 @@ export default function EmployeeDocumentsPage({ params }: { params: { id: string
         <label className="flex items-center gap-2 text-sm text-secondary-foreground cursor-pointer">
           <input
             type="checkbox"
-            checked={unavailable[key as keyof typeof unavailable]?.checked ?? false}
+            checked={unavailable[key]?.checked ?? false}
             onChange={(e) => toggleUnavailable(key, e.target.checked)}
             className="rounded border-white/20"
           />
           Document not available
         </label>
-        {unavailable[key as keyof typeof unavailable]?.checked && (
+        {unavailable[key]?.checked && (
           <textarea
             placeholder={`Remark (required) — e.g. ${DOC_LABELS[key] ?? key} applied / pending`}
-            value={unavailable[key as keyof typeof unavailable]?.remark ?? ''}
+            value={unavailable[key]?.remark ?? ''}
             onChange={(e) =>
               setUnavailable((prev) => ({
                 ...prev,
