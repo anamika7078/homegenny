@@ -212,7 +212,6 @@ const HR_NAV: NavSection[] = [
     section: 'Communications',
     items: [
       { href: '/hr/notifications', label: 'Notifications', icon: Bell },
-      { href: '/hr/reports', label: 'Reports', icon: BarChart2 },
     ],
   },
 ];

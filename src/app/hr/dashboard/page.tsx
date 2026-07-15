@@ -2,7 +2,7 @@
 
 import { useAuthStore } from '@/lib/store/auth.store';
 import { DashboardMetrics } from '@/components/dashboard/dashboard-metrics';
-import { Users, Calendar, Bell, BarChart2, FileText } from 'lucide-react';
+import { Users, Calendar, Bell, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
@@ -13,7 +13,6 @@ const QUICK_LINKS = [
   { href: '/hr/attendance', label: 'Attendance', icon: Calendar, color: 'text-green-400', bg: 'bg-green-500/10' },
   { href: '/hr/categories', label: 'Categories', icon: FileText, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
   { href: '/hr/notifications', label: 'Notifications', icon: Bell, color: 'text-purple-400', bg: 'bg-purple-500/10' },
-  { href: '/hr/reports', label: 'Reports', icon: BarChart2, color: 'text-orange-400', bg: 'bg-orange-500/10' },
 ];
 
 export default function HrDashboardPage() {
