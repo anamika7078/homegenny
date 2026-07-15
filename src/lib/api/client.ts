@@ -134,14 +134,34 @@ export interface ApiClient {
   listEmployees(params?: Record<string, unknown>): Promise<any>;
   getEmployee(id: string): Promise<any>;
   createEmployee(body: Record<string, unknown>): Promise<any>;
+  updateEmployeeStatus(id: string, status: string): Promise<any>;
+  exitEmployee(
+    id: string,
+    body: { channel: 'ONLINE' | 'OFFLINE'; reason: string; exitDate: string; notes?: string },
+  ): Promise<any>;
   listCategories(): Promise<any>;
+  listAttendance(params?: {
+    date?: string;
+    employeeId?: string;
+    branchId?: string;
+    categoryId?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<any>;
   getAttendanceStats(params?: { date?: string; branchId?: string }): Promise<any>;
-  markAttendance(body: { employeeId: string; date: string; status: string }): Promise<any>;
+  markAttendance(body: {
+    employeeId: string;
+    date: string;
+    status: string;
+    notes?: string;
+  }): Promise<any>;
   previewEmployeePayroll(employeeId: string, month: number, year: number): Promise<any>;
   generateEmployeePayroll(employeeId: string, month: number, year: number): Promise<any>;
   getEmployeePayrolls(): Promise<any>;
   uploadDocument(employeeId: string, formData: FormData): Promise<any>;
   getEmployeeDocuments(employeeId: string): Promise<any>;
+  markDocumentUnavailable(employeeId: string, body: { type: string; remark: string }): Promise<any>;
+  completeEmployeeOnboarding(employeeId: string, body?: { remark?: string }): Promise<any>;
   getHrNotifications(): Promise<any>;
   markHrNotificationRead(id: string): Promise<any>;
   checkRestricted(aadhaar: string, phone: string): Promise<any>;
@@ -348,23 +368,44 @@ export const api: ApiClient = {
   getEmployee: (id: string) => apiClient.get(`/employees/${id}`).then((res) => res.data),
   createEmployee: (body: Record<string, unknown>) =>
     apiClient.post('/employees', body).then((res) => res.data),
+  updateEmployeeStatus: (id: string, status: string) =>
+    apiClient.patch(`/employees/${id}/status`, { status }).then((res) => res.data),
+  exitEmployee: (
+    id: string,
+    body: { channel: 'ONLINE' | 'OFFLINE'; reason: string; exitDate: string; notes?: string },
+  ) => apiClient.post(`/employees/${id}/exit`, body).then((res) => res.data),
   listCategories: () => apiClient.get('/categories').then((res) => res.data),
+  listAttendance: (params?: {
+    date?: string;
+    employeeId?: string;
+    branchId?: string;
+    categoryId?: string;
+    page?: number;
+    limit?: number;
+  }) => apiClient.get('/attendance', { params }).then((res) => res.data),
   getAttendanceStats: (params?: { date?: string; branchId?: string }) =>
-    apiClient.get('/attendance/stats', { params }),
-  markAttendance: (body: { employeeId: string; date: string; status: string }) =>
-    apiClient.post(`/attendance/mark`, body).then((res) => res.data),
+    apiClient.get('/attendance/stats', { params }).then((res) => res.data),
+  markAttendance: (body: {
+    employeeId: string;
+    date: string;
+    status: string;
+    notes?: string;
+  }) => apiClient.post(`/attendance/mark`, body).then((res) => res.data),
   previewEmployeePayroll: (employeeId: string, month: number, year: number) =>
-    apiClient.get(`/attendance/${employeeId}/payroll-preview`, { params: { month, year } }).then((res) => res.data),
+    apiClient.get(`/attendance/${employeeId}/payroll-preview`, { params: { month, year } }),
   generateEmployeePayroll: (employeeId: string, month: number, year: number) =>
-    apiClient.post(`/attendance/${employeeId}/generate-payroll`, null, { params: { month, year } }).then((res) => res.data),
-  getEmployeePayrolls: () =>
-    apiClient.get(`/attendance/payrolls/all`).then((res) => res.data),
+    apiClient.post(`/attendance/${employeeId}/generate-payroll`, { month, year }),
+  getEmployeePayrolls: () => apiClient.get(`/attendance/payrolls/all`),
   uploadDocument: (employeeId: string, formData: FormData) =>
     apiClient.post(`/documents/${employeeId}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   getEmployeeDocuments: (employeeId: string) =>
-    apiClient.get(`/documents/employee/${employeeId}`).then((res) => res.data),
+    apiClient.get(`/documents/employee/${employeeId}`),
+  markDocumentUnavailable: (employeeId: string, body: { type: string; remark: string }) =>
+    apiClient.post(`/documents/${employeeId}/unavailable`, body),
+  completeEmployeeOnboarding: (employeeId: string, body?: { remark?: string }) =>
+    apiClient.post(`/documents/${employeeId}/complete-onboarding`, body ?? {}),
   getHrNotifications: () => apiClient.get('/notifications/in-app'),
   markHrNotificationRead: (id: string) =>
     apiClient.patch(`/notifications/in-app/${id}/read`),

@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import toast from 'react-hot-toast';
 import { Users, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { HR_BRANCH_ID, unwrapItems } from '@/lib/hr/utils';
+import { HR_BRANCH_ID, unwrapData, unwrapItems } from '@/lib/hr/utils';
 
 export default function HrCreateEmployeePage() {
   const router = useRouter();
@@ -27,6 +27,8 @@ export default function HrCreateEmployeePage() {
     joiningDate: new Date().toISOString().split('T')[0],
     categoryId: '',
     salary: '18000',
+    docsNotAvailable: false,
+    onboardingRemark: '',
   });
 
   const { data: categoriesRaw, isLoading: categoriesLoading } = useQuery({
@@ -40,9 +42,13 @@ export default function HrCreateEmployeePage() {
     mutationFn: (data: Record<string, unknown>) => api.createEmployee(data),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['employees', 'hr'] });
-      const employee = res?.data ?? res;
+      const employee = unwrapData(res) ?? res?.data ?? res;
       toast.success(`Employee created! ID: ${employee?.employeeId ?? 'saved'}`);
-      router.push('/hr/employees');
+      if (employee?.id) {
+        router.push(`/hr/employees/${employee.id}/documents`);
+      } else {
+        router.push('/hr/employees');
+      }
     },
     onError: (err: any) => {
       toast.error(err.message || 'Failed to create employee');
@@ -63,6 +69,10 @@ export default function HrCreateEmployeePage() {
       toast.error('Please select a category');
       return;
     }
+    if (formData.docsNotAvailable && !formData.onboardingRemark.trim()) {
+      toast.error('Please leave a remark when documents are not available');
+      return;
+    }
 
     const category = categories.find((c: any) => c.id === formData.categoryId);
     const categoryName = category?.name ?? 'Operations';
@@ -77,7 +87,9 @@ export default function HrCreateEmployeePage() {
       city: formData.city,
       state: formData.state,
       pincode: formData.pincode,
-      emergencyContact: {},
+      emergencyContact: formData.docsNotAvailable
+        ? { onboardingRemark: formData.onboardingRemark.trim(), docsNotAvailableAtCreate: true }
+        : {},
       joiningDate: formData.joiningDate,
       branchId: HR_BRANCH_ID,
       categoryId: formData.categoryId,
@@ -208,13 +220,34 @@ export default function HrCreateEmployeePage() {
                 required
               />
             </div>
-          </div>
 
-          
+            <div className="space-y-3 sm:col-span-2 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+              <label className="flex items-center gap-2 text-sm text-white cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.docsNotAvailable}
+                  onChange={(e) =>
+                    setFormData({ ...formData, docsNotAvailable: e.target.checked })
+                  }
+                  className="rounded border-white/20"
+                />
+                Documents not available yet — leave a remark to continue onboarding
+              </label>
+              {formData.docsNotAvailable && (
+                <textarea
+                  placeholder="Remark (required) — e.g. PAN applied for, documents with candidate"
+                  value={formData.onboardingRemark}
+                  onChange={(e) => setFormData({ ...formData, onboardingRemark: e.target.value })}
+                  rows={3}
+                  className="w-full rounded-xl border border-amber-500/30 bg-background px-3 py-2 text-sm text-white placeholder:text-secondary-foreground/50 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                />
+              )}
+            </div>
+          </div>
 
           <div className="flex justify-end pt-2">
             <Button type="submit" disabled={createMutation.isPending || categoriesLoading}>
-              {createMutation.isPending ? 'Saving...' : 'Create Employee'}
+              {createMutation.isPending ? 'Saving...' : 'Create & Continue Onboarding'}
             </Button>
           </div>
         </form>

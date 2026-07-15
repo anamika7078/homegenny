@@ -29,6 +29,7 @@ export const DOC_TYPE_TO_API: Record<string, string> = {
   aadhaar: 'Aadhaar Card',
   pan: 'PAN Card',
   photo: 'Passport Size Photo',
+  police_verification: 'Police Verification Certificate',
   driving_license: 'Driving License',
 };
 
@@ -36,5 +37,14 @@ export const DOC_TYPE_FROM_API: Record<string, string> = {
   'Aadhaar Card': 'aadhaar',
   'PAN Card': 'pan',
   'Passport Size Photo': 'photo',
+  'Police Verification Certificate': 'police_verification',
   'Driving License': 'driving_license',
+};
+
+export const DOC_LABELS: Record<string, string> = {
+  aadhaar: 'Aadhaar Card',
+  pan: 'PAN Card',
+  photo: 'Passport Photo',
+  police_verification: 'Police Verification',
+  driving_license: 'Driving License',
 };

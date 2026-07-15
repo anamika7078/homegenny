@@ -199,6 +199,7 @@ const HR_NAV: NavSection[] = [
     section: 'Employee Management',
     items: [
       { href: '/hr/employees', label: 'Employees', icon: Users },
+      { href: '/hr/payroll', label: 'Salary Slips', icon: DollarSign },
     ],
   },
   {
