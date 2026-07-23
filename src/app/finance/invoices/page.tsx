@@ -156,7 +156,7 @@ function GenerateInvoiceModal({
   }, [code, month, year]);
 
   const calc = preview?.calculation as Calc | undefined;
-  const alreadyGenerated = !!preview?.invoice_id || !!invoiceId;
+  const alreadyGenerated = !!preview?.invoice_id || !!preview?.payroll_id || !!invoiceId;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
@@ -362,7 +362,11 @@ function GenerateInvoiceModal({
                 <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-950/40 border border-amber-500/20 rounded-xl">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                   <span className="text-xs text-amber-300">
-                    Invoice <strong>{preview.invoice_number}</strong> already exists for this period.
+                    {preview.type === 'EMPLOYEE' ? (
+                      <>Payroll record already exists for this period.</>
+                    ) : (
+                      <>Invoice <strong>{preview.invoice_number}</strong> already exists for this period.</>
+                    )}
                   </span>
                 </div>
               )}
