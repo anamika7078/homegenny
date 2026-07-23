@@ -4,10 +4,10 @@ import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/store/auth.store';
-import { Input }   from '@/components/ui/input';
-import { Button }  from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/loading';
-import { Modal }   from '@/components/ui/modal';
+import { Modal } from '@/components/ui/modal';
 import toast from 'react-hot-toast';
 import { getDashboardPath } from '@/lib/rbac/permissions';
 import type { UserRole } from '@/lib/types';
@@ -15,9 +15,9 @@ import type { UserRole } from '@/lib/types';
 type LoginDialog = 'invalid_credentials' | 'other_system' | null;
 
 export default function LoginPage() {
-  const [phone,    setPhone]    = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [dialog, setDialog]     = useState<LoginDialog>(null);
+  const [dialog, setDialog] = useState<LoginDialog>(null);
   const { setAuth } = useAuthStore();
   const router = useRouter();
 
@@ -36,7 +36,7 @@ export default function LoginPage() {
         sessionStorage.setItem('hg_2fa_phone', phone.trim());
         sessionStorage.setItem('hg_2fa_password', password);
         sessionStorage.setItem('hg_totp_otpauth', payload.otpauth_url ?? '');
-        sessionStorage.setItem('hg_totp_secret',  payload.totp_secret  ?? '');
+        sessionStorage.setItem('hg_totp_secret', payload.totp_secret ?? '');
         router.push('/auth/2fa');
         return;
       }
@@ -54,10 +54,10 @@ export default function LoginPage() {
       }
 
       const user = {
-        id:        payload.user.id,
+        id: payload.user.id,
         full_name: payload.user.full_name ?? payload.user.name ?? payload.user.phone,
-        phone:     payload.user.phone,
-        role:      payload.user.role as UserRole,
+        phone: payload.user.phone,
+        role: payload.user.role as UserRole,
         is_active: payload.user.is_active ?? true,
         branch_id: payload.user.branch_id ?? null,
       };
@@ -92,9 +92,9 @@ export default function LoginPage() {
 
   const handleSubmit = () => {
     const cleanPhone = phone.replace(/\D/g, '');
-    if (!cleanPhone)            { toast.error('Enter your phone number'); return; }
-    if (cleanPhone.length < 10) { toast.error('Phone must be 10 digits');  return; }
-    if (!password)              { toast.error('Enter your password');      return; }
+    if (!cleanPhone) { toast.error('Enter your phone number'); return; }
+    if (cleanPhone.length < 10) { toast.error('Phone must be 10 digits'); return; }
+    if (!password) { toast.error('Enter your password'); return; }
     setDialog(null);
     login.mutate();
   };
@@ -152,8 +152,8 @@ export default function LoginPage() {
 
         <div className="text-center text-xs text-slate-500 mt-6 space-y-1">
           <p className="font-medium text-slate-400">Password for all: HomeGenny@2024</p>
-          <p>9800000001 Branch Manager (BM) · 9800000002 Relationship Manager (RM) · 9800000003 Admin</p>
-          <p>9800000004 Finance · 9800000005 Trainer · 9800000006 Assessor  9800000008 HR</p>
+          <p>· 9800000002 Relationship Manager (RM) · 9800000003 Admin</p>
+          <p>9800000004 Finance · 9800000005 Trainer ·  9800000008 HR</p>
         </div>
       </div>
 

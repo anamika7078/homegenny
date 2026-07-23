@@ -1,18 +1,26 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
 import {
   Loader2, FileText, CheckCircle2, Send, Search,
-  AlertTriangle, RefreshCw, Eye, Download,
+  AlertTriangle, RefreshCw, Eye, Download, Plus,
+  User, Calculator, X, ChevronRight, Receipt,
 } from 'lucide-react';
 import axios from 'axios';
 import { BASE_URL, tokenStore } from '@/lib/api/client';
+import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
 function fmt(n: number | string) {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(Number(n));
 }
 function fmtRs(n: number | string) { return `₹${fmt(n)}`; }
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const STATUS_TABS = [
   { id: '',         label: 'All' },
@@ -42,7 +50,378 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 interface LineItem { description: string; amount: number; gst_applicable: boolean; }
+interface Calc {
+  grossSalary: number;
+  esicEmployee: number;
+  esicEmployer: number;
+  pfEmployee: number;
+  pfEmployer: number;
+  netSalary: number;
+  managementFee: number;
+  gstOnFee: number;
+  clientTotalCharge: number;
+}
 
+// ── Generate Invoice Modal ────────────────────────────────────────────────────
+function GenerateInvoiceModal({
+  onClose,
+  onGenerated,
+}: {
+  onClose: () => void;
+  onGenerated: () => void;
+}) {
+  const now = new Date();
+  const [step, setStep] = useState<'lookup' | 'preview' | 'done'>('lookup');
+  const [empCode, setEmpCode] = useState('');
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
+  const [lookup, setLookup] = useState<any>(null);
+  const [preview, setPreview] = useState<any>(null);
+  const [invoiceId, setInvoiceId] = useState<string | null>(null);
+  const [invoiceNo, setInvoiceNo] = useState<string | null>(null);
+
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [generateLoading, setGenerateLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const years = Array.from({ length: 4 }, (_, i) => now.getFullYear() - i);
+  const code = empCode.trim();
+
+  const handleLookup = useCallback(async () => {
+    if (!code) { setError('Enter a staff code'); return; }
+    setError(null);
+    setLookupLoading(true);
+    setLookup(null);
+    setPreview(null);
+    try {
+      const res = await api.lookupFinanceStaffByCode(code);
+      const data = (res as any)?.data ?? res;
+      setLookup(data);
+      // Auto-preview
+      await doPreview(code, month, year, setPreview, setError);
+      setStep('preview');
+    } catch (e: any) {
+      setError(e.message ?? 'Staff not found');
+    } finally {
+      setLookupLoading(false);
+    }
+  }, [code, month, year]);
+
+  async function doPreview(
+    c: string, m: number, y: number,
+    setP: (v: any) => void, setE: (v: string | null) => void,
+  ) {
+    setPreviewLoading(true);
+    try {
+      const res = await api.previewFinanceAttendancePayroll(c, m, y);
+      const data = (res as any)?.data ?? res;
+      setP(data);
+      if (data.invoice_id) {
+        setInvoiceId(data.invoice_id);
+        setInvoiceNo(data.invoice_number ?? null);
+      } else {
+        setInvoiceId(null);
+        setInvoiceNo(null);
+      }
+    } catch (e: any) {
+      setE(e.message ?? 'Preview failed');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  const handlePreview = useCallback(async () => {
+    if (!code) return;
+    setError(null);
+    await doPreview(code, month, year, setPreview, setError);
+  }, [code, month, year]);
+
+  const handleGenerate = useCallback(async () => {
+    if (!code) return;
+    setError(null);
+    setGenerateLoading(true);
+    try {
+      const res = await api.generateFinanceAttendancePayroll(code, month, year);
+      const data = (res as any)?.data ?? res;
+      setInvoiceId(data.invoice_id ?? null);
+      setInvoiceNo(data.invoice_number ?? null);
+      setStep('done');
+      onGenerated();
+    } catch (e: any) {
+      setError(e.message ?? 'Invoice generation failed');
+    } finally {
+      setGenerateLoading(false);
+    }
+  }, [code, month, year]);
+
+  const calc = preview?.calculation as Calc | undefined;
+  const alreadyGenerated = !!preview?.invoice_id || !!invoiceId;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+      <div className="bg-[#0d1526] border border-white/10 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center">
+              <Receipt className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="text-white font-semibold text-sm">Generate Invoice from Salary Slip</h2>
+              <p className="text-slate-500 text-xs">Attendance-based payroll → client invoice</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/8 text-slate-400 hover:text-white transition">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-5">
+          {/* Step 1: Lookup */}
+          <div className="space-y-3">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              Staff / Employee Code
+            </label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                <input
+                  id="input-staff-code"
+                  value={empCode}
+                  onChange={(e) => { setEmpCode(e.target.value); setLookup(null); setPreview(null); setStep('lookup'); }}
+                  onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
+                  placeholder="e.g. HG-2025-001 or SC-001"
+                  className="w-full bg-[#131c2e] border border-white/10 text-white text-sm rounded-xl pl-9 pr-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 placeholder-slate-600"
+                />
+              </div>
+              <button
+                id="btn-lookup-staff"
+                onClick={handleLookup}
+                disabled={!code || lookupLoading}
+                className="px-4 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium disabled:opacity-50 transition flex items-center gap-2"
+              >
+                {lookupLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                Lookup
+              </button>
+            </div>
+          </div>
+
+          {/* Month / Year */}
+          {step !== 'done' && (
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">Month</label>
+                <SelectMenu
+                  value={String(month)}
+                  onValueChange={(v) => { setMonth(Number(v)); setPreview(null); }}
+                  placeholder="Month"
+                  className="bg-[#131c2e] border-white/10 text-sm rounded-xl w-full"
+                >
+                  {MONTHS.map((m, i) => (
+                    <SelectMenuItem key={m} value={String(i + 1)}>{m}</SelectMenuItem>
+                  ))}
+                </SelectMenu>
+              </div>
+              <div className="flex-1">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">Year</label>
+                <SelectMenu
+                  value={String(year)}
+                  onValueChange={(v) => { setYear(Number(v)); setPreview(null); }}
+                  placeholder="Year"
+                  className="bg-[#131c2e] border-white/10 text-sm rounded-xl w-full"
+                >
+                  {years.map((y) => (
+                    <SelectMenuItem key={y} value={String(y)}>{y}</SelectMenuItem>
+                  ))}
+                </SelectMenu>
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-red-950/60 border border-red-500/20 rounded-xl">
+              <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+              <span className="text-xs text-red-300">{error}</span>
+            </div>
+          )}
+
+          {/* Lookup Card */}
+          {lookup && (
+            <div className="bg-[#131c2e] border border-white/8 rounded-xl px-4 py-3 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                <User className="w-4 h-4 text-indigo-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-medium text-sm truncate">{lookup.staff_name}</p>
+                <p className="text-slate-500 text-xs">
+                  {lookup.type === 'PLACEMENT' ? `EOR · ${lookup.client_name ?? 'No client'}` : `Internal · ${lookup.department ?? 'HR'}`}
+                  {lookup.monthly_salary ? ` · ${fmtRs(lookup.monthly_salary)}/mo` : ''}
+                </p>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${lookup.type === 'PLACEMENT' ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-blue-400 bg-blue-400/10 border-blue-400/20'}`}>
+                {lookup.type}
+              </span>
+            </div>
+          )}
+
+          {/* Preview Loading */}
+          {previewLoading && (
+            <div className="flex items-center justify-center py-6 gap-2 text-slate-400">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">Loading salary slip preview…</span>
+            </div>
+          )}
+
+          {/* Salary Slip Preview */}
+          {preview && !previewLoading && step !== 'done' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Calculator className="w-3.5 h-3.5" />
+                  Salary Slip — {MONTHS[preview.period_month - 1]} {preview.period_year}
+                </span>
+                <button
+                  onClick={handlePreview}
+                  className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1 transition"
+                >
+                  <RefreshCw className="w-3 h-3" /> Refresh
+                </button>
+              </div>
+
+              <div className="bg-[#131c2e] border border-white/8 rounded-xl overflow-hidden">
+                {/* Attendance summary */}
+                <div className="px-4 py-2.5 border-b border-white/5 flex items-center justify-between">
+                  <span className="text-xs text-slate-500">Attendance</span>
+                  <span className="text-xs text-white font-medium">
+                    {preview.billable_days ?? preview.present_days ?? 0} / {preview.days_in_month} days
+                    <span className="text-slate-500 ml-1.5">(billable)</span>
+                  </span>
+                </div>
+
+                {/* Earnings */}
+                <div className="px-4 py-2 flex items-center justify-between">
+                  <span className="text-xs text-slate-400">Monthly Salary</span>
+                  <span className="text-xs text-slate-300">{fmtRs(preview.monthly_salary ?? 0)}</span>
+                </div>
+                <div className="px-4 py-2 flex items-center justify-between border-b border-white/5">
+                  <span className="text-xs text-slate-400">Pro-rated Gross</span>
+                  <span className="text-xs text-white font-semibold">{fmtRs(preview.prorated_gross ?? 0)}</span>
+                </div>
+
+                {/* Deductions */}
+                {calc && (
+                  <>
+                    <div className="px-4 py-2 flex items-center justify-between">
+                      <span className="text-xs text-amber-400/80">ESIC (Employee 0.75%)</span>
+                      <span className="text-xs text-amber-400">- {fmtRs(calc.esicEmployee)}</span>
+                    </div>
+                    <div className="px-4 py-2 flex items-center justify-between border-b border-white/5">
+                      <span className="text-xs text-amber-400/80">PF (Employee 12%)</span>
+                      <span className="text-xs text-amber-400">- {fmtRs(calc.pfEmployee)}</span>
+                    </div>
+
+                    {/* Net Salary */}
+                    <div className="px-4 py-2.5 flex items-center justify-between bg-emerald-500/5 border-b border-emerald-500/10">
+                      <span className="text-xs text-emerald-400 font-semibold">Net Salary (Staff Receives)</span>
+                      <span className="text-sm text-emerald-400 font-bold">{fmtRs(calc.netSalary)}</span>
+                    </div>
+
+                    {/* Client charges (EOR only) */}
+                    {preview.type === 'PLACEMENT' && (
+                      <>
+                        <div className="px-4 py-2 flex items-center justify-between">
+                          <span className="text-xs text-slate-400">ESIC (Employer 3.25%)</span>
+                          <span className="text-xs text-slate-300">{fmtRs(calc.esicEmployer)}</span>
+                        </div>
+                        <div className="px-4 py-2 flex items-center justify-between">
+                          <span className="text-xs text-slate-400">PF (Employer 12%)</span>
+                          <span className="text-xs text-slate-300">{fmtRs(calc.pfEmployer)}</span>
+                        </div>
+                        <div className="px-4 py-2 flex items-center justify-between">
+                          <span className="text-xs text-indigo-400/80">Management Fee</span>
+                          <span className="text-xs text-indigo-400">{fmtRs(calc.managementFee)}</span>
+                        </div>
+                        <div className="px-4 py-2 flex items-center justify-between border-b border-white/5">
+                          <span className="text-xs text-indigo-400/80">GST on Fee (18%)</span>
+                          <span className="text-xs text-indigo-400">{fmtRs(calc.gstOnFee)}</span>
+                        </div>
+                        <div className="px-4 py-3 flex items-center justify-between bg-indigo-500/5 border-b border-indigo-500/10">
+                          <span className="text-xs text-indigo-300 font-semibold">Total Client Charge</span>
+                          <span className="text-sm text-indigo-300 font-bold">{fmtRs(calc.clientTotalCharge)}</span>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Already generated note */}
+              {alreadyGenerated && (
+                <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-950/40 border border-amber-500/20 rounded-xl">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="text-xs text-amber-300">
+                    Invoice <strong>{preview.invoice_number}</strong> already exists for this period.
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Done state */}
+          {step === 'done' && (
+            <div className="flex flex-col items-center gap-3 py-6">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center">
+                <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+              </div>
+              <div className="text-center">
+                <p className="text-white font-semibold">Invoice Generated!</p>
+                {invoiceNo && <p className="text-slate-400 text-sm mt-0.5">Invoice # <strong className="text-white">{invoiceNo}</strong></p>}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-white/8 flex items-center justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium transition border border-white/8"
+          >
+            {step === 'done' ? 'Close' : 'Cancel'}
+          </button>
+
+          {step === 'preview' && preview && !alreadyGenerated && (
+            <button
+              id="btn-generate-invoice"
+              onClick={handleGenerate}
+              disabled={generateLoading || !preview || preview.billable_days === 0 || preview.present_days === 0}
+              className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold disabled:opacity-50 transition flex items-center gap-2"
+            >
+              {generateLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Receipt className="w-3.5 h-3.5" />}
+              Generate Invoice
+            </button>
+          )}
+
+          {step === 'lookup' && lookup && (
+            <button
+              id="btn-preview-salary-slip"
+              onClick={handlePreview}
+              disabled={previewLoading}
+              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold disabled:opacity-50 transition flex items-center gap-2"
+            >
+              {previewLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
+              Preview Salary Slip
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function InvoicesPage() {
   const [status, setStatus]         = useState('');
   const [invoices, setInvoices]     = useState<any[]>([]);
@@ -52,6 +431,7 @@ export default function InvoicesPage() {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [selected, setSelected]     = useState<any | null>(null);
   const [toast, setToast]           = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [showGenerate, setShowGenerate] = useState(false);
 
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
@@ -166,8 +546,12 @@ export default function InvoicesPage() {
                 <span className="text-white font-medium">{selected.client_name ?? selected.client_id}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-white/5">
+                <span className="text-slate-400">Staff</span>
+                <span className="text-white">{selected.staff_name ?? '—'}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-white/5">
                 <span className="text-slate-400">Period</span>
-                <span className="text-white">{selected.period_month}/{selected.period_year}</span>
+                <span className="text-white">{MONTHS_SHORT[selected.period_month - 1]} {selected.period_year}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-white/5">
                 <span className="text-slate-400">Due Date</span>
@@ -209,19 +593,37 @@ export default function InvoicesPage() {
         </div>
       )}
 
+      {/* Generate Invoice Modal */}
+      {showGenerate && (
+        <GenerateInvoiceModal
+          onClose={() => setShowGenerate(false)}
+          onGenerated={() => { setShowGenerate(false); load(); showToast('success', 'Invoice generated successfully!'); }}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Invoice Generation</h1>
           <p className="text-sm text-slate-400 mt-0.5">GST-compliant client invoices · EOR billing</p>
         </div>
-        <button
-          id="btn-refresh-invoices"
-          onClick={load}
-          className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
-        >
-          <RefreshCw className="w-4 h-4 text-slate-400" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            id="btn-generate-invoice-open"
+            onClick={() => setShowGenerate(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition"
+          >
+            <Plus className="w-4 h-4" />
+            Generate Invoice
+          </button>
+          <button
+            id="btn-refresh-invoices"
+            onClick={load}
+            className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+          >
+            <RefreshCw className="w-4 h-4 text-slate-400" />
+          </button>
+        </div>
       </div>
 
       {/* Tabs + Search */}
@@ -261,9 +663,21 @@ export default function InvoicesPage() {
             <Loader2 className="w-7 h-7 animate-spin text-emerald-400" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <FileText className="w-10 h-10 text-slate-600" />
-            <p className="text-slate-400 text-sm">No invoices found</p>
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/8 border border-emerald-500/15 flex items-center justify-center">
+              <FileText className="w-6 h-6 text-slate-600" />
+            </div>
+            <div className="text-center">
+              <p className="text-slate-300 text-sm font-medium">No invoices found</p>
+              <p className="text-slate-500 text-xs mt-1">Generate an invoice from a salary slip to get started</p>
+            </div>
+            <button
+              onClick={() => setShowGenerate(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-sm font-semibold border border-emerald-500/20 transition"
+            >
+              <Plus className="w-4 h-4" />
+              Generate First Invoice
+            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -272,6 +686,7 @@ export default function InvoicesPage() {
                 <tr className="border-b border-white/5 text-[11px] text-slate-400 uppercase tracking-wider">
                   <th className="px-5 py-3 text-left">Invoice #</th>
                   <th className="px-4 py-3 text-left">Client</th>
+                  <th className="px-4 py-3 text-left">Staff</th>
                   <th className="px-4 py-3 text-center">Period</th>
                   <th className="px-4 py-3 text-right">Salary</th>
                   <th className="px-4 py-3 text-right">Fee + GST</th>
@@ -289,7 +704,11 @@ export default function InvoicesPage() {
                     <tr key={inv.id} className={`border-b border-white/5 hover:bg-white/2 transition ${overdue ? 'bg-red-500/3' : ''}`}>
                       <td className="px-5 py-3 font-mono text-xs text-slate-300">{inv.invoice_number}</td>
                       <td className="px-4 py-3 text-white">{inv.client_name ?? inv.client_id?.slice(0, 8)}</td>
-                      <td className="px-4 py-3 text-center text-slate-400">{inv.period_month}/{inv.period_year}</td>
+                      <td className="px-4 py-3">
+                        <p className="text-white text-xs">{inv.staff_name ?? '—'}</p>
+                        {inv.staff_code && <p className="text-[10px] text-slate-500">{inv.staff_code}</p>}
+                      </td>
+                      <td className="px-4 py-3 text-center text-slate-400">{MONTHS_SHORT[inv.period_month - 1]} {inv.period_year}</td>
                       <td className="px-4 py-3 text-right text-slate-300">{fmtRs(inv.staff_salary_component)}</td>
                       <td className="px-4 py-3 text-right">
                         <span className="text-indigo-400">{fmtRs(feeGst)}</span>

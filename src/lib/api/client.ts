@@ -132,6 +132,7 @@ export interface ApiClient {
   createStaff(body: Record<string, unknown>): Promise<any>;
   updateStaff(id: string, body: Record<string, unknown>): Promise<any>;
   listEmployees(params?: Record<string, unknown>): Promise<any>;
+  listEmployeesForDropdown(branchId?: string): Promise<any[]>;
   getEmployee(id: string): Promise<any>;
   createEmployee(body: Record<string, unknown>): Promise<any>;
   updateEmployeeStatus(id: string, status: string): Promise<any>;
@@ -291,6 +292,7 @@ export interface ApiClient {
   getTrainingBatches(): Promise<any>;
   getTrainingStats(): Promise<any>;
   createTrainingBatch(body: Record<string, unknown>): Promise<any>;
+  deleteTrainingBatch(batchId: string): Promise<any>;
   enrollInBatch(batchId: string, staffId: string): Promise<any>;
   markBatchAttendance(batchId: string, body: { staff_id: string; day_number: number; attended: boolean }): Promise<any>;
   updateBatchStatus(batchId: string, status: string): Promise<any>;
@@ -365,6 +367,8 @@ export const api: ApiClient = {
     apiClient.put(`/staff/${id}`, body).then(res => res.data),
   listEmployees: (params?: Record<string, unknown>) =>
     apiClient.get('/employees', { params }).then((res) => res.data),
+  listEmployeesForDropdown: (branchId?: string) =>
+    apiClient.get('/employees/list', { params: branchId ? { branchId } : {} }).then((res) => res.data),
   getEmployee: (id: string) => apiClient.get(`/employees/${id}`).then((res) => res.data),
   createEmployee: (body: Record<string, unknown>) =>
     apiClient.post('/employees', body).then((res) => res.data),
@@ -604,6 +608,7 @@ export const api: ApiClient = {
   getTrainingBatches: () => apiClient.get('/training/batches'),
   getTrainingStats: () => apiClient.get('/training/stats'),
   createTrainingBatch: (body: Record<string, unknown>) => apiClient.post('/training/batches', body),
+  deleteTrainingBatch: (batchId: string) => apiClient.delete(`/training/batches/${batchId}`),
   enrollInBatch: (batchId: string, staffId: string) => apiClient.post(`/training/batches/${batchId}/enroll`, { staff_id: staffId }),
   markBatchAttendance: (batchId: string, body: { staff_id: string; day_number: number; attended: boolean }) =>
     apiClient.patch(`/training/batches/${batchId}/attendance`, body),

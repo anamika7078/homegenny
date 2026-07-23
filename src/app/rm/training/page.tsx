@@ -188,9 +188,22 @@ function BatchCard({ batch, onAttendanceChange, onStatusChange }: {
 }
 
 function NewBatchModal({ onClose, onCreate }: { onClose: () => void; onCreate: (body: Record<string, unknown>) => Promise<void> }) {
-  const [form, setForm] = useState({ series: 'DR', trainer_name: '', classroom: '', start_date: '' });
+  const [form, setForm] = useState({ series: 'DR', trainer_id: '', trainer_name: '', classroom: '', start_date: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [employees, setEmployees] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function loadStaff() {
+      try {
+        const res = await api.listEmployeesForDropdown();
+        setEmployees(Array.isArray(res) ? res : []);
+      } catch (err) {
+        console.error('Failed to load employees for trainer assignment', err);
+      }
+    }
+    loadStaff();
+  }, []);
 
   const submit = async () => {
     if (!form.start_date) { setError('Start date is required'); return; }
@@ -234,8 +247,25 @@ function NewBatchModal({ onClose, onCreate }: { onClose: () => void; onCreate: (
               ))}
             </SelectMenu>
           </div>
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">Trainer *</label>
+            <SelectMenu
+              value={form.trainer_id}
+              onValueChange={(v) => {
+                const emp = employees.find(e => e.id === v);
+                setForm(p => ({ ...p, trainer_id: v, trainer_name: emp?.fullName ?? '' }));
+              }}
+              placeholder="Select trainer"
+              className="bg-white/5 border-white/10"
+            >
+              {employees.map(e => (
+                <SelectMenuItem key={e.id} value={e.id}>
+                  {e.fullName}
+                </SelectMenuItem>
+              ))}
+            </SelectMenu>
+          </div>
           {[
-            { key: 'trainer_name', label: 'Trainer Name', type: 'text' },
             { key: 'classroom', label: 'Classroom / Location', type: 'text' },
             { key: 'start_date', label: 'Start Date *', type: 'date' },
           ].map(f => (
