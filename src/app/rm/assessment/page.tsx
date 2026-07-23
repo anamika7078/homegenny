@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Car, CheckCircle2, XCircle, Clock, AlertTriangle, ChevronDown, ArrowRight } from 'lucide-react';
+import { Car, CheckCircle2, XCircle, Clock, AlertTriangle, ChevronDown, ArrowRight, Loader2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+import { api } from '@/lib/api/client';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type AttemptResult = 'pass' | 'fail' | null;
@@ -28,7 +29,7 @@ interface ChecklistItem {
   description: string;
 }
 
-// ── Static Data ───────────────────────────────────────────────────────────────
+// ── Static Data & Rules ───────────────────────────────────────────────────────
 const CHECKLIST: ChecklistItem[] = [
   { id: 'parking',   label: 'Parking',           description: 'Parallel, reverse & bay parking within markings' },
   { id: 'lane',      label: 'Lane Discipline',   description: 'Proper lane usage, no unnecessary lane changes' },
@@ -45,14 +46,6 @@ const VEHICLE_MATRIX: Record<VehicleClass, { label: string; icon: string; color:
   TRANS: { label: 'Transport Vehicle',    icon: '🚐', color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' },
 };
 
-const MOCK_DRIVERS: Driver[] = [
-  { id: '1', code: 'DR-2024-001', name: 'Ramesh Kumar',   phone: '9810XXXXXX', dl: 'DL-04 20110012345', vehicleClasses: ['LMV', 'MCWG'],       attempts: ['fail', null, null], scenario: 'DR-07', status: 'in_progress', nextRetry: '25 May 2026' },
-  { id: '2', code: 'DR-2024-002', name: 'Suresh Yadav',   phone: '9811XXXXXX', dl: 'UP-14 20150098765', vehicleClasses: ['LMV'],                attempts: [null, null, null],   scenario: 'DR-06', status: 'pending' },
-  { id: '3', code: 'DR-2024-003', name: 'Mohan Singh',    phone: '9812XXXXXX', dl: 'HR-26 20120056789', vehicleClasses: ['LMV', 'HMV', 'TRANS'], attempts: ['pass', null, null], scenario: 'DR-14', status: 'passed' },
-  { id: '4', code: 'DR-2024-004', name: 'Deepak Chauhan', phone: '9813XXXXXX', dl: 'DL-07 20190034567', vehicleClasses: ['LMV'],                attempts: ['fail', 'fail', null], scenario: 'DR-08', status: 'deferred', nextRetry: '30 May 2026' },
-  { id: '5', code: 'DR-2024-005', name: 'Vijay Prasad',   phone: '9814XXXXXX', dl: 'MH-12 20170078901', vehicleClasses: ['LMV', 'MCWG'],       attempts: ['fail', 'fail', 'fail'], scenario: 'DR-09', status: 'terminal' },
-];
-
 const STATUS_STYLE: Record<Driver['status'], { label: string; cls: string; icon: string }> = {
   pending:     { label: 'Pending',     cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30',   icon: '⏳' },
   in_progress: { label: 'In Progress', cls: 'bg-sky-500/15 text-sky-400 border-sky-500/30',         icon: '🔵' },
@@ -60,6 +53,48 @@ const STATUS_STYLE: Record<Driver['status'], { label: string; cls: string; icon:
   deferred:    { label: 'Deferred',    cls: 'bg-violet-500/15 text-violet-400 border-violet-500/30', icon: '⏸️' },
   terminal:    { label: 'Terminal',    cls: 'bg-red-500/15 text-red-400 border-red-500/30',          icon: '🚫' },
 };
+
+function mapItemToDriver(item: any): Driver {
+  const meta = item.metadata ?? {};
+  const stageRaw = String(item.pipeline_stage || item.status || 'pending').toLowerCase();
+
+  let status: Driver['status'] = 'pending';
+  if (['passed', 's3_training', 'confirmed', 'active'].includes(stageRaw)) {
+    status = 'passed';
+  } else if (['deferred', 'dr-07', 'dr-08'].includes(stageRaw)) {
+    status = 'deferred';
+  } else if (['terminal', 'dr-09', 'failed', 'denied'].includes(stageRaw)) {
+    status = 'terminal';
+  } else if (['in_progress', 's2.5', 's2_assessment'].includes(stageRaw)) {
+    status = 'in_progress';
+  } else {
+    status = 'pending';
+  }
+
+  const rawAttempts = Array.isArray(meta.attempts) ? meta.attempts : [];
+  const attempts: AttemptResult[] = [
+    rawAttempts[0] ?? null,
+    rawAttempts[1] ?? null,
+    rawAttempts[2] ?? null,
+  ];
+
+  const vehicleClasses: VehicleClass[] = Array.isArray(meta.vehicleClasses) && meta.vehicleClasses.length
+    ? meta.vehicleClasses
+    : ['LMV'];
+
+  return {
+    id: item.id,
+    code: item.staff_code || item.employeeId || item.employee_id || item.id?.slice(0, 8),
+    name: item.full_name || item.fullName || 'Driver Staff',
+    phone: item.mobile || 'N/A',
+    dl: item.dl_number || meta.dl_number || 'DL Verified',
+    vehicleClasses,
+    attempts,
+    scenario: item.current_scenario_code || meta.scenario || (status === 'passed' ? 'DR-14' : status === 'deferred' ? 'DR-07' : 'DR-06'),
+    status,
+    nextRetry: meta.nextRetry,
+  };
+}
 
 // ── Subcomponents ─────────────────────────────────────────────────────────────
 function AttemptDots({ attempts }: { attempts: AttemptResult[] }) {
@@ -81,12 +116,35 @@ function AttemptDots({ attempts }: { attempts: AttemptResult[] }) {
   );
 }
 
-function AssessmentModal({ driver, onClose }: { driver: Driver; onClose: () => void }) {
+function AssessmentModal({ driver, onClose, onRefresh }: { driver: Driver; onClose: () => void; onRefresh: () => void }) {
   const [checks, setChecks] = useState<Record<string, boolean>>({});
   const [submitted, setSubmitted] = useState(false);
-  const passed = CHECKLIST.every((c) => checks[c.id]);
+  const [submitting, setSubmitting] = useState(false);
+  const [resultPass, setResultPass] = useState(false);
 
+  const passed = CHECKLIST.every((c) => checks[c.id]);
   const toggle = (id: string) => setChecks((p) => ({ ...p, [id]: !p[id] }));
+
+  const handleSubmitResult = async (isPass: boolean) => {
+    setSubmitting(true);
+    setResultPass(isPass);
+    try {
+      await api.createAssessment({
+        candidate_id: driver.id,
+        assessment_type: 'DRIVER',
+        score: isPass ? 100 : 40,
+        result: isPass ? 'PASS' : 'FAIL',
+        remarks: isPass ? 'Practical driving test passed' : 'Practical driving test failed',
+        scenario_code: isPass ? 'DR-14' : 'DR-07',
+      });
+    } catch {
+      // Fallback
+    } finally {
+      setSubmitting(false);
+      setSubmitted(true);
+      onRefresh();
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -142,37 +200,40 @@ function AssessmentModal({ driver, onClose }: { driver: Driver; onClose: () => v
             {/* Actions */}
             <div className="flex gap-3 px-6 pb-6">
               <button
-                onClick={() => setSubmitted(true)}
-                className="flex-1 py-2.5 rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-bold hover:bg-red-500/30 transition-colors"
+                disabled={submitting}
+                onClick={() => handleSubmitResult(false)}
+                className="flex-1 py-2.5 rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-bold hover:bg-red-500/30 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 Record FAIL
               </button>
               <button
-                disabled={!passed}
-                onClick={() => setSubmitted(true)}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-sm font-bold hover:bg-emerald-500/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                disabled={!passed || submitting}
+                onClick={() => handleSubmitResult(true)}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-sm font-bold hover:bg-emerald-500/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 Record PASS
               </button>
             </div>
           </>
         ) : (
           <div className="px-6 py-10 text-center">
-            <div className="text-4xl mb-3">{passed ? '🎉' : '❌'}</div>
-            <p className="font-bold text-white text-lg">{passed ? 'Assessment Passed!' : 'Assessment Failed'}</p>
+            <div className="text-4xl mb-3">{resultPass ? '🎉' : '❌'}</div>
+            <p className="font-bold text-white text-lg">{resultPass ? 'Assessment Passed!' : 'Assessment Failed'}</p>
             <p className="text-sm text-muted-foreground mt-2">
-              {passed
+              {resultPass
                 ? 'Driver cleared for S3 Training. Scenario updated to DR-14.'
                 : driver.attempts.filter(Boolean).length >= 2
                   ? 'Max attempts reached. Moving to Terminal (DR-09).'
                   : 'Deferred for 7-day retry window.'}
             </p>
-            <Link
-              href="/verification"
+            <button
+              onClick={onClose}
               className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#FF5A1F] text-white font-bold text-sm hover:bg-[#e04d17] transition-colors"
             >
-              Go to Verification <ArrowRight className="w-4 h-4" />
-            </Link>
+              Done <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         )}
       </motion.div>
@@ -182,7 +243,7 @@ function AssessmentModal({ driver, onClose }: { driver: Driver; onClose: () => v
 
 function DriverRow({ driver, onAssess }: { driver: Driver; onAssess: (d: Driver) => void }) {
   const [open, setOpen] = useState(false);
-  const st = STATUS_STYLE[driver.status];
+  const st = STATUS_STYLE[driver.status] ?? STATUS_STYLE.pending;
 
   return (
     <div className="rounded-xl border border-white/8 bg-card/60 overflow-hidden">
@@ -220,7 +281,7 @@ function DriverRow({ driver, onAssess }: { driver: Driver; onAssess: (d: Driver)
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">DL Vehicle Classes</p>
                 <div className="flex flex-wrap gap-2">
                   {driver.vehicleClasses.map((vc) => {
-                    const vm = VEHICLE_MATRIX[vc];
+                    const vm = VEHICLE_MATRIX[vc] ?? VEHICLE_MATRIX.LMV;
                     return (
                       <span key={vc} className={`text-xs font-bold border rounded-lg px-3 py-1 ${vm.color}`}>
                         {vm.icon} {vc} — {vm.label}
@@ -274,9 +335,6 @@ function DriverRow({ driver, onAssess }: { driver: Driver; onAssess: (d: Driver)
                 >
                   View Verification <ArrowRight className="w-3 h-3" />
                 </Link>
-                <button className="px-4 py-2 text-xs font-bold rounded-lg border border-white/15 bg-white/5 text-foreground hover:bg-white/10 transition-colors">
-                  View DL Data
-                </button>
               </div>
             </div>
           </motion.div>
@@ -288,18 +346,51 @@ function DriverRow({ driver, onAssess }: { driver: Driver; onAssess: (d: Driver)
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function DriverAssessmentPage() {
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [activeDriver, setActiveDriver] = useState<Driver | null>(null);
   const [filter, setFilter] = useState<string>('all');
 
+  const loadDrivers = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Fetch staff from staff endpoint (which includes both intake candidates and HR module employees)
+      const res = await api.listStaff({ limit: 200 });
+      const items: any[] = res?.items ?? res?.data?.items ?? (Array.isArray(res) ? res : []);
+      
+      // Filter candidates/employees that belong to Driver category
+      const driverItems = items.filter((s: any) => {
+        const series = String(s.series || s.department || s.series_db || '').toUpperCase();
+        const roleTypes = (s.role_types || []).map((r: any) => String(r).toUpperCase());
+        return (
+          series.includes('DRIV') ||
+          series === 'DR' ||
+          roleTypes.some((r: string) => r.includes('DRIV')) ||
+          String(s.department ?? '').toLowerCase().includes('driver')
+        );
+      });
+
+      setDrivers(driverItems.map(mapItemToDriver));
+    } catch {
+      setDrivers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDrivers();
+  }, [loadDrivers]);
+
   const counts = {
-    pending:     MOCK_DRIVERS.filter(d => d.status === 'pending').length,
-    in_progress: MOCK_DRIVERS.filter(d => d.status === 'in_progress').length,
-    passed:      MOCK_DRIVERS.filter(d => d.status === 'passed').length,
-    deferred:    MOCK_DRIVERS.filter(d => d.status === 'deferred').length,
-    terminal:    MOCK_DRIVERS.filter(d => d.status === 'terminal').length,
+    pending:     drivers.filter(d => d.status === 'pending').length,
+    in_progress: drivers.filter(d => d.status === 'in_progress').length,
+    passed:      drivers.filter(d => d.status === 'passed').length,
+    deferred:    drivers.filter(d => d.status === 'deferred').length,
+    terminal:    drivers.filter(d => d.status === 'terminal').length,
   };
 
-  const filtered = filter === 'all' ? MOCK_DRIVERS : MOCK_DRIVERS.filter(d => d.status === filter);
+  const filtered = filter === 'all' ? drivers : drivers.filter(d => d.status === filter);
 
   return (
     <motion.div
@@ -313,16 +404,25 @@ export default function DriverAssessmentPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Driver Assessment</h1>
           <p className="text-sm text-muted-foreground mt-1">S2.5 · Practical driving test · RM queue</p>
         </div>
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-card/40">
-          <AlertTriangle className="w-4 h-4 text-amber-400" />
-          <span className="text-xs text-amber-400 font-semibold">{counts.deferred} Deferred · {counts.terminal} Terminal</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={loadDrivers}
+            className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition text-slate-400 hover:text-white"
+            title="Refresh Drivers"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-card/40">
+            <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <span className="text-xs text-amber-400 font-semibold">{counts.deferred} Deferred · {counts.terminal} Terminal</span>
+          </div>
         </div>
       </div>
 
       {/* Stat pills */}
       <div className="flex flex-wrap gap-2">
         {[
-          { key: 'all',         label: 'All',         val: MOCK_DRIVERS.length, cls: 'bg-white/5 border-white/10 text-foreground' },
+          { key: 'all',         label: 'All',         val: drivers.length, cls: 'bg-white/5 border-white/10 text-foreground' },
           { key: 'pending',     label: 'Pending',     val: counts.pending,     cls: 'bg-amber-500/10 border-amber-500/20 text-amber-400' },
           { key: 'in_progress', label: 'In Progress', val: counts.in_progress, cls: 'bg-sky-500/10 border-sky-500/20 text-sky-400' },
           { key: 'passed',      label: 'Passed',      val: counts.passed,      cls: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' },
@@ -353,17 +453,24 @@ export default function DriverAssessmentPage() {
 
       {/* Driver cards */}
       <div className="space-y-3">
-        {filtered.map(d => (
-          <DriverRow key={d.id} driver={d} onAssess={setActiveDriver} />
-        ))}
-        {filtered.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground text-sm">No drivers in this category.</div>
+        {loading ? (
+          <div className="flex justify-center items-center py-16">
+            <Loader2 className="w-7 h-7 animate-spin text-[#FF5A1F]" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            No driver records found in this category. Add drivers via S1 Intake or HR Module.
+          </div>
+        ) : (
+          filtered.map(d => (
+            <DriverRow key={d.id} driver={d} onAssess={setActiveDriver} />
+          ))
         )}
       </div>
 
       {/* Assessment Modal */}
       {activeDriver && (
-        <AssessmentModal driver={activeDriver} onClose={() => setActiveDriver(null)} />
+        <AssessmentModal driver={activeDriver} onClose={() => setActiveDriver(null)} onRefresh={loadDrivers} />
       )}
     </motion.div>
   );
