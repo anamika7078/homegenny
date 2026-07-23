@@ -53,7 +53,6 @@ const NAV: { section: string; items: NavItem[] }[] = [
     items: [
       { href: '/rm/verification', label: 'Verification', icon: ClipboardCheck },
       { href: '/rm/assessment', label: 'Driver Assessment', icon: Car },
-      { href: '/rm/training', label: 'Training', icon: GraduationCap },
       { href: '/rm/video', label: 'Video Queue', icon: Video },
       { href: '/rm/agreements', label: 'Agreements', icon: FileText },
     ],

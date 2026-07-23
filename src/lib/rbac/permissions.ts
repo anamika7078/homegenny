@@ -44,7 +44,6 @@ export const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
       { href: '/staff/intake', label: 'New Intake (S1)', icon: 'UserPlus', permission: 'rm.intake', roles: ['RM', 'BM', 'ADMIN'] },
       { href: '/rm/verification', label: 'Verification', icon: 'ShieldCheck', permission: 'rm.verification', roles: ['RM'] },
       { href: '/rm/assessment', label: 'Driver Assessment', icon: 'ClipboardCheck', permission: 'rm.verification', roles: ['RM', 'ASSESSOR'] },
-      { href: '/rm/training', label: 'Training', icon: 'GraduationCap', roles: ['RM', 'TRAINER'] },
       { href: '/rm/video', label: 'Video Queue', icon: 'Video', roles: ['RM', 'TRAINER'] },
       { href: '/rm/agreements', label: 'Agreements', icon: 'FileText', permission: 'rm.agreements', roles: ['RM'] },
       { href: '/rm/placements', label: 'Placements', icon: 'MapPin', permission: 'rm.deployments', roles: ['RM'] },

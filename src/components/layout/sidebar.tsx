@@ -78,7 +78,6 @@ const RM_NAV: NavSection[] = [
       { href: '/rm/pipeline', label: 'Pipeline Board', icon: GitBranch },
       { href: '/rm/verification', label: 'Verification Queue', icon: ClipboardCheck },
       { href: '/rm/video', label: 'Video Reviews', icon: Video },
-      { href: '/rm/training', label: 'Training Queue', icon: GraduationCap },
       { href: '/rm/intake', label: 'S1 Intake', icon: UserPlus },
     ],
   },
