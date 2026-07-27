@@ -347,6 +347,18 @@ export interface ApiClient {
   getAdminApprovals(): Promise<any>;
   approveAdminAction(id: string): Promise<any>;
   rejectAdminAction(id: string): Promise<any>;
+
+  // Finance Customers
+  listFinanceCustomers(search?: string): Promise<any>;
+  createFinanceCustomer(body: {
+    customer_name: string;
+    address: string;
+    pan_card: string;
+    gstn?: string;
+  }): Promise<any>;
+  getFinanceCustomer(id: string): Promise<any>;
+  updateFinanceCustomer(id: string, body: Record<string, unknown>): Promise<any>;
+  generateFinanceCustomerBillNumber(id: string): Promise<any>;
 }
 
 export const api: ApiClient = {
@@ -669,4 +681,19 @@ export const api: ApiClient = {
   getAdminApprovals: () => apiClient.get('/admin/approvals'),
   approveAdminAction: (id: string) => apiClient.post(`/admin/approvals/${id}/approve`),
   rejectAdminAction: (id: string) => apiClient.post(`/admin/approvals/${id}/reject`),
+
+  // ── Finance Customers ──────────────────────────────────────────────────────
+  listFinanceCustomers: (search?: string) =>
+    apiClient.get('/finance/customers', { params: search ? { search } : {} }),
+  createFinanceCustomer: (body: {
+    customer_name: string;
+    address: string;
+    pan_card: string;
+    gstn?: string;
+  }) => apiClient.post('/finance/customers', body),
+  getFinanceCustomer: (id: string) => apiClient.get(`/finance/customers/${id}`),
+  updateFinanceCustomer: (id: string, body: Record<string, unknown>) =>
+    apiClient.put(`/finance/customers/${id}`, body),
+  generateFinanceCustomerBillNumber: (id: string) =>
+    apiClient.post(`/finance/customers/${id}/bill-number`),
 };

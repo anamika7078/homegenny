@@ -225,12 +225,12 @@ const SUPPORT_NAV: NavSection[] = [
   {
     section: 'Operations',
     items: [
-      { href: '/alarms',          label: 'Issues & Alarms',  icon: Bell      },
-      { href: '/staff/pipeline',  label: 'Pipeline Kanban',  icon: GitBranch },
-      { href: '/staff/intake',    label: 'S1 Intake',        icon: UserPlus  },
-      { href: '/video-cert',      label: 'Video Cert',       icon: Video     },
-      { href: '/agreements',      label: 'Agreements',       icon: FileText  },
-      { href: '/payroll',         label: 'Payroll',          icon: DollarSign},
+      { href: '/alarms', label: 'Issues & Alarms', icon: Bell },
+      { href: '/staff/pipeline', label: 'Pipeline Kanban', icon: GitBranch },
+      { href: '/staff/intake', label: 'S1 Intake', icon: UserPlus },
+      { href: '/video-cert', label: 'Video Cert', icon: Video },
+      { href: '/agreements', label: 'Agreements', icon: FileText },
+      { href: '/payroll', label: 'Payroll', icon: DollarSign },
     ],
   },
   {
@@ -251,20 +251,20 @@ const ADMIN_NAV: NavSection[] = [
   {
     section: 'Management',
     items: [
-      { href: '/admin/users',               label: 'Users & Roles',      icon: Users          },
-      { href: '/admin/branches',            label: 'Branches',           icon: GitBranch      },
-      { href: '/admin/pipeline',            label: 'Pipeline Overview',  icon: Activity       },
-      { href: '/admin/queues',              label: 'Queues',             icon: ClipboardCheck },
-      { href: '/admin/video-certifications',label: 'Video Certifications',icon: Video         },
+      { href: '/admin/users', label: 'Users & Roles', icon: Users },
+      { href: '/admin/branches', label: 'Branches', icon: GitBranch },
+      { href: '/admin/pipeline', label: 'Pipeline Overview', icon: Activity },
+      { href: '/admin/queues', label: 'Queues', icon: ClipboardCheck },
+      { href: '/admin/video-certifications', label: 'Video Certifications', icon: Video },
     ],
   },
   {
     section: 'Analytics & Compliance',
     items: [
-      { href: '/admin/analytics',     label: 'Analytics',       icon: BarChart2  },
-      { href: '/admin/audit-logs',    label: 'Audit Logs',      icon: FileText   },
-      { href: '/admin/privacy',       label: 'Privacy (DPDP)',  icon: ShieldCheck},
-      { href: '/admin/system-health', label: 'System Health',   icon: Activity   },
+      { href: '/admin/analytics', label: 'Analytics', icon: BarChart2 },
+      { href: '/admin/audit-logs', label: 'Audit Logs', icon: FileText },
+      { href: '/admin/privacy', label: 'Privacy (DPDP)', icon: ShieldCheck },
+      { href: '/admin/system-health', label: 'System Health', icon: Activity },
     ],
   },
 ];
@@ -279,19 +279,21 @@ const FINANCE_NAV: NavSection[] = [
   {
     section: 'Finance',
     items: [
-      { href: '/finance/payroll',     label: 'Payroll',     icon: DollarSign },
+      { href: '/finance/customers', label: 'Customers', icon: Users },
+      { href: '/finance/payroll', label: 'Payroll', icon: DollarSign },
       { href: '/finance/payroll/attendance', label: 'Attendance Payroll', icon: Calculator },
-      { href: '/finance/invoices',    label: 'Invoices',    icon: FileText   },
-      { href: '/finance/deposits',    label: 'Deposits',    icon: TrendingUp },
+      { href: '/finance/invoices', label: 'Invoices', icon: FileText },
+      { href: '/finance/deposits', label: 'Deposits', icon: TrendingUp },
       { href: '/finance/settlements', label: 'Settlements', icon: DollarSign },
-      { href: '/finance/esic-pf',     label: 'ESIC & PF',  icon: ShieldCheck},
+      { href: '/finance/esic-pf', label: 'ESIC & PF', icon: ShieldCheck },
+
     ],
   },
   {
     section: 'Analytics',
     items: [
-      { href: '/finance/analytics', label: 'Analytics',   icon: BarChart2 },
-      { href: '/finance/audit',     label: 'Audit Trail', icon: FileText  },
+      { href: '/finance/analytics', label: 'Analytics', icon: BarChart2 },
+      { href: '/finance/audit', label: 'Audit Trail', icon: FileText },
     ],
   },
 ];
@@ -352,24 +354,24 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   useEffect(() => { setMounted(true); }, []);
   if (!mounted) return null;
 
-  const role        = user?.role;
-  const isRm        = role === 'RM';
-  const isTrainer   = role === 'TRAINER';
-  const isAssessor  = role === 'ASSESSOR';
-  const isAdmin     = role === 'ADMIN';
-  const isFinance   = role === 'FINANCE';
-  const isSupport   = role === 'SUPPORT';
-  const isHr        = role === 'HR';
+  const role = user?.role;
+  const isRm = role === 'RM';
+  const isTrainer = role === 'TRAINER';
+  const isAssessor = role === 'ASSESSOR';
+  const isAdmin = role === 'ADMIN';
+  const isFinance = role === 'FINANCE';
+  const isSupport = role === 'SUPPORT';
+  const isHr = role === 'HR';
 
   const navSections =
-    isRm       ? RM_NAV
-    : isTrainer  ? TRAINER_NAV
-    : isAssessor ? ASSESSOR_NAV
-    : isAdmin    ? ADMIN_NAV
-    : isFinance  ? FINANCE_NAV
-    : isSupport  ? SUPPORT_NAV
-    : isHr       ? HR_NAV
-    : BM_NAV;
+    isRm ? RM_NAV
+      : isTrainer ? TRAINER_NAV
+        : isAssessor ? ASSESSOR_NAV
+          : isAdmin ? ADMIN_NAV
+            : isFinance ? FINANCE_NAV
+              : isSupport ? SUPPORT_NAV
+                : isHr ? HR_NAV
+                  : BM_NAV;
 
   return (
     <aside
