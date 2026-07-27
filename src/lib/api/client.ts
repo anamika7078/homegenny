@@ -62,7 +62,13 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 // ── Response interceptor: unwrap + auto-refresh + readable errors ─────────
 let isRefreshing = false;
 apiClient.interceptors.response.use(
-  (response) => response.data,   // unwrap — callers get body directly
+  (response) => {
+    const body = response.data;
+    if (body && typeof body === 'object' && 'success' in body && 'data' in body) {
+      return body.data;
+    }
+    return body;
+  },
   async (error) => {
     const original = error.config;
 
@@ -133,6 +139,7 @@ export interface ApiClient {
   updateStaff(id: string, body: Record<string, unknown>): Promise<any>;
   listEmployees(params?: Record<string, unknown>): Promise<any>;
   listEmployeesForDropdown(branchId?: string): Promise<any[]>;
+  listBranches(): Promise<any[]>;
   getEmployee(id: string): Promise<any>;
   createEmployee(body: Record<string, unknown>): Promise<any>;
   updateEmployeeStatus(id: string, status: string): Promise<any>;
@@ -359,6 +366,25 @@ export interface ApiClient {
   getFinanceCustomer(id: string): Promise<any>;
   updateFinanceCustomer(id: string, body: Record<string, unknown>): Promise<any>;
   generateFinanceCustomerBillNumber(id: string): Promise<any>;
+
+  // Finance Commercial
+  listWageConfigs(search?: string): Promise<any>;
+  createWageConfig(body: Record<string, unknown>): Promise<any>;
+  getWageCategories(): Promise<any>;
+  getActiveWageConfig(state: string, zone: string, category: string): Promise<any>;
+  getWageRevisionComparison(state: string, zone: string, category: string): Promise<any>;
+  listCalculations(search?: string): Promise<any>;
+  runCalculationOnTheFly(body: Record<string, unknown>): Promise<any>;
+  createCalculation(body: Record<string, unknown>): Promise<any>;
+  getCalculation(id: string): Promise<any>;
+  submitForApproval(id: string): Promise<any>;
+  approveCalculation(id: string, comments: string): Promise<any>;
+  rejectCalculation(id: string, comments: string): Promise<any>;
+  listQuotations(): Promise<any>;
+  createQuotation(body: Record<string, unknown>): Promise<any>;
+  getQuotation(id: string): Promise<any>;
+  listRateCards(search?: string): Promise<any>;
+  getCommercialReports(): Promise<any>;
 }
 
 export const api: ApiClient = {
@@ -376,21 +402,23 @@ export const api: ApiClient = {
   createStaff: (body: Record<string, unknown>) =>
     apiClient.post('/staff', body),
   updateStaff: (id: string, body: Record<string, unknown>) =>
-    apiClient.put(`/staff/${id}`, body).then(res => res.data),
+    apiClient.put(`/staff/${id}`, body),
   listEmployees: (params?: Record<string, unknown>) =>
-    apiClient.get('/employees', { params }).then((res) => res.data),
+    apiClient.get('/employees', { params }),
   listEmployeesForDropdown: (branchId?: string) =>
-    apiClient.get('/employees/list', { params: branchId ? { branchId } : {} }).then((res) => res.data),
-  getEmployee: (id: string) => apiClient.get(`/employees/${id}`).then((res) => res.data),
+    apiClient.get('/employees/list', { params: branchId ? { branchId } : {} }),
+  listBranches: () =>
+    apiClient.get('/employees/branches'),
+  getEmployee: (id: string) => apiClient.get(`/employees/${id}`),
   createEmployee: (body: Record<string, unknown>) =>
-    apiClient.post('/employees', body).then((res) => res.data),
+    apiClient.post('/employees', body),
   updateEmployeeStatus: (id: string, status: string) =>
-    apiClient.patch(`/employees/${id}/status`, { status }).then((res) => res.data),
+    apiClient.patch(`/employees/${id}/status`, { status }),
   exitEmployee: (
     id: string,
     body: { channel: 'ONLINE' | 'OFFLINE'; reason: string; exitDate: string; notes?: string },
-  ) => apiClient.post(`/employees/${id}/exit`, body).then((res) => res.data),
-  listCategories: () => apiClient.get('/categories').then((res) => res.data),
+  ) => apiClient.post(`/employees/${id}/exit`, body),
+  listCategories: () => apiClient.get('/categories'),
   listAttendance: (params?: {
     date?: string;
     employeeId?: string;
@@ -398,15 +426,15 @@ export const api: ApiClient = {
     categoryId?: string;
     page?: number;
     limit?: number;
-  }) => apiClient.get('/attendance', { params }).then((res) => res.data),
+  }) => apiClient.get('/attendance', { params }),
   getAttendanceStats: (params?: { date?: string; branchId?: string }) =>
-    apiClient.get('/attendance/stats', { params }).then((res) => res.data),
+    apiClient.get('/attendance/stats', { params }),
   markAttendance: (body: {
     employeeId: string;
     date: string;
     status: string;
     notes?: string;
-  }) => apiClient.post(`/attendance/mark`, body).then((res) => res.data),
+  }) => apiClient.post(`/attendance/mark`, body),
   previewEmployeePayroll: (employeeId: string, month: number, year: number) =>
     apiClient.get(`/attendance/${employeeId}/payroll-preview`, { params: { month, year } }),
   generateEmployeePayroll: (employeeId: string, month: number, year: number) =>
@@ -696,4 +724,40 @@ export const api: ApiClient = {
     apiClient.put(`/finance/customers/${id}`, body),
   generateFinanceCustomerBillNumber: (id: string) =>
     apiClient.post(`/finance/customers/${id}/bill-number`),
+
+  // ── Finance Commercial ─────────────────────────────────────────────────────
+  listWageConfigs: (search?: string) =>
+    apiClient.get('/finance/commercial/wage-config', { params: search ? { search } : {} }),
+  createWageConfig: (body: any) =>
+    apiClient.post('/finance/commercial/wage-config', body),
+  getWageCategories: () =>
+    apiClient.get('/finance/commercial/wage-config/categories'),
+  getActiveWageConfig: (state: string, zone: string, category: string) =>
+    apiClient.get('/finance/commercial/wage-config/active', { params: { state, zone, category } }),
+  getWageRevisionComparison: (state: string, zone: string, category: string) =>
+    apiClient.get('/finance/commercial/wage-config/comparison', { params: { state, zone, category } }),
+  listCalculations: (search?: string) =>
+    apiClient.get('/finance/commercial/calculations', { params: search ? { search } : {} }),
+  runCalculationOnTheFly: (body: any) =>
+    apiClient.post('/finance/commercial/calculations/calculate', body),
+  createCalculation: (body: any) =>
+    apiClient.post('/finance/commercial/calculations', body),
+  getCalculation: (id: string) =>
+    apiClient.get(`/finance/commercial/calculations/${id}`),
+  submitForApproval: (id: string) =>
+    apiClient.post(`/finance/commercial/calculations/${id}/submit`),
+  approveCalculation: (id: string, comments: string) =>
+    apiClient.post(`/finance/commercial/calculations/${id}/approve`, { comments }),
+  rejectCalculation: (id: string, comments: string) =>
+    apiClient.post(`/finance/commercial/calculations/${id}/reject`, { comments }),
+  listQuotations: () =>
+    apiClient.get('/finance/commercial/quotations'),
+  createQuotation: (body: any) =>
+    apiClient.post('/finance/commercial/quotations', body),
+  getQuotation: (id: string) =>
+    apiClient.get(`/finance/commercial/quotations/${id}`),
+  listRateCards: (search?: string) =>
+    apiClient.get('/finance/commercial/rate-cards', { params: search ? { search } : {} }),
+  getCommercialReports: () =>
+    apiClient.get('/finance/commercial/reports'),
 };

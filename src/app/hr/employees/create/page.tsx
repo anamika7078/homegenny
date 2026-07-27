@@ -24,6 +24,7 @@ export default function HrCreateEmployeePage() {
     pincode: '110001',
     joiningDate: new Date().toISOString().split('T')[0],
     categoryId: '',
+    branchId: HR_BRANCH_ID,
     salary: '18000',
     docsNotAvailable: false,
     onboardingRemark: '',
@@ -34,7 +35,13 @@ export default function HrCreateEmployeePage() {
     queryFn: () => api.listCategories(),
   });
 
+  const { data: branchesRaw, isLoading: branchesLoading } = useQuery({
+    queryKey: ['branches', 'hr'],
+    queryFn: () => api.listBranches(),
+  });
+
   const categories = unwrapItems(categoriesRaw);
+  const branches = unwrapItems(branchesRaw);
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => api.createEmployee(data),
@@ -89,7 +96,7 @@ export default function HrCreateEmployeePage() {
         ? { onboardingRemark: formData.onboardingRemark.trim(), docsNotAvailableAtCreate: true }
         : {},
       joiningDate: formData.joiningDate,
-      branchId: HR_BRANCH_ID,
+      branchId: formData.branchId || HR_BRANCH_ID,
       categoryId: formData.categoryId,
       department: categoryName,
       designation: categoryName,
@@ -110,33 +117,34 @@ export default function HrCreateEmployeePage() {
             <Users className="h-5 w-5 text-blue-400" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white sm:text-2xl">Add New Employee</h1>
-            <p className="text-sm text-secondary-foreground">Create an internal HR employee record</p>
+            <h1 className="text-xl font-bold text-white">Create New Employee</h1>
+            <p className="text-xs text-secondary-foreground">Add staff to HR database</p>
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-background/40 p-6 backdrop-blur-xl">
-        <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="rounded-2xl border border-white/10 bg-card p-6 space-y-4">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-secondary-foreground">
+            Personal Details
+          </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input
               label="Full Name"
-              placeholder="e.g. Anamika Singh"
               value={formData.fullName}
               onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
               required
             />
             <Input
-              label="Phone Number"
-              placeholder="9876543210"
+              label="Mobile Number"
               value={formData.mobile}
               onChange={(e) => setFormData({ ...formData, mobile: e.target.value.replace(/\D/g, '') })}
               maxLength={10}
               required
             />
             <Input
-              label="Email (optional)"
-              placeholder="employee@homegenny.com"
+              label="Email Address (Optional)"
+              type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             />
@@ -179,6 +187,22 @@ export default function HrCreateEmployeePage() {
                 {categories.map((c: any) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-sm font-semibold text-white">Branch Assignment</label>
+              <select
+                className="w-full rounded-xl border border-white/10 bg-background px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+                value={formData.branchId}
+                onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
+                disabled={branchesLoading}
+              >
+                <option value={HR_BRANCH_ID}>Corporate / Default Branch (All Modules)</option>
+                {branches.map((b: any) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} {b.city ? `(${b.city})` : ''}
                   </option>
                 ))}
               </select>
@@ -247,9 +271,9 @@ export default function HrCreateEmployeePage() {
             <Button type="submit" disabled={createMutation.isPending || categoriesLoading}>
               {createMutation.isPending ? 'Saving...' : 'Create & Continue Onboarding'}
             </Button>
-          </div>
-        </form>
-      </div>
+          </div> </div>
+      </form>
     </div>
+
   );
 }

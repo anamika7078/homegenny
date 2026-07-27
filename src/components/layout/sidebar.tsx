@@ -58,6 +58,7 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   badge?: string;
+  subItems?: Array<{ href: string; label: string }>;
 }
 interface NavSection {
   section: string;
@@ -280,6 +281,19 @@ const FINANCE_NAV: NavSection[] = [
     section: 'Finance',
     items: [
       { href: '/finance/customers', label: 'Customers', icon: Users },
+      {
+        href: '/finance/commercial',
+        label: 'Commercial',
+        icon: Calculator,
+        subItems: [
+          { href: '/finance/commercial/wage-config', label: 'Wage Configuration' },
+          { href: '/finance/commercial/calculator', label: 'Commercial Calculator' },
+          { href: '/finance/commercial/quotations', label: 'Quotations' },
+          { href: '/finance/commercial/rate-cards', label: 'Rate Cards' },
+          { href: '/finance/commercial/reports', label: 'Reports' },
+          { href: '/finance/commercial/approvals', label: 'Approval' },
+        ]
+      },
       { href: '/finance/payroll', label: 'Payroll', icon: DollarSign },
       { href: '/finance/payroll/attendance', label: 'Attendance Payroll', icon: Calculator },
       { href: '/finance/invoices', label: 'Invoices', icon: FileText },
@@ -350,6 +364,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuthStore();
   const [mounted, setMounted] = useState(false);
+  const [openSubMenus, setOpenSubMenus] = useState<Record<string, boolean>>({
+    'Commercial': true,
+  });
 
   useEffect(() => { setMounted(true); }, []);
   if (!mounted) return null;
@@ -459,9 +476,53 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               {section.section}
             </h4>
             <div className="space-y-0.5">
-              {section.items.map((item) => (
-                <NavLink key={item.href} {...item} pathname={pathname} onNavigate={onClose} />
-              ))}
+              {section.items.map((item) => {
+                if (item.subItems) {
+                  const isOpen = openSubMenus[item.label];
+                  const active = pathname.startsWith(item.href);
+                  return (
+                    <div key={item.label} className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => setOpenSubMenus(prev => ({ ...prev, [item.label]: !prev[item.label] }))}
+                        className={cn(
+                          'w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-secondary-foreground hover:text-[#FF5A1F] hover:bg-[#FF5A1F]/5',
+                          active && 'text-[#FF5A1F] bg-[#FF5A1F]/10'
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <item.icon className="w-4 h-4 flex-shrink-0" />
+                          <span>{item.label}</span>
+                        </div>
+                        <span className="text-[10px] font-bold">{isOpen ? '▼' : '▶'}</span>
+                      </button>
+                      {isOpen && (
+                        <div className="pl-6 space-y-0.5 border-l border-[#1e293b] ml-5 mt-1">
+                          {item.subItems.map((sub) => {
+                            const subActive = pathname === sub.href;
+                            return (
+                              <Link
+                                key={sub.href}
+                                href={sub.href}
+                                onClick={onClose}
+                                className={cn(
+                                  'block py-2 px-3 text-xs font-semibold rounded-md transition-colors',
+                                  subActive
+                                    ? 'text-[#FF5A1F] bg-[#FF5A1F]/5'
+                                    : 'text-secondary-foreground hover:text-foreground hover:bg-white/5'
+                                )}
+                              >
+                                {sub.label}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                return <NavLink key={item.href} {...item} pathname={pathname} onNavigate={onClose} />;
+              })}
             </div>
           </div>
         ))}
