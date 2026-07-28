@@ -231,7 +231,7 @@ export function ProcessingPipelineTab() {
           'Transfer Reference',
           'Payment Status'
         ];
-        const rows = list.map((d: any) => [
+        const rows: any[][] = list.map((d: any) => [
           batchNo,
           d.employee?.employeeId || '',
           `"${(d.employee?.fullName || 'Staff Member').replace(/"/g, '""')}"`,
@@ -248,7 +248,7 @@ export function ProcessingPipelineTab() {
           `SALARY-${batchNo}-${d.employee?.employeeId || 'EMP'}`,
           'READY_FOR_DISBURSEMENT'
         ]);
-        const csvString = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const csvString = '\uFEFF' + [headers.join(','), ...rows.map((r: any[]) => r.join(','))].join('\n');
         const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
