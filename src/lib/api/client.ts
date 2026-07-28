@@ -385,6 +385,52 @@ export interface ApiClient {
   getQuotation(id: string): Promise<any>;
   listRateCards(search?: string): Promise<any>;
   getCommercialReports(): Promise<any>;
+
+  // ── Enterprise Payroll & Salary Structures ─────────────────────────────────
+  listSalaryStructures(params?: any): Promise<any>;
+  getSalaryStructure(id: string): Promise<any>;
+  createSalaryStructure(body: any): Promise<any>;
+  updateSalaryStructure(id: string, body: any): Promise<any>;
+  deleteSalaryStructure(id: string): Promise<any>;
+
+  listEmployeeSalaries(params?: any): Promise<any>;
+  getEmployeeSalaryProfile(employeeId: string): Promise<any>;
+  assignEmployeeSalaryProfile(body: any): Promise<any>;
+  reviseEmployeeSalary(employeeId: string, body: any): Promise<any>;
+
+  listOvertimeRules(): Promise<any>;
+  createOvertimeRule(body: any): Promise<any>;
+  listOvertimeRecords(params?: any): Promise<any>;
+  createOvertimeRecord(body: any): Promise<any>;
+  approveOvertimeRecord(id: string, role?: string): Promise<any>;
+  rejectOvertimeRecord(id: string): Promise<any>;
+
+  listBonusRecords(params?: any): Promise<any>;
+  createBonusRecord(body: any): Promise<any>;
+  deleteBonusRecord(id: string): Promise<any>;
+
+  listReimbursements(params?: any): Promise<any>;
+  createReimbursement(body: any): Promise<any>;
+  updateReimbursementStatus(id: string, body: any): Promise<any>;
+
+  listLoans(params?: any): Promise<any>;
+  createLoan(body: any): Promise<any>;
+  updateLoanStatus(id: string, status: string): Promise<any>;
+  listSalaryAdvances(params?: any): Promise<any>;
+  createSalaryAdvance(body: any): Promise<any>;
+
+  processEnterpriseBatch(body: any): Promise<any>;
+  listEnterpriseBatches(params?: any): Promise<any>;
+  getEnterpriseBatch(id: string): Promise<any>;
+  approveEnterpriseBatchTier(id: string, body: any): Promise<any>;
+  rejectEnterpriseBatchTier(id: string, body: any): Promise<any>;
+  lockEnterpriseBatch(id: string): Promise<any>;
+  generateBankTransferBatch(id: string, format: string): Promise<any>;
+  getEnterprisePayrollSummary(params?: any): Promise<any>;
+  getDepartmentPayrollBreakdown(params?: any): Promise<any>;
+  getStatutoryComplianceReport(params?: any): Promise<any>;
+  listPayrollSettings(): Promise<any>;
+  updatePayrollSetting(body: any): Promise<any>;
 }
 
 export const api: ApiClient = {
@@ -760,4 +806,50 @@ export const api: ApiClient = {
     apiClient.get('/finance/commercial/rate-cards', { params: search ? { search } : {} }),
   getCommercialReports: () =>
     apiClient.get('/finance/commercial/reports'),
+
+  // ── Enterprise Payroll & Salary Structures ─────────────────────────────────
+  listSalaryStructures: (params?: any) => apiClient.get('/salary-structure', { params }),
+  getSalaryStructure: (id: string) => apiClient.get(`/salary-structure/${id}`),
+  createSalaryStructure: (body: any) => apiClient.post('/salary-structure', body),
+  updateSalaryStructure: (id: string, body: any) => apiClient.put(`/salary-structure/${id}`, body),
+  deleteSalaryStructure: (id: string) => apiClient.delete(`/salary-structure/${id}`),
+
+  listEmployeeSalaries: (params?: any) => apiClient.get('/employee-salary', { params }),
+  getEmployeeSalaryProfile: (employeeId: string) => apiClient.get(`/employee-salary/employee/${employeeId}`),
+  assignEmployeeSalaryProfile: (body: any) => apiClient.post('/employee-salary', body),
+  reviseEmployeeSalary: (employeeId: string, body: any) => apiClient.post(`/employee-salary/employee/${employeeId}/revise`, body),
+
+  listOvertimeRules: () => apiClient.get('/overtime/rules'),
+  createOvertimeRule: (body: any) => apiClient.post('/overtime/rules', body),
+  listOvertimeRecords: (params?: any) => apiClient.get('/overtime/records', { params }),
+  createOvertimeRecord: (body: any) => apiClient.post('/overtime/records', body),
+  approveOvertimeRecord: (id: string, role?: string) => apiClient.put(`/overtime/records/${id}/approve`, {}, { params: { role } }),
+  rejectOvertimeRecord: (id: string) => apiClient.put(`/overtime/records/${id}/reject`, {}),
+
+  listBonusRecords: (params?: any) => apiClient.get('/bonus', { params }),
+  createBonusRecord: (body: any) => apiClient.post('/bonus', body),
+  deleteBonusRecord: (id: string) => apiClient.delete(`/bonus/${id}`),
+
+  listReimbursements: (params?: any) => apiClient.get('/reimbursement', { params }),
+  createReimbursement: (body: any) => apiClient.post('/reimbursement', body),
+  updateReimbursementStatus: (id: string, body: any) => apiClient.put(`/reimbursement/${id}/status`, body),
+
+  listLoans: (params?: any) => apiClient.get('/loan', { params }),
+  createLoan: (body: any) => apiClient.post('/loan', body),
+  updateLoanStatus: (id: string, status: string) => apiClient.put(`/loan/${id}/status`, { status }),
+  listSalaryAdvances: (params?: any) => apiClient.get('/loan/advance/list', { params }),
+  createSalaryAdvance: (body: any) => apiClient.post('/loan/advance', body),
+
+  processEnterpriseBatch: (body: any) => apiClient.post('/enterprise-payroll/process-batch', body),
+  listEnterpriseBatches: (params?: any) => apiClient.get('/enterprise-payroll/batches', { params }),
+  getEnterpriseBatch: (id: string) => apiClient.get(`/enterprise-payroll/batches/${id}`),
+  approveEnterpriseBatchTier: (id: string, body: any) => apiClient.put(`/enterprise-payroll/batches/${id}/approve`, body),
+  rejectEnterpriseBatchTier: (id: string, body: any) => apiClient.put(`/enterprise-payroll/batches/${id}/reject`, body),
+  lockEnterpriseBatch: (id: string) => apiClient.put(`/enterprise-payroll/batches/${id}/lock`, {}),
+  generateBankTransferBatch: (id: string, format: string) => apiClient.post(`/enterprise-payroll/batches/${id}/bank-transfer`, { format }),
+  getEnterprisePayrollSummary: (params?: any) => apiClient.get('/enterprise-payroll/reports/summary', { params }),
+  getDepartmentPayrollBreakdown: (params?: any) => apiClient.get('/enterprise-payroll/reports/department-breakdown', { params }),
+  getStatutoryComplianceReport: (params?: any) => apiClient.get('/enterprise-payroll/reports/statutory-compliance', { params }),
+  listPayrollSettings: () => apiClient.get('/enterprise-payroll/settings'),
+  updatePayrollSetting: (body: any) => apiClient.post('/enterprise-payroll/settings', body),
 };
