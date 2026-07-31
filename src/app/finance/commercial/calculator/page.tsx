@@ -20,15 +20,15 @@ export default function CommercialCalculatorPage() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
-  // Selector states
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  // Unit-code centric selection states
+  const [allUnits, setAllUnits] = useState<any[]>([]);
+  const [selectedUnitCode, setSelectedUnitCode] = useState('');
+  const [selectedUnit, setSelectedUnit] = useState<any>(null);
+
   const [selectedBranchId, setSelectedBranchId] = useState('');
   const [state, setState] = useState('Delhi NCR');
   const [zone, setZone] = useState('Zone A');
   const [contractDuration, setContractDuration] = useState(12);
-
-  // Selected Customer Details (to show unit code, unit name, etc.)
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
 
   // Dynamic rows of calculator items
   const [items, setItems] = useState<any[]>([
@@ -54,9 +54,38 @@ export default function CommercialCalculatorPage() {
       const custsData = (custs as any)?.data ?? custs;
       const brsData = (brs as any)?.data ?? brs;
       const catsData = (cats as any)?.data ?? cats;
-      setCustomers(Array.isArray(custsData) ? custsData : []);
+      
+      const parsedCusts = Array.isArray(custsData) ? custsData : [];
+      setCustomers(parsedCusts);
       setBranches(Array.isArray(brsData) ? brsData : []);
       setCategories(Array.isArray(catsData) ? catsData : []);
+
+      // Extract all unit codes across customers & branches into flat array
+      const unitsList: any[] = [];
+      parsedCusts.forEach((c: any) => {
+        const cBranches = (c.branches && c.branches.length > 0)
+          ? c.branches
+          : [{
+              unit_code: c.unit_code,
+              unit_name: c.unit_name,
+              address: c.address,
+              state: c.state,
+              city: c.city,
+              pincode: c.pincode,
+              gstn: c.gstn,
+            }];
+        cBranches.forEach((b: any) => {
+          unitsList.push({
+            ...b,
+            customer_id: c.id,
+            customer_name: c.customer_name,
+            pan_card: c.pan_card,
+            hq_address: c.address,
+            hq_gstn: c.gstn,
+          });
+        });
+      });
+      setAllUnits(unitsList);
     } catch (e: any) {
       showToast('error', e.message ?? 'Failed to load master records');
     } finally {
@@ -68,10 +97,13 @@ export default function CommercialCalculatorPage() {
     loadData();
   }, []);
 
-  const handleCustomerChange = (customerId: string) => {
-    setSelectedCustomerId(customerId);
-    const found = customers.find((c) => c.id === customerId);
-    setSelectedCustomer(found || null);
+  const handleUnitCodeChange = (unitCode: string) => {
+    setSelectedUnitCode(unitCode);
+    const found = allUnits.find((u) => u.unit_code === unitCode);
+    setSelectedUnit(found || null);
+    if (found?.state) {
+      setState(found.state);
+    }
   };
 
   const addItemRow = () => {
@@ -105,34 +137,33 @@ export default function CommercialCalculatorPage() {
       }
       setResults(resData);
       showToast('success', 'Calculated successfully!');
-    } catch (err: any) {
-      showToast('error', err.message ?? 'Failed to calculate');
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Calculation failed');
     } finally {
       setCalculating(false);
     }
   };
 
   const handleSaveDraft = async () => {
-    if (!selectedCustomerId) {
-      showToast('error', 'Please select a Customer first');
+    if (!selectedUnit) {
+      showToast('error', 'Please select a Unit Code first');
       return;
     }
     setSaving(true);
     try {
-      const branch = branches.find((b) => b.id === selectedBranchId);
-      const res = await api.createCalculation({
-        customer_id: selectedCustomerId,
-        branch_id: selectedBranchId || undefined,
-        branch_name: branch?.name || undefined,
+      await api.createCalculation({
+        customer_id: selectedUnit.customer_id,
+        branch_id: selectedBranchId || null,
+        unit_code: selectedUnit.unit_code,
         state,
         zone,
-        contract_duration: contractDuration,
+        contract_duration_months: contractDuration,
         items,
+        results,
       });
-      const resData = (res as any)?.data ?? res;
-      showToast('success', `Calculation Saved as Draft (Rev ${resData.nextRevision})! ID: ${resData.id}`);
-    } catch (err: any) {
-      showToast('error', err.message ?? 'Failed to save draft');
+      showToast('success', 'Calculation saved as draft!');
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Failed to save draft');
     } finally {
       setSaving(false);
     }
@@ -156,14 +187,16 @@ export default function CommercialCalculatorPage() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex justify-between items-center">
+      {/* Top Bar / Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-            <Calculator className="text-orange-500 w-7 h-7" />
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <Calculator className="w-7 h-7 text-orange-500" />
             Commercial Calculator
           </h1>
-          <p className="text-sm text-slate-400">Calculate employee salary breakups, customer billings, and compliance costs dynamically.</p>
+          <p className="text-sm text-slate-400 mt-0.5">
+            Select Unit Code first — Customer Name, Branch, and Address will auto-fill automatically.
+          </p>
         </div>
         <div className="flex gap-3">
           <button
@@ -185,69 +218,104 @@ export default function CommercialCalculatorPage() {
         </div>
       </div>
 
-      {/* Master Configuration Selection */}
-      <div className="bg-[#0f172a] border border-white/10 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-5 gap-6">
-        <div>
-          <label className="text-xs font-semibold text-slate-400 mb-1.5 block">Customer Name</label>
-          <select
-            value={selectedCustomerId}
-            onChange={(e) => handleCustomerChange(e.target.value)}
-            className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none"
-          >
-            <option value="">Select Customer...</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>{c.customer_name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold text-slate-400 mb-1.5 block">Unit Code / Name</label>
-          <div className="bg-slate-900/50 border border-white/5 rounded-xl px-4 py-2.5 text-slate-400 text-sm h-11 flex items-center">
-            {selectedCustomer ? (
-              <span className="text-white font-medium">
-                [{selectedCustomer.unit_code}] {selectedCustomer.unit_name}
-              </span>
-            ) : (
-              'Auto loads from customer'
-            )}
-          </div>
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold text-slate-400 mb-1.5 block">Branch</label>
-          <select
-            value={selectedBranchId}
-            onChange={(e) => setSelectedBranchId(e.target.value)}
-            className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none"
-          >
-            <option value="">Select Branch...</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 col-span-2">
+      {/* Master Configuration Selection (Unit Code FIRST -> Auto-fill Customer, Branch & Address) */}
+      <div className="bg-[#0f172a] border border-white/10 rounded-2xl p-6 space-y-4 shadow-xl">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+          {/* 1. Unit Code Selection (FIRST) */}
           <div>
-            <label className="text-xs font-semibold text-slate-400 mb-1.5 block">State</label>
+            <label className="text-xs font-semibold text-slate-400 mb-1.5 block">
+              1. Select Unit Code <span className="text-orange-400">*</span>
+            </label>
+            <select
+              value={selectedUnitCode}
+              onChange={(e) => handleUnitCodeChange(e.target.value)}
+              className="w-full bg-slate-900 border border-emerald-500/40 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-emerald-500 font-mono font-bold"
+            >
+              <option value="">Select Unit Code...</option>
+              {allUnits.map((u, idx) => (
+                <option key={idx} value={u.unit_code}>
+                  [{u.unit_code}] {u.customer_name} — {u.unit_name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 2. Customer Name (Auto-filled Read-Only) */}
+          <div>
+            <label className="text-xs font-semibold text-slate-400 mb-1.5 block">
+              2. Customer Name <span className="text-emerald-400/70 text-[10px] uppercase font-normal">(Auto-filled)</span>
+            </label>
+            <div className="bg-slate-900/70 border border-white/8 rounded-xl px-4 py-2.5 text-sm h-11 flex items-center">
+              {selectedUnit ? (
+                <span className="text-white font-bold truncate">{selectedUnit.customer_name}</span>
+              ) : (
+                <span className="text-slate-600 italic text-xs">Auto-filled from Unit Code</span>
+              )}
+            </div>
+          </div>
+
+          {/* 3. Branch / Unit Name (Auto-filled Read-Only) */}
+          <div>
+            <label className="text-xs font-semibold text-slate-400 mb-1.5 block">
+              3. Branch / Unit <span className="text-emerald-400/70 text-[10px] uppercase font-normal">(Auto-filled)</span>
+            </label>
+            <div className="bg-slate-900/70 border border-white/8 rounded-xl px-4 py-2.5 text-sm h-11 flex items-center">
+              {selectedUnit ? (
+                <span className="text-slate-200 font-semibold truncate">{selectedUnit.unit_name}</span>
+              ) : (
+                <span className="text-slate-600 italic text-xs">Auto-filled from Unit Code</span>
+              )}
+            </div>
+          </div>
+
+          {/* 4. State */}
+          <div>
+            <label className="text-xs font-semibold text-slate-400 mb-1.5 block">4. State</label>
             <input
               type="text"
               value={state}
               onChange={(e) => setState(e.target.value)}
-              className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm"
+              placeholder="e.g. Delhi NCR / Haryana"
+              className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50"
             />
           </div>
+
+          {/* 5. Zone */}
           <div>
-            <label className="text-xs font-semibold text-slate-400 mb-1.5 block">Zone</label>
+            <label className="text-xs font-semibold text-slate-400 mb-1.5 block">5. Zone</label>
             <input
               type="text"
               value={zone}
               onChange={(e) => setZone(e.target.value)}
-              className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm"
+              placeholder="e.g. Zone A"
+              className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50"
             />
           </div>
         </div>
+
+        {/* Auto-filled Branch Address Banner */}
+        {selectedUnit && (
+          <div className="pt-3 border-t border-white/8 flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-900/60 px-4 py-3 rounded-xl border border-emerald-500/20">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span className="font-semibold text-slate-300">Auto-filled Branch Address:</span>
+              <span className="text-white font-medium">
+                {[
+                  selectedUnit.address,
+                  selectedUnit.city,
+                  selectedUnit.state,
+                  selectedUnit.pincode ? `PIN: ${selectedUnit.pincode}` : '',
+                ].filter(Boolean).join(', ') || selectedUnit.hq_address || 'N/A'}
+              </span>
+            </div>
+            {selectedUnit.gstn && (
+              <div className="flex items-center gap-1.5 text-slate-400 font-mono text-[11px]">
+                <span className="text-slate-500">GSTN:</span>
+                <span className="text-slate-200">{selectedUnit.gstn}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Calculator Rows */}

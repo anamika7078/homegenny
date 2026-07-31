@@ -362,8 +362,28 @@ export interface ApiClient {
     address: string;
     pan_card: string;
     gstn?: string;
+    branches?: Array<{
+      unit_code: string;
+      unit_name: string;
+      address?: string;
+      state?: string;
+      city?: string;
+      pincode?: string;
+      gstn?: string;
+    }>;
   }): Promise<any>;
   getFinanceCustomer(id: string): Promise<any>;
+  getCustomerBranches(id: string): Promise<any>;
+  addCustomerBranch(id: string, body: {
+    unit_code: string;
+    unit_name: string;
+    address?: string;
+    state?: string;
+    city?: string;
+    pincode?: string;
+    gstn?: string;
+  }): Promise<any>;
+  listAllCustomerBranches(): Promise<any>;
   updateFinanceCustomer(id: string, body: Record<string, unknown>): Promise<any>;
   generateFinanceCustomerBillNumber(id: string): Promise<any>;
 
@@ -764,8 +784,20 @@ export const api: ApiClient = {
     address: string;
     pan_card: string;
     gstn?: string;
+    branches?: Array<{
+      unit_code: string;
+      unit_name: string;
+      address?: string;
+      state?: string;
+      city?: string;
+      pincode?: string;
+      gstn?: string;
+    }>;
   }) => apiClient.post('/finance/customers', body),
   getFinanceCustomer: (id: string) => apiClient.get(`/finance/customers/${id}`),
+  getCustomerBranches: (id: string) => apiClient.get(`/finance/customers/${id}/branches`),
+  addCustomerBranch: (id: string, body: any) => apiClient.post(`/finance/customers/${id}/branches`, body),
+  listAllCustomerBranches: () => apiClient.get('/finance/customers/branches/all'),
   updateFinanceCustomer: (id: string, body: Record<string, unknown>) =>
     apiClient.put(`/finance/customers/${id}`, body),
   generateFinanceCustomerBillNumber: (id: string) =>
