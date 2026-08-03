@@ -90,7 +90,7 @@ function computeAll(d: any) {
   const da = Number(d.da) || 0;
   const hra = Number(d.hra) || 0;
   const skilledAllowance = Number(d.skilled_allowance) || 0;
-  const shiftPattern = String(d.shift_pattern || '8');
+
   const employerPfPct = Number(d.employer_pf_pct) || 0;
   const employerPfMax = Number(d.employer_pf_max) || 15000;
   const employeePfPct = Number(d.employee_pf_pct) || 0;
@@ -115,8 +115,10 @@ function computeAll(d: any) {
 
   // ── Phase A: Gross Salary ──
   const subtotal1 = basic + da;
-  const additionalHoursPct = shiftPattern === '12' ? 50 : 0;
-  const additionalHours = subtotal1 * (additionalHoursPct / 100);
+  // Shift pattern is stored as config only — actual shift-based calculation
+  // happens in the Commercial Calculator screen, not here.
+  const additionalHoursPct = 0;
+  const additionalHours = 0;
   const subtotal2 = subtotal1 + additionalHours + hra + skilledAllowance;
 
   // ── Phase B: Statutory Contributions ──
@@ -158,6 +160,35 @@ function computeAll(d: any) {
   const nfhServiceCharge = nfhOn ? (nfhPayDouble + nfhEsic) * (managementPct / 100) : 0;
   const totalNfh = nfhPayDouble + nfhEsic + nfhServiceCharge;
 
+  // ── Phase D: GST & Billing ──
+  const gstOn = d.gst_applicable !== false;
+  const gstType: 'intra_state' | 'inter_state' = d.gst_type || 'intra_state';
+  const gstRate = Number(d.gst_pct) || 18;
+
+  let cgstPct = 0;
+  let sgstPct = 0;
+  let igstPct = 0;
+  let cgstAmount = 0;
+  let sgstAmount = 0;
+  let igstAmount = 0;
+  let totalGstAmount = 0;
+
+  if (gstOn) {
+    if (gstType === 'intra_state') {
+      cgstPct = gstRate / 2;
+      sgstPct = gstRate / 2;
+      cgstAmount = totalCTC * (cgstPct / 100);
+      sgstAmount = totalCTC * (sgstPct / 100);
+      totalGstAmount = cgstAmount + sgstAmount;
+    } else {
+      igstPct = gstRate;
+      igstAmount = totalCTC * (igstPct / 100);
+      totalGstAmount = igstAmount;
+    }
+  }
+
+  const grandTotalWithGst = totalCTC + totalGstAmount;
+
   return {
     subtotal1, additionalHours, additionalHoursPct, subtotal2,
     bonusRaw, bonusMonthly, leaveWages, pfBase,
@@ -166,6 +197,8 @@ function computeAll(d: any) {
     ratePerDay, ratePerHour,
     grossEarnings, epfoEmployee, esicEmployee, totalDeductions, netSalary,
     nfhPayDouble, nfhEsic, nfhServiceCharge, totalNfh,
+    gstOn, gstType, gstRate, cgstPct, sgstPct, igstPct,
+    cgstAmount, sgstAmount, igstAmount, totalGstAmount, grandTotalWithGst,
   };
 }
 
@@ -220,11 +253,15 @@ export default function WageConfigPage() {
     uniform_applicable: true,
     relieving_applicable: true,
     nfh_applicable: false,
+    // GST fields
+    gst_applicable: true,
+    gst_type: 'intra_state' as 'intra_state' | 'inter_state',
+    gst_pct: 18,
   });
 
   // Calculation sections collapse state
   const [expandedSections, setExpandedSections] = useState({
-    phaseA: true, phaseB: true, phaseC: true, employee: true, nfh: true,
+    phaseA: true, phaseB: true, phaseC: true, gst: true, employee: true, nfh: true,
   });
 
   const toggleSection = (key: keyof typeof expandedSections) => {
@@ -274,11 +311,13 @@ export default function WageConfigPage() {
     try {
       const payload: any = {
         ...formData,
-        additional_hours_pct: formData.shift_pattern === '12' ? 50 : 0,
+        // Additional hours % is the OT rate applied when 12h shift is selected in Commercial Calculator
+        // Always stored as 50% — the calculator decides whether to apply it based on shift selection
+        additional_hours_pct: 50,
         lwf_pct: 0,
         lwf_max: formData.lwf_amount,
         training_charges: 0,
-        gst_pct: 18,
+        gst_pct: formData.gst_pct || 18,
         nfh: 0,
       };
       await api.createWageConfig(payload);
@@ -542,17 +581,6 @@ export default function WageConfigPage() {
                       <input type="number" required value={formData.skilled_allowance}
                         onChange={(e) => handleInputChange('skilled_allowance', e.target.value)} className={inputCls} />
                     </div>
-                    <div>
-                      <label className={labelCls}>Shift Pattern</label>
-                      <select
-                        value={formData.shift_pattern}
-                        onChange={(e) => handleInputChange('shift_pattern', e.target.value)}
-                        className={inputCls}
-                      >
-                        <option value="8">8 Hours</option>
-                        <option value="12">12 Hours</option>
-                      </select>
-                    </div>
                   </div>
                 </div>
 
@@ -606,6 +634,77 @@ export default function WageConfigPage() {
                       )}
                     </div>
                   )}
+                </div>
+
+                {/* ── GST Configuration ── */}
+                <div className="border-t border-white/5 pt-5 space-y-3">
+                  <h4 className="text-xs uppercase font-bold tracking-wider text-orange-500 flex items-center gap-2">
+                    <BadgePercent className="w-3.5 h-3.5" />
+                    GST Configuration
+                  </h4>
+                  <div className="bg-slate-900/40 rounded-xl p-4 border border-white/5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Toggle
+                        label="GST (18% Statutory Tax)"
+                        checked={formData.gst_applicable}
+                        onChange={(v) => handleInputChange('gst_applicable', v)}
+                      />
+                      {formData.gst_applicable && (
+                        <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                          Total Rate: {formData.gst_pct}%
+                        </span>
+                      )}
+                    </div>
+
+                    {formData.gst_applicable && (
+                      <div className="pt-2.5 border-t border-white/5 space-y-2">
+                        <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                          Supply Type / GST Classification
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => handleInputChange('gst_type', 'intra_state')}
+                            className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
+                              formData.gst_type === 'intra_state'
+                                ? 'bg-orange-500/15 border-orange-500/50 text-white shadow-lg shadow-orange-500/10'
+                                : 'bg-slate-900/60 border-white/5 text-slate-400 hover:border-white/10 hover:text-slate-200'
+                            }`}
+                          >
+                            <span className="text-xs font-bold flex items-center justify-between">
+                              Intra-State (Same State)
+                              {formData.gst_type === 'intra_state' && (
+                                <span className="w-2 h-2 rounded-full bg-orange-400" />
+                              )}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              CGST (9%) + SGST (9%) = 18% Total
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleInputChange('gst_type', 'inter_state')}
+                            className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
+                              formData.gst_type === 'inter_state'
+                                ? 'bg-orange-500/15 border-orange-500/50 text-white shadow-lg shadow-orange-500/10'
+                                : 'bg-slate-900/60 border-white/5 text-slate-400 hover:border-white/10 hover:text-slate-200'
+                            }`}
+                          >
+                            <span className="text-xs font-bold flex items-center justify-between">
+                              Inter-State (Different State)
+                              {formData.gst_type === 'inter_state' && (
+                                <span className="w-2 h-2 rounded-full bg-orange-400" />
+                              )}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              IGST (18%) Integrated Tax
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* ── Compliance Rates ── */}
@@ -718,8 +817,6 @@ export default function WageConfigPage() {
                       <CalcRow label="Basic" value={fmtRs(formData.basic_wage)} />
                       <CalcRow label="DA" value={fmtRs(formData.da)} />
                       <CalcRow label="Sub Total 1" value={fmtRs(calc.subtotal1)} sub />
-                      <CalcRow label={`Addl. Hours (${calc.additionalHoursPct}%)`} value={fmtRs(calc.additionalHours)}
-                        dimmed={calc.additionalHours === 0} />
                       <CalcRow label="HRA" value={fmtRs(formData.hra)} />
                       <CalcRow label="Skilled Allowance" value={fmtRs(formData.skilled_allowance)} />
                       <CalcRow label="Sub Total 2" value={fmtRs(calc.subtotal2)} sub />
@@ -781,6 +878,39 @@ export default function WageConfigPage() {
                           <div className="text-xs font-bold text-white font-mono mt-0.5">{fmtRs(calc.ratePerHour)}</div>
                         </div>
                       </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-white/5" />
+
+                {/* Phase D - GST */}
+                <div className="space-y-1">
+                  <button type="button" onClick={() => toggleSection('gst')}
+                    className="flex items-center justify-between w-full text-left py-1 hover:text-white transition">
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400">Phase D — GST & Billing</span>
+                    {expandedSections.gst ? <ChevronUp className="w-3 h-3 text-slate-500" /> : <ChevronDown className="w-3 h-3 text-slate-500" />}
+                  </button>
+                  {expandedSections.gst && (
+                    <div className="space-y-0.5">
+                      <CalcRow label="Total Monthly CTC" value={fmtRs(calc.totalCTC)} sub />
+                      {calc.gstOn ? (
+                        calc.gstType === 'intra_state' ? (
+                          <>
+                            <CalcRow label={`(+) CGST (${calc.cgstPct}%)`} value={fmtRs(calc.cgstAmount)} />
+                            <CalcRow label={`(+) SGST (${calc.sgstPct}%)`} value={fmtRs(calc.sgstAmount)} />
+                            <CalcRow label="Total GST Amount (18%)" value={fmtRs(calc.totalGstAmount)} sub />
+                          </>
+                        ) : (
+                          <>
+                            <CalcRow label={`(+) IGST (${calc.igstPct}%)`} value={fmtRs(calc.igstAmount)} />
+                            <CalcRow label="Total GST Amount (18%)" value={fmtRs(calc.totalGstAmount)} sub />
+                          </>
+                        )
+                      ) : (
+                        <CalcRow label="GST (18%)" value="EXEMPT / OFF" dimmed badge="OFF" />
+                      )}
+                      <CalcRow label="Grand Total (Incl. GST)" value={fmtRs(calc.grandTotalWithGst)} highlight />
                     </div>
                   )}
                 </div>

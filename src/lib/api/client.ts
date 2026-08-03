@@ -362,6 +362,9 @@ export interface ApiClient {
     address: string;
     pan_card: string;
     gstn?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
     branches?: Array<{
       unit_code: string;
       unit_name: string;

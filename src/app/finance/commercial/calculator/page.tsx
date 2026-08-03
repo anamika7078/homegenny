@@ -26,7 +26,8 @@ export default function CommercialCalculatorPage() {
   const [selectedUnit, setSelectedUnit] = useState<any>(null);
 
   const [selectedBranchId, setSelectedBranchId] = useState('');
-  const [state, setState] = useState('Delhi NCR');
+  const [state, setState] = useState('');
+  const [city, setCity] = useState('');
   const [zone, setZone] = useState('Zone A');
   const [contractDuration, setContractDuration] = useState(12);
 
@@ -60,31 +61,19 @@ export default function CommercialCalculatorPage() {
       setBranches(Array.isArray(brsData) ? brsData : []);
       setCategories(Array.isArray(catsData) ? catsData : []);
 
-      // Extract all unit codes across customers & branches into flat array
-      const unitsList: any[] = [];
-      parsedCusts.forEach((c: any) => {
-        const cBranches = (c.branches && c.branches.length > 0)
-          ? c.branches
-          : [{
-              unit_code: c.unit_code,
-              unit_name: c.unit_name,
-              address: c.address,
-              state: c.state,
-              city: c.city,
-              pincode: c.pincode,
-              gstn: c.gstn,
-            }];
-        cBranches.forEach((b: any) => {
-          unitsList.push({
-            ...b,
-            customer_id: c.id,
-            customer_name: c.customer_name,
-            pan_card: c.pan_card,
-            hq_address: c.address,
-            hq_gstn: c.gstn,
-          });
-        });
-      });
+      // Extract unit codes from customers list
+      const unitsList: any[] = parsedCusts.map((c: any) => ({
+        unit_code: c.unit_code,
+        unit_name: c.unit_name,
+        customer_id: c.id,
+        customer_name: c.customer_name,
+        pan_card: c.pan_card,
+        address: c.address,
+        city: c.city,
+        state: c.state,
+        pincode: c.pincode,
+        gstn: c.gstn,
+      }));
       setAllUnits(unitsList);
     } catch (e: any) {
       showToast('error', e.message ?? 'Failed to load master records');
@@ -101,8 +90,12 @@ export default function CommercialCalculatorPage() {
     setSelectedUnitCode(unitCode);
     const found = allUnits.find((u) => u.unit_code === unitCode);
     setSelectedUnit(found || null);
-    if (found?.state) {
-      setState(found.state);
+    if (found) {
+      setState(found.state || '');
+      setCity(found.city || '');
+    } else {
+      setState('');
+      setCity('');
     }
   };
 
@@ -171,9 +164,9 @@ export default function CommercialCalculatorPage() {
 
   // Grand totals of results
   const resArray = Array.isArray(results) ? results : [];
-  const totalCost = resArray.reduce((acc, r) => acc + Number(r.monthly_cost || 0), 0);
+  const totalCost = resArray.reduce((acc, r) => acc + Number(r.monthly_cost ?? r.monthlyCost ?? 0), 0);
   const totalGst = resArray.reduce((acc, r) => acc + Number(r.gst || 0), 0);
-  const totalGrand = resArray.reduce((acc, r) => acc + Number(r.grand_total || 0), 0);
+  const totalGrand = resArray.reduce((acc, r) => acc + Number(r.grand_total ?? r.grandTotal ?? 0), 0);
   const totalResources = resArray.reduce((acc, r) => acc + Number(r.no_of_resources || 0), 0);
 
   return (
@@ -195,7 +188,7 @@ export default function CommercialCalculatorPage() {
             Commercial Calculator
           </h1>
           <p className="text-sm text-slate-400 mt-0.5">
-            Select Unit Code first — Customer Name, Branch, and Address will auto-fill automatically.
+            Select Unit Code — Customer Name, State, City & Address will populate automatically.
           </p>
         </div>
         <div className="flex gap-3">
@@ -218,9 +211,9 @@ export default function CommercialCalculatorPage() {
         </div>
       </div>
 
-      {/* Master Configuration Selection (Unit Code FIRST -> Auto-fill Customer, Branch & Address) */}
+      {/* Master Configuration Selection (Unit Code FIRST -> Customer, State, City & Address) */}
       <div className="bg-[#0f172a] border border-white/10 rounded-2xl p-6 space-y-4 shadow-xl">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 sm:gap-6">
           {/* 1. Unit Code Selection (FIRST) */}
           <div>
             <label className="text-xs font-semibold text-slate-400 mb-1.5 block">
@@ -234,48 +227,50 @@ export default function CommercialCalculatorPage() {
               <option value="">Select Unit Code...</option>
               {allUnits.map((u, idx) => (
                 <option key={idx} value={u.unit_code}>
-                  [{u.unit_code}] {u.customer_name} — {u.unit_name}
+                  [{u.unit_code}] {u.customer_name}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* 2. Customer Name (Auto-filled Read-Only) */}
+          {/* 2. Customer Name */}
           <div>
             <label className="text-xs font-semibold text-slate-400 mb-1.5 block">
-              2. Customer Name <span className="text-emerald-400/70 text-[10px] uppercase font-normal">(Auto-filled)</span>
+              2. Customer Name
             </label>
             <div className="bg-slate-900/70 border border-white/8 rounded-xl px-4 py-2.5 text-sm h-11 flex items-center">
               {selectedUnit ? (
                 <span className="text-white font-bold truncate">{selectedUnit.customer_name}</span>
               ) : (
-                <span className="text-slate-600 italic text-xs">Auto-filled from Unit Code</span>
+                <span className="text-slate-600 italic text-xs">Customer Name</span>
               )}
             </div>
           </div>
 
-          {/* 3. Branch / Unit Name (Auto-filled Read-Only) */}
+          {/* 3. State */}
           <div>
             <label className="text-xs font-semibold text-slate-400 mb-1.5 block">
-              3. Branch / Unit <span className="text-emerald-400/70 text-[10px] uppercase font-normal">(Auto-filled)</span>
+              3. State
             </label>
-            <div className="bg-slate-900/70 border border-white/8 rounded-xl px-4 py-2.5 text-sm h-11 flex items-center">
-              {selectedUnit ? (
-                <span className="text-slate-200 font-semibold truncate">{selectedUnit.unit_name}</span>
-              ) : (
-                <span className="text-slate-600 italic text-xs">Auto-filled from Unit Code</span>
-              )}
-            </div>
-          </div>
-
-          {/* 4. State */}
-          <div>
-            <label className="text-xs font-semibold text-slate-400 mb-1.5 block">4. State</label>
             <input
               type="text"
               value={state}
               onChange={(e) => setState(e.target.value)}
               placeholder="e.g. Delhi NCR / Haryana"
+              className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50"
+            />
+          </div>
+
+          {/* 4. City */}
+          <div>
+            <label className="text-xs font-semibold text-slate-400 mb-1.5 block">
+              4. City
+            </label>
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="e.g. Gurugram / Noida"
               className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500/50"
             />
           </div>
@@ -293,19 +288,18 @@ export default function CommercialCalculatorPage() {
           </div>
         </div>
 
-        {/* Auto-filled Branch Address Banner */}
+        {/* Customer Address Banner */}
         {selectedUnit && (
           <div className="pt-3 border-t border-white/8 flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-900/60 px-4 py-3 rounded-xl border border-emerald-500/20">
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span className="font-semibold text-slate-300">Auto-filled Branch Address:</span>
+              <span className="font-semibold text-slate-300">Customer Address:</span>
               <span className="text-white font-medium">
-                {[
-                  selectedUnit.address,
+                {selectedUnit.address || [
                   selectedUnit.city,
                   selectedUnit.state,
                   selectedUnit.pincode ? `PIN: ${selectedUnit.pincode}` : '',
-                ].filter(Boolean).join(', ') || selectedUnit.hq_address || 'N/A'}
+                ].filter(Boolean).join(', ') || 'N/A'}
               </span>
             </div>
             {selectedUnit.gstn && (
@@ -359,15 +353,15 @@ export default function CommercialCalculatorPage() {
               </div>
 
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Working Hours</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="24"
+                <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Shift Hours</label>
+                <select
                   value={row.working_hours}
                   onChange={(e) => handleRowChange(idx, 'working_hours', Number(e.target.value))}
-                  className="w-24 bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white text-xs"
-                />
+                  className="w-28 bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none font-medium"
+                >
+                  <option value={8}>8 Hours</option>
+                  <option value={12}>12 Hours</option>
+                </select>
               </div>
 
               <div>
@@ -439,56 +433,56 @@ export default function CommercialCalculatorPage() {
                   <div className="col-span-3 grid grid-cols-3 gap-x-6 gap-y-3 text-xs text-slate-400">
                     <div>
                       <span>Basic + DA:</span>
-                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.subtotal1)}</p>
+                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.subtotal1 || 0)}</p>
                     </div>
                     <div>
                       <span>Additional Hours:</span>
-                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.additional_hours)}</p>
+                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.additional_hours ?? r.additionalHours ?? 0)}</p>
                     </div>
                     <div>
                       <span>Subtotal2 (Basic+DA+OT+HRA+Skill):</span>
-                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.subtotal2)}</p>
+                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.subtotal2 || 0)}</p>
                     </div>
                     <div>
                       <span>Employer PF:</span>
-                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.employer_pf)}</p>
+                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.employer_pf ?? r.employerPf ?? 0)}</p>
                     </div>
                     <div>
                       <span>Bonus (ER component):</span>
-                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.bonus)}</p>
+                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.bonus || 0)}</p>
                     </div>
                     <div>
                       <span>Leave Wages:</span>
-                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.leave_wages)}</p>
+                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.leave_wages ?? r.leaveWages ?? 0)}</p>
                     </div>
                     <div>
                       <span>ESIC:</span>
-                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.esic)}</p>
+                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.esic || 0)}</p>
                     </div>
                     <div>
                       <span>LWF & Uniform:</span>
-                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.lwf + r.uniform)}</p>
+                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs((r.lwf || 0) + (r.uniform || 0))}</p>
                     </div>
                     <div>
                       <span>Relieving Charges:</span>
-                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.relieving)}</p>
+                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.relieving || 0)}</p>
                     </div>
                     <div>
                       <span>Management Fee:</span>
-                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.management_fee)}</p>
+                      <p className="text-sm font-semibold text-white mt-0.5">{fmtRs(r.management_fee ?? r.managementFee ?? 0)}</p>
                     </div>
                     <div className="col-span-3 border-t border-white/5 my-2 pt-2 grid grid-cols-3 gap-6">
                       <div>
                         <span className="text-slate-500">Monthly Commercial Cost:</span>
-                        <p className="text-base font-bold text-white mt-0.5">{fmtRs(r.monthly_cost)}</p>
+                        <p className="text-base font-bold text-white mt-0.5">{fmtRs(r.monthly_cost ?? r.monthlyCost ?? 0)}</p>
                       </div>
                       <div>
                         <span className="text-slate-500">Daily Billing Rate:</span>
-                        <p className="text-base font-bold text-white mt-0.5">{fmtRs(r.daily_rate)}</p>
+                        <p className="text-base font-bold text-white mt-0.5">{fmtRs(r.daily_rate ?? r.dailyRate ?? 0)}</p>
                       </div>
                       <div>
                         <span className="text-slate-500">Hourly Rate:</span>
-                        <p className="text-base font-bold text-white mt-0.5">{fmtRs(r.hourly_rate)}</p>
+                        <p className="text-base font-bold text-white mt-0.5">{fmtRs(r.hourly_rate ?? r.hourlyRate ?? 0)}</p>
                       </div>
                     </div>
                   </div>
