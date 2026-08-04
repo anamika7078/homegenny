@@ -512,7 +512,7 @@ function AddBatchModal({ onClose, onCreated }: {
         ...(selectedEmp ? { trainer_id: selectedEmp.id, trainer_name: selectedEmp.fullName } : {}),
       });
 
-      const batchData = result?.data ?? result;
+      const batchData = result?.batch ?? result?.data ?? result;
       batchData.enrollments = batchData.enrollments ?? [];
 
       onCreated(batchData as Batch);
@@ -596,7 +596,7 @@ function AddBatchModal({ onClose, onCreated }: {
                     )}
                   </div>
 
-                  {/* Dual search: Unit ID + Name */}
+                  {/* Dual search: Emp ID + Name */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -605,7 +605,7 @@ function AddBatchModal({ onClose, onCreated }: {
                         value={unitIdSearch}
                         onChange={e => { setUnitIdSearch(e.target.value); setDropdownOpen(true); }}
                         onFocus={() => setDropdownOpen(true)}
-                        placeholder="Unit ID / Emp ID"
+                        placeholder="Emp ID"
                         className="w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#FF5A1F]/50"
                       />
                     </div>
