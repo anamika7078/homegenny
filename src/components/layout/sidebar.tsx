@@ -286,7 +286,6 @@ const FINANCE_NAV: NavSection[] = [
         label: 'Commercial',
         icon: Calculator,
         subItems: [
-          { href: '/finance/commercial/wage-config', label: 'Wage Configuration' },
           { href: '/finance/commercial/calculator', label: 'Commercial Calculator' },
           { href: '/finance/commercial/quotations', label: 'Quotations' },
           { href: '/finance/commercial/rate-cards', label: 'Rate Cards' },

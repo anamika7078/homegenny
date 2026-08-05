@@ -24,6 +24,7 @@ export default function AdminUsersPage() {
     fullName: '',
     phone: '',
     email: '',
+    password: '',
     role: 'STAFF',
     branchId: ''
   });
@@ -33,7 +34,13 @@ export default function AdminUsersPage() {
     queryFn: () => api.getAdminUsers(),
   });
 
+  const { data: branchesData } = useQuery({
+    queryKey: ['admin', 'branches'],
+    queryFn: () => api.getAdminBranches(),
+  });
+
   const users = Array.isArray(usersData) ? usersData : (usersData?.data || []);
+  const branches = Array.isArray(branchesData) ? branchesData : (branchesData?.data || []);
 
   const createMutation = useMutation({
     mutationFn: (data: any) => api.createAdminUser(data),
@@ -41,7 +48,7 @@ export default function AdminUsersPage() {
       toast.success("User created successfully");
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
       setIsCreateModalOpen(false);
-      setFormData({ fullName: '', phone: '', email: '', role: 'STAFF', branchId: '' });
+      setFormData({ fullName: '', phone: '', email: '', password: '', role: 'STAFF', branchId: '' });
     },
     onError: (error: any) => toast.error(error.message || "Failed to create user")
   });
@@ -87,6 +94,7 @@ export default function AdminUsersPage() {
       fullName: user.fullName || '',
       phone: user.phone || '',
       email: user.email || '',
+      password: '',
       role: user.role || 'STAFF',
       branchId: user.branchId || ''
     });
@@ -120,51 +128,38 @@ export default function AdminUsersPage() {
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
+            <div className="p-8 text-center text-[#8D9AB5]">Loading users...</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-[#8D9AB5] uppercase bg-[#0F172A]/60 border-b border-border/40">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-[#0F172A]/80 text-[#8D9AB5] uppercase text-xs border-b border-border/60">
                   <tr>
-                    <th className="px-6 py-4 font-semibold tracking-wider">User Details</th>
-                    <th className="px-6 py-4 font-semibold tracking-wider">Contact</th>
-                    <th className="px-6 py-4 font-semibold tracking-wider">Role</th>
-                    <th className="px-6 py-4 font-semibold tracking-wider">Branch</th>
-                    <th className="px-6 py-4 font-semibold tracking-wider">Status</th>
-                    <th className="px-6 py-4 font-semibold tracking-wider text-right">Actions</th>
+                    <th className="px-6 py-4 font-semibold">User</th>
+                    <th className="px-6 py-4 font-semibold">Role</th>
+                    <th className="px-6 py-4 font-semibold">Branch</th>
+                    <th className="px-6 py-4 font-semibold">Status</th>
+                    <th className="px-6 py-4 font-semibold text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border/20">
+                <tbody className="divide-y divide-border/30">
                   {filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-[#8D9AB5]">
+                      <td colSpan={5} className="px-6 py-8 text-center text-[#8D9AB5]/70">
                         No users found matching your criteria.
                       </td>
                     </tr>
                   ) : (
                     filteredUsers.map((user: any) => (
-                      <tr key={user.id} className="hover:bg-[#1C2740]/40 transition-all text-[#E8EDF8]/90">
+                      <tr key={user.id} className="hover:bg-accent/30 transition-colors">
                         <td className="px-6 py-4">
-                          <div className="flex items-center">
-                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold shadow-sm">
-                              {user.fullName?.charAt(0) || 'U'}
-                            </div>
-                            <div className="ml-4">
-                              <div className="font-semibold text-[#E8EDF8]">{user.fullName}</div>
-                              <div className="text-xs text-[#8D9AB5]">ID: {user.id.substring(0,8)}...</div>
-                            </div>
+                          <div className="font-medium text-[#E8EDF8]">{user.fullName || 'Unnamed'}</div>
+                          <div className="text-xs text-[#8D9AB5] flex items-center gap-3 mt-1">
+                            <span className="flex items-center gap-1"><Phone className="h-3 w-3 text-[#8D9AB5]/70"/>{user.phone}</span>
+                            {user.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3 text-[#8D9AB5]/70"/>{user.email}</span>}
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex flex-col gap-1 text-[#8D9AB5]">
-                            <span className="flex items-center gap-2"><Phone className="h-3 w-3 text-[#8D9AB5]/70"/> {user.phone}</span>
-                            {user.email && <span className="flex items-center gap-2"><Mail className="h-3 w-3 text-[#8D9AB5]/70"/> {user.email}</span>}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge variant="outline" className="bg-blue-955/40 text-blue-300 border border-blue-800/40">
+                          <Badge variant="outline" className="border-border bg-slate-900/40 text-slate-300 font-mono text-xs">
                             {user.role}
                           </Badge>
                         </td>
@@ -223,6 +218,16 @@ export default function AdminUsersPage() {
               <Input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="bg-[#0F172A]/50 border-border text-[#E8EDF8] focus:ring-1 focus:ring-primary focus:border-primary" />
             </div>
           </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-[#8D9AB5]">Password (Optional — Default: HomeGenny@2024)</label>
+            <Input
+              type="password"
+              placeholder="Enter custom password"
+              value={formData.password || ''}
+              onChange={e => setFormData({...formData, password: e.target.value})}
+              className="bg-[#0F172A]/50 border-border text-[#E8EDF8] focus:ring-1 focus:ring-primary focus:border-primary"
+            />
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-[#8D9AB5]">Role</label>
@@ -244,8 +249,20 @@ export default function AdminUsersPage() {
               </SelectMenu>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-[#8D9AB5]">Branch ID (Optional)</label>
-              <Input value={formData.branchId} onChange={e => setFormData({...formData, branchId: e.target.value})} className="bg-[#0F172A]/50 border-border text-[#E8EDF8] focus:ring-1 focus:ring-primary focus:border-primary" />
+              <label className="text-sm font-medium text-[#8D9AB5]">Branch (Optional)</label>
+              <SelectMenu
+                value={formData.branchId || 'NONE'}
+                onValueChange={(v) => setFormData({ ...formData, branchId: v === 'NONE' ? '' : v })}
+                placeholder="Select Branch"
+                className="bg-[#0F172A]/50 border-border"
+              >
+                <SelectMenuItem value="NONE">Global (No Branch)</SelectMenuItem>
+                {branches.map((b: any) => (
+                  <SelectMenuItem key={b.id} value={b.id}>
+                    {b.name} ({b.city})
+                  </SelectMenuItem>
+                ))}
+              </SelectMenu>
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-4 border-t border-border/40 mt-6">
@@ -295,8 +312,20 @@ export default function AdminUsersPage() {
               </SelectMenu>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-[#8D9AB5]">Branch ID (Optional)</label>
-              <Input value={formData.branchId} onChange={e => setFormData({...formData, branchId: e.target.value})} className="bg-[#0F172A]/50 border-border text-[#E8EDF8] focus:ring-1 focus:ring-primary focus:border-primary" />
+              <label className="text-sm font-medium text-[#8D9AB5]">Branch (Optional)</label>
+              <SelectMenu
+                value={formData.branchId || 'NONE'}
+                onValueChange={(v) => setFormData({ ...formData, branchId: v === 'NONE' ? '' : v })}
+                placeholder="Select Branch"
+                className="bg-[#0F172A]/50 border-border"
+              >
+                <SelectMenuItem value="NONE">Global (No Branch)</SelectMenuItem>
+                {branches.map((b: any) => (
+                  <SelectMenuItem key={b.id} value={b.id}>
+                    {b.name} ({b.city})
+                  </SelectMenuItem>
+                ))}
+              </SelectMenu>
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-4 border-t border-border/40 mt-6">

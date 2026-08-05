@@ -6,19 +6,10 @@ import { api } from '@/lib/api/client';
 import {
   TrendingUp, Calculator, FileText, CreditCard, BarChart3,
   CheckCircle2, Clock, AlertCircle, ArrowRight, Loader2,
-  IndianRupee, Sparkles, Building2,
+  IndianRupee, Sparkles,
 } from 'lucide-react';
 
 const MODULE_CARDS = [
-  {
-    href: '/finance/commercial/wage-config',
-    icon: Building2,
-    label: 'Wage Configuration',
-    desc: 'Manage minimum wage templates by state, zone and category',
-    color: 'from-violet-500/20 to-purple-600/20',
-    border: 'border-violet-500/30',
-    iconColor: 'text-violet-400',
-  },
   {
     href: '/finance/commercial/calculator',
     icon: Calculator,

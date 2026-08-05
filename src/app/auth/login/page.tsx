@@ -15,14 +15,17 @@ import type { UserRole } from '@/lib/types';
 type LoginDialog = 'invalid_credentials' | 'other_system' | null;
 
 export default function LoginPage() {
-  const [phone, setPhone] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [dialog, setDialog] = useState<LoginDialog>(null);
   const { setAuth } = useAuthStore();
   const router = useRouter();
 
   const login = useMutation({
-    mutationFn: () => api.login(phone.replace(/\D/g, ''), password),
+    mutationFn: () => {
+      const cleanTarget = identifier.includes('@') ? identifier.trim() : identifier.replace(/\D/g, '') || identifier.trim();
+      return api.login(cleanTarget, password);
+    },
 
     onSuccess: (res: any) => {
       const payload = res?.data !== undefined ? res.data : res;
@@ -33,7 +36,7 @@ export default function LoginPage() {
 
       // First-time Admin: backend provisioned a TOTP secret — show QR wizard
       if (payload?.requires_totp_setup) {
-        sessionStorage.setItem('hg_2fa_phone', phone.trim());
+        sessionStorage.setItem('hg_2fa_phone', identifier.trim());
         sessionStorage.setItem('hg_2fa_password', password);
         sessionStorage.setItem('hg_totp_otpauth', payload.otpauth_url ?? '');
         sessionStorage.setItem('hg_totp_secret', payload.totp_secret ?? '');
@@ -43,7 +46,7 @@ export default function LoginPage() {
 
       if (payload?.requires_2fa) {
         sessionStorage.setItem('hg_2fa_user_id', payload.user_id);
-        sessionStorage.setItem('hg_2fa_phone', phone.trim());
+        sessionStorage.setItem('hg_2fa_phone', identifier.trim());
         sessionStorage.setItem('hg_2fa_password', password);
         router.push('/auth/2fa');
         return;
@@ -91,9 +94,12 @@ export default function LoginPage() {
   });
 
   const handleSubmit = () => {
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (!cleanPhone) { toast.error('Enter your phone number'); return; }
-    if (cleanPhone.length < 10) { toast.error('Phone must be 10 digits'); return; }
+    const target = identifier.trim();
+    if (!target) { toast.error('Enter your phone number or email address'); return; }
+    if (!target.includes('@')) {
+      const cleanPhone = target.replace(/\D/g, '');
+      if (cleanPhone.length < 10) { toast.error('Phone number must be at least 10 digits'); return; }
+    }
     if (!password) { toast.error('Enter your password'); return; }
     setDialog(null);
     login.mutate();
@@ -113,14 +119,12 @@ export default function LoginPage() {
           <h2 className="text-base font-semibold text-white">Sign in</h2>
 
           <Input
-            label="Phone Number"
-            placeholder="9800000001"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-            type="tel"
-            inputMode="numeric"
-            maxLength={10}
-            autoComplete="tel"
+            label="Phone Number or Email"
+            placeholder="9800000001 or admin@homegenny.com"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            type="text"
+            autoComplete="username"
             disabled={login.isPending}
           />
 
