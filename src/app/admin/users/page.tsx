@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { api } from '@/lib/api/client';
-import { Search, Plus, Edit2, ShieldBan, ShieldCheck, Mail, Phone, MapPin } from 'lucide-react';
+import { Search, Plus, Edit2, ShieldBan, ShieldCheck, Mail, Phone, MapPin, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
@@ -28,6 +28,18 @@ export default function AdminUsersPage() {
     role: 'STAFF',
     branchId: ''
   });
+
+  // Confirm-password is only used for client-side validation — never sent to the API.
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const passwordsMismatch = formData.password.length > 0 && confirmPassword.length > 0 && formData.password !== confirmPassword;
+
+  const resetPasswordFields = () => {
+    setConfirmPassword('');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+  };
 
   const { data: usersData, isLoading } = useQuery({
     queryKey: ['admin', 'users'],
@@ -49,6 +61,7 @@ export default function AdminUsersPage() {
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
       setIsCreateModalOpen(false);
       setFormData({ fullName: '', phone: '', email: '', password: '', role: 'STAFF', branchId: '' });
+      resetPasswordFields();
     },
     onError: (error: any) => toast.error(error.message || "Failed to create user")
   });
@@ -80,6 +93,10 @@ export default function AdminUsersPage() {
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.password && formData.password !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
     createMutation.mutate(formData);
   };
 
@@ -218,15 +235,48 @@ export default function AdminUsersPage() {
               <Input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="bg-[#0F172A]/50 border-border text-[#E8EDF8] focus:ring-1 focus:ring-primary focus:border-primary" />
             </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-[#8D9AB5]">Password (Optional — Default: HomeGenny@2024)</label>
-            <Input
-              type="password"
-              placeholder="Enter custom password"
-              value={formData.password || ''}
-              onChange={e => setFormData({...formData, password: e.target.value})}
-              className="bg-[#0F172A]/50 border-border text-[#E8EDF8] focus:ring-1 focus:ring-primary focus:border-primary"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-[#8D9AB5]">Password (Optional — Default: HomeGenny@2024)</label>
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter custom password"
+                  value={formData.password || ''}
+                  onChange={e => setFormData({...formData, password: e.target.value})}
+                  className="pr-9 bg-[#0F172A]/50 border-border text-[#E8EDF8] focus:ring-1 focus:ring-primary focus:border-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D9AB5]/70 hover:text-[#E8EDF8] transition-colors"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-[#8D9AB5]">Confirm Password</label>
+              <div className="relative">
+                <Input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="Re-enter password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  error={passwordsMismatch ? 'Passwords do not match' : undefined}
+                  className="pr-9 bg-[#0F172A]/50 border-border text-[#E8EDF8] focus:ring-1 focus:ring-primary focus:border-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(v => !v)}
+                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D9AB5]/70 hover:text-[#E8EDF8] transition-colors"
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -266,8 +316,8 @@ export default function AdminUsersPage() {
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-4 border-t border-border/40 mt-6">
-            <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)} className="border-border hover:bg-[#1C2740] hover:text-white">Cancel</Button>
-            <Button type="submit" disabled={createMutation.isPending}>
+            <Button type="button" variant="outline" onClick={() => { setIsCreateModalOpen(false); resetPasswordFields(); }} className="border-border hover:bg-[#1C2740] hover:text-white">Cancel</Button>
+            <Button type="submit" disabled={createMutation.isPending || passwordsMismatch}>
               {createMutation.isPending ? 'Creating...' : 'Create User'}
             </Button>
           </div>
