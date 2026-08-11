@@ -98,7 +98,10 @@ export default function LoginPage() {
     if (!target) { toast.error('Enter your phone number or email address'); return; }
     if (!target.includes('@')) {
       const cleanPhone = target.replace(/\D/g, '');
-      if (cleanPhone.length < 10) { toast.error('Phone number must be at least 10 digits'); return; }
+      if (cleanPhone.length > 0 && cleanPhone.length < 10) {
+        toast.error('Phone number must be at least 10 digits');
+        return;
+      }
     }
     if (!password) { toast.error('Enter your password'); return; }
     setDialog(null);

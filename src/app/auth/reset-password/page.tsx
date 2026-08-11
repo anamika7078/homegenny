@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
 import toast from 'react-hot-toast';
 
+import { validatePassword } from '@/lib/validation/password';
+
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -15,8 +17,9 @@ export default function ResetPasswordPage() {
   const router = useRouter();
 
   const save = async () => {
-    if (password.length < 8) {
-      toast.error('Password must be at least 8 characters');
+    const val = validatePassword(password);
+    if (!val.isValid) {
+      toast.error(val.error || 'Password does not meet security requirements');
       return;
     }
     if (password !== confirm) {

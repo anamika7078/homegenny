@@ -1,11 +1,11 @@
-export function Spinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
+export function Spinner({ size = 'md', className = '' }: { size?: 'sm' | 'md' | 'lg'; className?: string }) {
   const s = { sm: 'w-4 h-4', md: 'w-6 h-6', lg: 'w-10 h-10' }[size];
-  return <div className={`${s} animate-spin rounded-full border-2 border-slate-700 border-t-brand-500`} />;
+  return <div className={`${s} mx-auto animate-spin rounded-full border-2 border-slate-700 border-t-brand-500 ${className}`} />;
 }
 export function PageLoader() {
   return (
     <div className="flex min-h-[100dvh] w-full items-center justify-center bg-slate-950 px-4">
-      <div className="text-center space-y-4" aria-live="polite" aria-busy="true">
+      <div className="flex flex-col items-center justify-center text-center space-y-4" aria-live="polite" aria-busy="true">
         <Spinner size="lg" />
         <p className="text-sm sm:text-base text-slate-400 leading-tight">Loading HomeGenny...</p>
       </div>

@@ -331,12 +331,15 @@ export interface ApiClient {
 
   getAdminAuditLogs(): Promise<any>;
   getAdminAuditLogDetails(id: string): Promise<any>;
+  getAdminPipelineAuditEvents(params?: Record<string, unknown>): Promise<any>;
 
   getAdminSystemHealth(): Promise<any>;
   getAdminQueueStatus(): Promise<any>;
   getAdminFailedQueueJobs(limit?: number): Promise<any>;
   retryAdminFailedQueueJobs(): Promise<any>;
   getAdminCronStatus(): Promise<any>;
+  triggerAdminManualCronRun(jobId: string): Promise<any>;
+  getAdminApiTelemetry(): Promise<any>;
 
   getAdminRevenueAnalytics(): Promise<any>;
   getAdminPipelineAnalytics(): Promise<any>;
@@ -345,6 +348,7 @@ export interface ApiClient {
 
   getAdminVideoCertifications(params?: { status?: string; search?: string; page?: number; limit?: number }): Promise<any>;
   reviewAdminVideoCertification(id: string, body: { status: 'APPROVED' | 'REJECTED'; notes?: string }): Promise<any>;
+  overrideAdminVideoCertification(id: string, body: { neverDelete?: boolean; reviewNotes?: string; fraudFlag?: boolean; legalHold?: boolean; legalReason?: string }): Promise<any>;
   getVideoCertViewUrl(key: string): Promise<any>;
 
   submitAdminDeleteRequest(body: Record<string, unknown>): Promise<any>;
@@ -753,12 +757,16 @@ export const api: ApiClient = {
 
   getAdminAuditLogs: () => apiClient.get('/admin/audit-logs'),
   getAdminAuditLogDetails: (id: string) => apiClient.get(`/admin/audit-logs/${id}`),
+  getAdminPipelineAuditEvents: (params?: Record<string, unknown>) =>
+    apiClient.get('/admin/audit-logs/pipeline-events', { params }),
 
   getAdminSystemHealth: () => apiClient.get('/admin/system-health'),
   getAdminQueueStatus: () => apiClient.get('/admin/queues'),
   getAdminFailedQueueJobs: (limit = 20) => apiClient.get('/admin/queues/failed', { params: { limit } }),
   retryAdminFailedQueueJobs: () => apiClient.post('/admin/queues/retry-failed'),
   getAdminCronStatus: () => apiClient.get('/admin/cron-status'),
+  triggerAdminManualCronRun: (jobId: string) => apiClient.post(`/admin/cron-jobs/${jobId}/trigger`),
+  getAdminApiTelemetry: () => apiClient.get('/admin/telemetry/api'),
 
   getAdminRevenueAnalytics: () => apiClient.get('/admin/analytics/revenue'),
   getAdminPipelineAnalytics: () => apiClient.get('/admin/analytics/pipeline'),
@@ -769,6 +777,8 @@ export const api: ApiClient = {
     apiClient.get('/admin/video-certifications', { params }),
   reviewAdminVideoCertification: (id: string, body: { status: 'APPROVED' | 'REJECTED'; notes?: string }) =>
     apiClient.put(`/admin/video-certifications/${id}/review`, body),
+  overrideAdminVideoCertification: (id: string, body: { neverDelete?: boolean; reviewNotes?: string; fraudFlag?: boolean; legalHold?: boolean; legalReason?: string }) =>
+    apiClient.put(`/admin/video-certifications/${id}/override`, body),
   getVideoCertViewUrl: (key: string) => apiClient.post('/video-cert/view-url', { key }),
 
   submitAdminDeleteRequest: (body: Record<string, unknown>) => apiClient.post('/admin/privacy/delete-request', body),

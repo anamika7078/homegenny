@@ -12,6 +12,8 @@ import { Search, Plus, Edit2, ShieldBan, ShieldCheck, Mail, Phone, MapPin, Eye, 
 import toast from 'react-hot-toast';
 import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
+import { validatePassword } from '@/lib/validation/password';
+
 export default function AdminUsersPage() {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
@@ -93,6 +95,13 @@ export default function AdminUsersPage() {
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.password) {
+      const val = validatePassword(formData.password);
+      if (!val.isValid) {
+        toast.error(val.error || "Password does not meet security criteria");
+        return;
+      }
+    }
     if (formData.password && formData.password !== confirmPassword) {
       toast.error("Passwords do not match");
       return;
@@ -102,7 +111,21 @@ export default function AdminUsersPage() {
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    updateMutation.mutate({ ...formData, id: selectedUser.id });
+    const payload: any = { ...formData, id: selectedUser.id };
+    if (formData.password) {
+      const val = validatePassword(formData.password);
+      if (!val.isValid) {
+        toast.error(val.error || "Password does not meet security criteria");
+        return;
+      }
+      if (formData.password !== confirmPassword) {
+        toast.error("Passwords do not match");
+        return;
+      }
+    } else {
+      delete payload.password;
+    }
+    updateMutation.mutate(payload);
   };
 
   const openEditModal = (user: any) => {
@@ -115,6 +138,7 @@ export default function AdminUsersPage() {
       role: user.role || 'STAFF',
       branchId: user.branchId || ''
     });
+    resetPasswordFields();
     setIsEditModalOpen(true);
   };
 
@@ -237,7 +261,7 @@ export default function AdminUsersPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-[#8D9AB5]">Password (Optional — Default: HomeGenny@2024)</label>
+              <label className="text-sm font-medium text-[#8D9AB5]">Password</label>
               <div className="relative">
                 <Input
                   type={showPassword ? 'text' : 'password'}
@@ -339,6 +363,49 @@ export default function AdminUsersPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium text-[#8D9AB5]">Email</label>
               <Input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="bg-[#0F172A]/50 border-border text-[#E8EDF8] focus:ring-1 focus:ring-primary focus:border-primary" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-[#8D9AB5]">New Password (Optional)</label>
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Leave blank to keep unchanged"
+                  value={formData.password || ''}
+                  onChange={e => setFormData({...formData, password: e.target.value})}
+                  className="pr-9 bg-[#0F172A]/50 border-border text-[#E8EDF8] focus:ring-1 focus:ring-primary focus:border-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D9AB5]/70 hover:text-[#E8EDF8] transition-colors"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-[#8D9AB5]">Confirm New Password</label>
+              <div className="relative">
+                <Input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="Re-enter new password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  error={passwordsMismatch ? 'Passwords do not match' : undefined}
+                  className="pr-9 bg-[#0F172A]/50 border-border text-[#E8EDF8] focus:ring-1 focus:ring-primary focus:border-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(v => !v)}
+                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D9AB5]/70 hover:text-[#E8EDF8] transition-colors"
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
