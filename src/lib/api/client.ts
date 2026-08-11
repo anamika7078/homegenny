@@ -7,7 +7,7 @@ import type { StaffAttendanceStatus } from '@/lib/types';
 export const BASE_URL =
   process.env['NEXT_PUBLIC_API_URL'] ||
   (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? `${window.location.origin}/api/v1`
+    ? 'https://homegennyserver-po5u.onrender.com/api/v1'
     : 'http://localhost:3001/api/v1');
 
 export const apiClient: AxiosInstance = axios.create({
