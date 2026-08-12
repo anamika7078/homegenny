@@ -369,6 +369,8 @@ export interface ApiClient {
     city?: string;
     state?: string;
     pincode?: string;
+    phone?: string;
+    email?: string;
     branches?: Array<{
       unit_code: string;
       unit_name: string;
@@ -797,6 +799,11 @@ export const api: ApiClient = {
     address: string;
     pan_card: string;
     gstn?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    phone?: string;
+    email?: string;
     branches?: Array<{
       unit_code: string;
       unit_name: string;
