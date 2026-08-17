@@ -176,6 +176,7 @@ export interface ApiClient {
 
   getPlacements(params?: Record<string, unknown>): Promise<any>;
   createPlacement(body: Record<string, unknown>): Promise<any>;
+  confirmPlacement(id: string): Promise<any>;
   exitPlacement(id: string, body: Record<string, unknown>): Promise<any>;
 
   getStaffTimeline(id: string): Promise<any>;
@@ -535,6 +536,8 @@ export const api: ApiClient = {
     apiClient.get('/placements', { params }),
   createPlacement: (body: Record<string, unknown>) =>
     apiClient.post('/placements', body),
+  confirmPlacement: (id: string) =>
+    apiClient.post(`/placements/${id}/confirm`),
   exitPlacement: (id: string, body: Record<string, unknown>) =>
     apiClient.post(`/placements/${id}/exit`, body),
 
