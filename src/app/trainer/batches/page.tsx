@@ -24,6 +24,23 @@ interface Batch {
   enrollments: Enrollment[];
 }
 
+// Was DropdownEmployee sourced from GET /employees (internal HR staff). That
+// can never actually be enrolled — batch_enrollments.staff_id FKs to
+// staff_applicants, not employees, so every enroll attempt against an HR
+// employee id 500s. Trainees are real S1-S5 pipeline candidates, so this now
+// sources from GET /staff?stage=S3_TRAIN instead (StaffApplicant, not Employee).
+interface DropdownTrainee {
+  id: string;
+  staffCode: string;
+  fullName: string;
+  mobile?: string;
+  series?: string;
+  branchId?: string;
+}
+
+// This one stays sourced from GET /employees/list — it's for picking which
+// HR employee is assigned as the batch's trainer (training_batches.trainer_id
+// really does FK to employees), not for enrolling a trainee.
 interface DropdownEmployee {
   id: string;
   employeeId: string;
@@ -84,32 +101,44 @@ function AttendanceCell({ present, loading, onClick }: {
 function EnrollTraineeModal({ batch, onClose, onEnrolled }: {
   batch: Batch;
   onClose: () => void;
-  onEnrolled: (batchId: string, emp: DropdownEmployee) => void;
+  onEnrolled: (batchId: string, trainee: DropdownTrainee) => void;
 }) {
   const [search, setSearch] = useState('');
-  const [employees, setEmployees] = useState<DropdownEmployee[]>([]);
+  const [trainees, setTrainees] = useState<DropdownTrainee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState<DropdownEmployee | null>(null);
+  const [selected, setSelected] = useState<DropdownTrainee | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
-    api.listEmployees({ limit: 200 })
+    api.listStaff({ stage: 'S3_TRAIN', limit: 200 })
       .then((res: any) => {
         const items = res?.data?.items ?? res?.items ?? res?.data ?? res ?? [];
-        setEmployees(Array.isArray(items) ? items : []);
+        const list = (Array.isArray(items) ? items : [])
+          // findAll() also merges in internal HR employees regardless of the
+          // stage filter — only real S3_TRAIN pipeline candidates belong here.
+          .filter((r: any) => r.pipeline_stage === 'S3_TRAIN' && r.source !== 'HR_EMPLOYEE')
+          .map((r: any): DropdownTrainee => ({
+            id: r.id,
+            staffCode: r.staff_code,
+            fullName: r.full_name,
+            mobile: r.mobile,
+            series: r.series,
+            branchId: r.branch_id,
+          }));
+        setTrainees(list);
       })
-      .catch((e: any) => setError(e.message ?? 'Failed to load employees'))
+      .catch((e: any) => setError(e.message ?? 'Failed to load trainees'))
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = employees.filter(e => {
+  const filtered = trainees.filter(t => {
     if (!search) return true;
     const s = search.toLowerCase();
-    return (e.fullName ?? '').toLowerCase().includes(s) ||
-           (e.employeeId ?? '').toLowerCase().includes(s) ||
-           (e.department ?? '').toLowerCase().includes(s);
+    return (t.fullName ?? '').toLowerCase().includes(s) ||
+           (t.staffCode ?? '').toLowerCase().includes(s) ||
+           (t.series ?? '').toLowerCase().includes(s);
   });
 
   const handleEnroll = async () => {
@@ -156,46 +185,46 @@ function EnrollTraineeModal({ batch, onClose, onEnrolled }: {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search by name, employee ID or department…"
+              placeholder="Search by name, staff code or series…"
               className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-emerald-500/40"
               autoFocus
             />
           </div>
         </div>
 
-        {/* Employee list */}
+        {/* Trainee list */}
         <div className="px-5 py-3 max-h-72 overflow-y-auto space-y-1">
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground text-xs">
-              <Loader2 className="w-4 h-4 animate-spin" /> Loading HR employees…
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading trainees…
             </div>
           ) : error ? (
             <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 text-red-400 text-xs">
               <AlertTriangle className="w-4 h-4" /> {error}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">No employees found</p>
+            <p className="text-sm text-muted-foreground text-center py-6">No trainees at S3_TRAIN found</p>
           ) : (
-            filtered.slice(0, 50).map(emp => (
+            filtered.slice(0, 50).map(t => (
               <button
-                key={emp.id}
-                onClick={() => setSelected(selected?.id === emp.id ? null : emp)}
+                key={t.id}
+                onClick={() => setSelected(selected?.id === t.id ? null : t)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${
-                  selected?.id === emp.id
+                  selected?.id === t.id
                     ? 'bg-emerald-500/10 border border-emerald-500/30'
                     : 'bg-white/3 border border-transparent hover:bg-white/6 hover:border-white/10'
                 }`}
               >
                 <div className="w-9 h-9 rounded-lg bg-white/8 flex items-center justify-center text-[11px] font-bold text-foreground flex-shrink-0">
-                  {getInitials(emp.fullName)}
+                  {getInitials(t.fullName)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">{emp.fullName}</p>
+                  <p className="text-sm font-semibold text-foreground truncate">{t.fullName}</p>
                   <p className="text-[11px] text-muted-foreground font-mono">
-                    {emp.employeeId}{emp.department ? ` · ${emp.department}` : ''}
+                    {t.staffCode}{t.series ? ` · ${t.series}` : ''}
                   </p>
                 </div>
-                {selected?.id === emp.id && (
+                {selected?.id === t.id && (
                   <BadgeCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                 )}
               </button>
@@ -211,7 +240,7 @@ function EnrollTraineeModal({ batch, onClose, onEnrolled }: {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground truncate">{selected.fullName}</p>
-              <p className="text-[11px] text-muted-foreground font-mono">{selected.employeeId}</p>
+              <p className="text-[11px] text-muted-foreground font-mono">{selected.staffCode}</p>
             </div>
             <span className="text-[10px] font-bold text-emerald-400">Selected</span>
           </div>
@@ -249,7 +278,7 @@ function BatchCard({ batch, onAttendanceChange, onStatusChange, onDelete, onTrai
   onAttendanceChange: (batchId: string, staffId: string, day: number, attended: boolean) => Promise<void>;
   onStatusChange: (batchId: string, status: string) => Promise<void>;
   onDelete: (batchId: string) => Promise<void>;
-  onTraineeAdded: (batchId: string, emp: DropdownEmployee) => void;
+  onTraineeAdded: (batchId: string, trainee: DropdownTrainee) => void;
 }) {
   const [open, setOpen] = useState(batch.status === 'ACTIVE');
   const [statusLoading, setStatusLoading] = useState(false);
@@ -837,17 +866,15 @@ export default function TrainerBatchesPage() {
     }
   };
 
-  const handleTraineeAdded = (batchId: string, emp: DropdownEmployee) => {
+  const handleTraineeAdded = (batchId: string, trainee: DropdownTrainee) => {
     setBatches(prev => prev.map(b => {
       if (b.id !== batchId) return b;
       const newEnrollment: Enrollment = {
         id: crypto.randomUUID(),
-        staffId: emp.id,
-        staffCode: emp.employeeId,
-        fullName: emp.fullName,
-        mobile: emp.mobile,
-        department: emp.department,
-        designation: emp.designation,
+        staffId: trainee.id,
+        staffCode: trainee.staffCode,
+        fullName: trainee.fullName,
+        mobile: trainee.mobile,
         attendance: [],
       };
       return { ...b, enrollments: [...b.enrollments, newEnrollment] };
