@@ -102,12 +102,9 @@ export default function TrainerVideoCertPage() {
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      // The trainer video-cert endpoint should return certifications assigned to this trainer's batches
-      // For now we call getTrainerBatches and the dashboard which contains video cert data
-      const raw = await api.getTrainerDashboard();
-      const data = raw?.data ?? raw ?? {};
-      // If there's no dedicated endpoint, show empty state gracefully
-      setCerts(data?.videoCerts ?? []);
+      const raw = await api.getTrainerVideoCertifications();
+      const data = raw?.data ?? raw ?? [];
+      setCerts(Array.isArray(data) ? data : []);
     } catch (e: any) {
       setError(e.message ?? 'Failed to load video certifications');
     } finally {

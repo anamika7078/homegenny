@@ -308,6 +308,7 @@ export interface ApiClient {
   // Trainer Role Module
   getTrainerDashboard(): Promise<any>;
   getTrainerBatches(): Promise<any>;
+  getTrainerVideoCertifications(): Promise<any>;
   reviewTrainerVideoCert(id: string, body: { status: 'APPROVED' | 'REJECTED'; notes?: string }): Promise<any>;
   updateTrainerAssessment(traineeId: string, body: Record<string, unknown>): Promise<any>;
 
@@ -735,6 +736,7 @@ export const api: ApiClient = {
   // Trainer Role Module
   getTrainerDashboard: () => apiClient.get('/trainer/dashboard'),
   getTrainerBatches: () => apiClient.get('/trainer/batches'),
+  getTrainerVideoCertifications: () => apiClient.get('/trainer/video-certifications'),
   reviewTrainerVideoCert: (id: string, body: { status: 'APPROVED' | 'REJECTED'; notes?: string }) =>
     apiClient.put(`/trainer/video-certifications/${id}/review`, body),
   updateTrainerAssessment: (traineeId: string, body: Record<string, unknown>) => apiClient.put(`/trainer/assessment/${traineeId}`, body),
