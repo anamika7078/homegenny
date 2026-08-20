@@ -483,6 +483,27 @@ export default function InvoicesPage() {
     }
   };
 
+  const handleGeneratePaymentLink = async (id: string, totalAmount: number | string) => {
+    setActioning(id + '_payment_link');
+    try {
+      const res: any = await api.createInvoicePaymentOrder(id, Number(totalAmount));
+      const order = res?.data ?? res;
+      // No real Razorpay account is set up yet — this is a simulated order
+      // until real credentials exist (order.status === 'simulated' either way
+      // tells you which one you got).
+      showToast(
+        'success',
+        order?.status === 'simulated'
+          ? `Simulated payment order created (${order.id}) — Razorpay isn't configured yet, this is a placeholder.`
+          : `Payment order created: ${order.id}`,
+      );
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Failed to generate payment link');
+    } finally {
+      setActioning(null);
+    }
+  };
+
   const handleDetail = async (id: string) => {
     try {
       const res = await api.getFinanceInvoice(id);
@@ -590,6 +611,16 @@ export default function InvoicesPage() {
                   className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition"
                 >
                   Send to Client
+                </button>
+              )}
+              {selected.status !== 'PAID' && selected.status !== 'PENDING' && (
+                <button
+                  id={`btn-modal-payment-link-${selected.id}`}
+                  onClick={() => handleGeneratePaymentLink(selected.id, selected.total_amount)}
+                  disabled={actioning === selected.id + '_payment_link'}
+                  className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition disabled:opacity-50"
+                >
+                  {actioning === selected.id + '_payment_link' ? 'Generating…' : 'Generate Payment Link'}
                 </button>
               )}
             </div>

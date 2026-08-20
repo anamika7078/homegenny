@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
 import {
   Loader2, Activity, RefreshCw, Calendar, Search, Filter,
-  FileText, CreditCard, Banknote, ShieldCheck, Database,
+  FileText, Banknote, ShieldCheck, AlertTriangle,
 } from 'lucide-react';
 import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
@@ -15,69 +15,66 @@ function fmtDate(d: string) {
   });
 }
 
+// Real AuditAction enum values (schema.prisma) — this page used to filter by
+// invented labels (PAYROLL_CONFIRMED, INVOICE_SENT, ...) that never matched
+// anything real, on top of always showing 5 hardcoded fake rows regardless.
 const ACTION_ICONS: Record<string, React.ReactNode> = {
-  'PAYROLL_CONFIRMED': <Banknote className="w-4 h-4 text-emerald-400" />,
-  'PAYROLL_DISBURSED': <Banknote className="w-4 h-4 text-emerald-500" />,
-  'INVOICE_APPROVED':  <FileText className="w-4 h-4 text-blue-400" />,
-  'INVOICE_SENT':      <FileText className="w-4 h-4 text-indigo-400" />,
-  'PAYMENT_SETTLED':   <CreditCard className="w-4 h-4 text-emerald-400" />,
-  'CREDIT_NOTE':       <CreditCard className="w-4 h-4 text-rose-400" />,
-  'DEPOSIT_EVENT':     <Database className="w-4 h-4 text-amber-400" />,
-  'DEFAULT':           <Activity className="w-4 h-4 text-slate-400" />,
+  PAYROLL_ACTION:     <Banknote className="w-4 h-4 text-emerald-400" />,
+  AGREEMENT_SIGN:     <FileText className="w-4 h-4 text-blue-400" />,
+  APPROVAL:           <ShieldCheck className="w-4 h-4 text-emerald-400" />,
+  DENIAL:             <AlertTriangle className="w-4 h-4 text-rose-400" />,
+  DEPLOYMENT_ACTION:  <Activity className="w-4 h-4 text-indigo-400" />,
+  DEFAULT:            <Activity className="w-4 h-4 text-slate-400" />,
 };
 
-// Mock data fallback if API is unavailable for Finance role
-const MOCK_AUDIT_LOGS = [
-  { id: '1', action: 'PAYROLL_CONFIRMED', actor_name: 'Finance Admin', details: { month: 6, year: 2026, count: 42 }, created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString() },
-  { id: '2', action: 'INVOICE_SENT', actor_name: 'Finance Admin', details: { invoice_number: 'INV-2026-06-001' }, created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() },
-  { id: '3', action: 'PAYMENT_SETTLED', actor_name: 'Finance Admin', details: { invoice_number: 'INV-2026-05-014', ref: 'UTR987654321' }, created_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString() },
-  { id: '4', action: 'DEPOSIT_EVENT', actor_name: 'System', details: { staff_code: 'HG-2026-991', event: 'FORFEITURE', code: 'DR-07' }, created_at: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString() },
-  { id: '5', action: 'INVOICE_APPROVED', actor_name: 'Finance Admin', details: { invoice_number: 'INV-2026-06-002' }, created_at: new Date(Date.now() - 1000 * 60 * 60 * 96).toISOString() },
-];
+interface AuditLogRow {
+  id: string;
+  action: string;
+  entityType?: string | null;
+  entityId?: string | null;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  actor?: { id: string; fullName: string; role: string } | null;
+}
 
 export default function AuditTrailPage() {
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<AuditLogRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [filterAction, setFilterAction] = useState('');
 
   const load = async () => {
     setLoading(true);
+    setError('');
     try {
-      // Try to fetch from real API if accessible (Admin/Finance shared logs)
-      const res = await api.getAdminAuditLogs();
-      const rawData = res?.data ?? res;
-      const arr = Array.isArray(rawData)
-        ? rawData
-        : Array.isArray(rawData?.items)
-          ? rawData.items
-          : [];
-      // Filter only finance-related actions if real data exists
-      const financeLogs = arr.filter((log: any) =>
-        ['PAYROLL', 'INVOICE', 'SETTLEMENT', 'PAYMENT', 'DEPOSIT', 'CREDIT'].some(kw => log.action?.includes(kw))
-      );
-      setLogs(financeLogs.length > 0 ? financeLogs : MOCK_AUDIT_LOGS);
+      // GET /audit/logs — the real, general audit log every deposit/invoice/
+      // payroll/placement action writes to (AuditService.log()). Was calling
+      // GET /admin/audit-logs (a different, admin-panel-only table FINANCE
+      // has never had access to) and silently substituting fake rows on the
+      // 403 — that fallback is gone; a real failure now shows as a real error.
+      const res = await api.getAuditLogs({ limit: 100, action: filterAction || undefined });
+      const items = res?.data?.items ?? res?.items ?? [];
+      setLogs(Array.isArray(items) ? items : []);
     } catch (e: any) {
-      console.warn('Audit API not accessible or failed, using fallback mock data:', e.message);
-      setLogs(MOCK_AUDIT_LOGS);
+      setError(e?.response?.data?.message ?? e.message ?? 'Failed to load audit logs');
+      setLogs([]);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [filterAction]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredLogs = logs.filter((log) => {
-    if (filterAction && !log.action?.includes(filterAction)) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        log.action?.toLowerCase().includes(q) ||
-        log.actor_name?.toLowerCase().includes(q) ||
-        JSON.stringify(log.details || {}).toLowerCase().includes(q)
-      );
-    }
-    return true;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      log.action?.toLowerCase().includes(q) ||
+      log.actor?.fullName?.toLowerCase().includes(q) ||
+      log.entityType?.toLowerCase().includes(q) ||
+      JSON.stringify(log.metadata ?? {}).toLowerCase().includes(q)
+    );
   });
 
   return (
@@ -114,10 +111,11 @@ export default function AuditTrailPage() {
                 placeholder="All Actions"
                 className="bg-[#131c2e] border-white/10 rounded-xl pl-8"
               >
-                <SelectMenuItem value="PAYROLL">Payroll Actions</SelectMenuItem>
-                <SelectMenuItem value="INVOICE">Invoice Actions</SelectMenuItem>
-                <SelectMenuItem value="PAYMENT">Settlement Actions</SelectMenuItem>
-                <SelectMenuItem value="DEPOSIT">Deposit Actions</SelectMenuItem>
+                <SelectMenuItem value="PAYROLL_ACTION">Payroll Actions</SelectMenuItem>
+                <SelectMenuItem value="AGREEMENT_SIGN">Agreement Actions</SelectMenuItem>
+                <SelectMenuItem value="APPROVAL">Approvals</SelectMenuItem>
+                <SelectMenuItem value="DENIAL">Denials</SelectMenuItem>
+                <SelectMenuItem value="DEPLOYMENT_ACTION">Placement Actions</SelectMenuItem>
               </SelectMenu>
             </div>
           </div>
@@ -139,6 +137,12 @@ export default function AuditTrailPage() {
           <div className="flex justify-center items-center py-16">
             <Loader2 className="w-7 h-7 animate-spin text-emerald-400" />
           </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <AlertTriangle className="w-10 h-10 text-red-500/70" />
+            <p className="text-red-400 text-sm">{error}</p>
+            <button onClick={load} className="text-xs text-emerald-400 underline">Retry</button>
+          </div>
         ) : filteredLogs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <Activity className="w-10 h-10 text-slate-600" />
@@ -159,21 +163,24 @@ export default function AuditTrailPage() {
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-bold text-white tracking-wide">
                         {log.action.replace(/_/g, ' ')}
+                        {log.entityType && <span className="text-slate-500 font-normal"> · {log.entityType}</span>}
                       </p>
                       <div className="flex items-center gap-1.5 text-xs text-slate-500">
                         <Calendar className="w-3.5 h-3.5" />
-                        {fmtDate(log.created_at)}
+                        {fmtDate(log.createdAt)}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                       <span className="text-slate-400">Actor:</span>
                       <span className="px-2 py-0.5 rounded border border-indigo-500/20 bg-indigo-500/10 text-indigo-300 font-medium">
-                        {log.actor_name || 'System'}
+                        {log.actor?.fullName ?? 'System'}
                       </span>
                     </div>
-                    <div className="mt-2 text-xs font-mono text-slate-400 bg-black/20 p-2 rounded-lg border border-white/5 overflow-x-auto">
-                      {JSON.stringify(log.details, null, 2)}
-                    </div>
+                    {log.metadata && Object.keys(log.metadata).length > 0 && (
+                      <div className="mt-2 text-xs font-mono text-slate-400 bg-black/20 p-2 rounded-lg border border-white/5 overflow-x-auto">
+                        {JSON.stringify(log.metadata, null, 2)}
+                      </div>
+                    )}
                   </div>
                 </div>
               );

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
 import {
   Loader2, ShieldCheck, Download,
-  RefreshCw, FileCheck,
+  RefreshCw, FileCheck, AlertTriangle,
 } from 'lucide-react';
 import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
@@ -232,9 +232,18 @@ export default function EsicPfPage() {
                     const emp = parseFloat(r.esic_employee);
                     const er  = parseFloat(r.esic_employer);
                     return (
-                      <tr key={r.staff_id} className="border-b border-white/5 hover:bg-white/2 transition">
+                      <tr key={r.staff_id} className={`border-b border-white/5 hover:bg-white/2 transition ${r.compliant === false ? 'bg-red-500/5' : ''}`}>
                         <td className="px-5 py-3 font-mono text-xs text-slate-400">{r.staff_code}</td>
-                        <td className="px-4 py-3 text-white">{r.staff_name}</td>
+                        <td className="px-4 py-3 text-white">
+                          <span className="flex items-center gap-1.5">
+                            {r.staff_name}
+                            {r.compliant === false && (
+                              <span title={`Recomputed: employee ₹${r.expected_employee}, employer ₹${r.expected_employer} — doesn't match stored value`}>
+                                <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                              </span>
+                            )}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 text-right text-slate-300">{fmtRs(gross)}</td>
                         <td className="px-4 py-3 text-right text-amber-400">{fmtRs(emp)}</td>
                         <td className="px-4 py-3 text-right text-orange-400">{fmtRs(er)}</td>
@@ -246,9 +255,18 @@ export default function EsicPfPage() {
                     const emp = parseFloat(r.pf_employee);
                     const er  = parseFloat(r.pf_employer);
                     return (
-                      <tr key={r.staff_id} className="border-b border-white/5 hover:bg-white/2 transition">
+                      <tr key={r.staff_id} className={`border-b border-white/5 hover:bg-white/2 transition ${r.compliant === false ? 'bg-red-500/5' : ''}`}>
                         <td className="px-5 py-3 font-mono text-xs text-slate-400">{r.staff_code}</td>
-                        <td className="px-4 py-3 text-white">{r.staff_name}</td>
+                        <td className="px-4 py-3 text-white">
+                          <span className="flex items-center gap-1.5">
+                            {r.staff_name}
+                            {r.compliant === false && (
+                              <span title={`Recomputed: employee ₹${r.expected_employee}, employer ₹${r.expected_employer} — doesn't match stored value`}>
+                                <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                              </span>
+                            )}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 text-right text-slate-300">{fmtRs(gross)}</td>
                         <td className="px-4 py-3 text-right text-slate-400">{fmtRs(pfBase)}</td>
                         <td className="px-4 py-3 text-right text-purple-400">{fmtRs(emp)}</td>

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
+import { useAuthStore } from '@/lib/store/auth.store';
 import {
   Loader2, PlayCircle, CheckCircle2, AlertCircle, Clock,
   Lock, Download, RefreshCw, ChevronRight, FileSpreadsheet, Building2,
@@ -29,6 +30,10 @@ export function ProcessingPipelineTab() {
   const [processing, setProcessing] = useState(false);
   const [activeBatch, setActiveBatch] = useState<any>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  // UX-only gating — the backend (enterprise-payroll.service.ts approveTier/
+  // rejectTier) is the actual security boundary now; this just hides buttons
+  // the click would 403/400 on anyway, instead of showing them to everyone.
+  const { user } = useAuthStore();
 
   const years = Array.from({ length: 4 }, (_, i) => currentDate.getFullYear() - i);
 
@@ -436,6 +441,8 @@ export function ProcessingPipelineTab() {
                 const tierName = step.tier === 'LEVEL_1_HR' ? 'Level 1: HR Verification' :
                                  step.tier === 'LEVEL_2_FINANCE' ? 'Level 2: Finance Review' :
                                  'Level 3: Executive Approval';
+                const isMyTier = user?.role === step.approverRole;
+                const priorTiersApproved = approvals.slice(0, idx).every((s: any) => s.status === 'APPROVED');
 
                 return (
                   <div key={step.tier || idx} className={`rounded-xl border p-4 transition relative flex flex-col justify-between
@@ -461,7 +468,7 @@ export function ProcessingPipelineTab() {
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-end gap-2">
-                      {isPending && activeBatch.status !== 'LOCKED' ? (
+                      {isPending && activeBatch.status !== 'LOCKED' && isMyTier ? (
                         <>
                           <button
                             onClick={() => handleRejectTier(step.tier)}
@@ -472,8 +479,9 @@ export function ProcessingPipelineTab() {
                           </button>
                           <button
                             onClick={() => handleApproveTier(step.tier)}
-                            disabled={!!actionLoading}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow"
+                            disabled={!!actionLoading || !priorTiersApproved}
+                            title={!priorTiersApproved ? 'Earlier tiers must be approved first' : undefined}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             {actionLoading === step.tier ? '...' : 'Approve Step'}
                           </button>
@@ -482,7 +490,10 @@ export function ProcessingPipelineTab() {
                         <span className="text-xs text-slate-500 flex items-center gap-1 font-medium">
                           {isApproved && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
                           {isRejected && <AlertCircle className="w-3.5 h-3.5 text-red-400" />}
-                          {isApproved ? 'Verified & Approved' : isRejected ? 'Returned for Revision' : 'Waiting previous tier'}
+                          {isApproved ? 'Verified & Approved'
+                            : isRejected ? 'Returned for Revision'
+                            : isPending && !isMyTier ? `Only ${step.approverRole || 'the assigned role'} can act on this`
+                            : 'Waiting previous tier'}
                         </span>
                       )}
                     </div>

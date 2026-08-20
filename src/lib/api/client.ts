@@ -237,7 +237,7 @@ export interface ApiClient {
   /** @deprecated Alias for queuePayrollBatch — /payroll/trigger does not exist on backend */
   triggerPayroll(month: number, year: number): Promise<any>;
 
-  getAuditLogs(params?: { limit?: number }): Promise<any>;
+  getAuditLogs(params?: { limit?: number; page?: number; action?: string; actorId?: string }): Promise<any>;
   getAlarms(params?: { severity?: string; category?: string; status?: string }): Promise<any>;
 
   // ── Finance Role APIs ──────────────────────────────────────────────────────
@@ -258,6 +258,7 @@ export interface ApiClient {
   getFinanceInvoiceSummary(): Promise<any>;
   approveFinanceInvoice(id: string): Promise<any>;
   sendFinanceInvoice(id: string): Promise<any>;
+  createInvoicePaymentOrder(invoiceId: string, amount: number): Promise<any>;
 
   // Settlements
   getFinanceSettlements(status?: string): Promise<any>;
@@ -658,6 +659,8 @@ export const api: ApiClient = {
     apiClient.post(`/finance/invoices/${id}/approve`),
   sendFinanceInvoice: (id: string) =>
     apiClient.post(`/finance/invoices/${id}/send`),
+  createInvoicePaymentOrder: (invoiceId: string, amount: number) =>
+    apiClient.post(`/payroll/invoice/${invoiceId}/payment-order`, { amount }),
 
   // Settlements
   getFinanceSettlements: (status?: string) =>
@@ -711,7 +714,7 @@ export const api: ApiClient = {
 
   listUsers: (params?: Record<string, unknown>) => apiClient.get('/admin/users', { params }),
   createUser: (body: Record<string, unknown>) => apiClient.post('/admin/users/create', body),
-  getAuditLogs: (params?: { limit?: number }) =>
+  getAuditLogs: (params?: { limit?: number; page?: number; action?: string; actorId?: string }) =>
     apiClient.get('/audit/logs', { params }),
   getAlarms: (params?: { severity?: string; category?: string; status?: string }) =>
     apiClient.get('/alarms', { params }),
