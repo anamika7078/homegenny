@@ -34,6 +34,10 @@ export interface PayrollCalc {
   grossSalary: number; esicEmployee: number; esicEmployer: number;
   pfEmployee: number; pfEmployer: number; netSalary: number;
   managementFee: number; gstOnFee: number; clientTotalCharge: number;
+  ratesUsed?: {
+    pfEmployeePct: number; pfEmployerPct: number; pfCeiling: number;
+    esicEmployeePct: number; esicEmployerPct: number; gstPct: number;
+  };
 }
 
 export type StaffAttendanceStatus = 'PRESENT' | 'ABSENT' | 'LEAVE' | 'OVERTIME';

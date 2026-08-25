@@ -60,6 +60,10 @@ interface Calc {
   managementFee: number;
   gstOnFee: number;
   clientTotalCharge: number;
+  ratesUsed?: {
+    pfEmployeePct: number; pfEmployerPct: number; pfCeiling: number;
+    esicEmployeePct: number; esicEmployerPct: number; gstPct: number;
+  };
 }
 
 // ── Generate Invoice Modal ────────────────────────────────────────────────────
@@ -314,11 +318,11 @@ function GenerateInvoiceModal({
                 {calc && (
                   <>
                     <div className="px-4 py-2 flex items-center justify-between">
-                      <span className="text-xs text-amber-400/80">ESIC (Employee 0.75%)</span>
+                      <span className="text-xs text-amber-400/80">ESIC (Employee{calc.ratesUsed ? ` ${calc.ratesUsed.esicEmployeePct}%` : ''})</span>
                       <span className="text-xs text-amber-400">- {fmtRs(calc.esicEmployee)}</span>
                     </div>
                     <div className="px-4 py-2 flex items-center justify-between border-b border-white/5">
-                      <span className="text-xs text-amber-400/80">PF (Employee 12%)</span>
+                      <span className="text-xs text-amber-400/80">PF (Employee{calc.ratesUsed ? ` ${calc.ratesUsed.pfEmployeePct}%` : ''})</span>
                       <span className="text-xs text-amber-400">- {fmtRs(calc.pfEmployee)}</span>
                     </div>
 
@@ -332,11 +336,11 @@ function GenerateInvoiceModal({
                     {preview.type === 'PLACEMENT' && (
                       <>
                         <div className="px-4 py-2 flex items-center justify-between">
-                          <span className="text-xs text-slate-400">ESIC (Employer 3.25%)</span>
+                          <span className="text-xs text-slate-400">ESIC (Employer{calc.ratesUsed ? ` ${calc.ratesUsed.esicEmployerPct}%` : ''})</span>
                           <span className="text-xs text-slate-300">{fmtRs(calc.esicEmployer)}</span>
                         </div>
                         <div className="px-4 py-2 flex items-center justify-between">
-                          <span className="text-xs text-slate-400">PF (Employer 12%)</span>
+                          <span className="text-xs text-slate-400">PF (Employer{calc.ratesUsed ? ` ${calc.ratesUsed.pfEmployerPct}%` : ''})</span>
                           <span className="text-xs text-slate-300">{fmtRs(calc.pfEmployer)}</span>
                         </div>
                         <div className="px-4 py-2 flex items-center justify-between">
@@ -344,7 +348,7 @@ function GenerateInvoiceModal({
                           <span className="text-xs text-indigo-400">{fmtRs(calc.managementFee)}</span>
                         </div>
                         <div className="px-4 py-2 flex items-center justify-between border-b border-white/5">
-                          <span className="text-xs text-indigo-400/80">GST on Fee (18%)</span>
+                          <span className="text-xs text-indigo-400/80">GST on Fee{calc.ratesUsed ? ` (${calc.ratesUsed.gstPct}%)` : ''}</span>
                           <span className="text-xs text-indigo-400">{fmtRs(calc.gstOnFee)}</span>
                         </div>
                         <div className="px-4 py-3 flex items-center justify-between bg-indigo-500/5 border-b border-indigo-500/10">
@@ -734,7 +738,13 @@ export default function InvoicesPage() {
               <tbody>
                 {filtered.map((inv: any) => {
                   const overdue = isOverdue(inv);
-                  const feeGst = parseFloat(inv.management_fee ?? 0) + parseFloat(inv.gst_amount ?? 0);
+                  const managementFeeAmt = parseFloat(inv.management_fee ?? 0);
+                  const gstAmt = parseFloat(inv.gst_amount ?? 0);
+                  const feeGst = managementFeeAmt + gstAmt;
+                  // gst_amount/management_fee reverse-derives the rate actually
+                  // applied — client_invoices doesn't store gst_pct directly,
+                  // and this can differ per placement (RM's wage_config).
+                  const gstPct = managementFeeAmt > 0 ? Math.round((gstAmt / managementFeeAmt) * 10000) / 100 : null;
                   return (
                     <tr key={inv.id} className={`border-b border-white/5 hover:bg-white/2 transition ${overdue ? 'bg-red-500/3' : ''}`}>
                       <td className="px-5 py-3 font-mono text-xs text-slate-300">{inv.invoice_number}</td>
@@ -747,7 +757,7 @@ export default function InvoicesPage() {
                       <td className="px-4 py-3 text-right text-slate-300">{fmtRs(inv.staff_salary_component)}</td>
                       <td className="px-4 py-3 text-right">
                         <span className="text-indigo-400">{fmtRs(feeGst)}</span>
-                        <span className="text-[10px] text-slate-500 block">18% GST on fee</span>
+                        <span className="text-[10px] text-slate-500 block">{gstPct != null ? `${gstPct}% GST on fee` : 'GST on fee'}</span>
                       </td>
                       <td className="px-4 py-3 text-right text-white font-bold">{fmtRs(inv.total_amount)}</td>
                       <td className="px-4 py-3 text-center text-xs">

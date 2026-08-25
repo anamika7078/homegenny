@@ -50,13 +50,22 @@ export function InvoiceViewModal({ data, onClose, title }: InvoiceViewModalProps
                 <Row label="Management fee" value={fmtRs(calc.managementFee)} />
               )}
               {calc.gstOnFee != null && (
-                <Row label="GST on fee (18%)" value={fmtRs(calc.gstOnFee)} />
+                <Row
+                  label={`GST on fee${calc.ratesUsed ? ` (${calc.ratesUsed.gstPct}%)` : ''}`}
+                  value={fmtRs(calc.gstOnFee)}
+                />
               )}
               {calc.esicEmployee != null && calc.esicEmployee > 0 && (
-                <Row label="ESIC (employee)" value={fmtRs(calc.esicEmployee)} />
+                <Row
+                  label={`ESIC (employee)${calc.ratesUsed ? ` (${calc.ratesUsed.esicEmployeePct}%)` : ''}`}
+                  value={fmtRs(calc.esicEmployee)}
+                />
               )}
               {calc.pfEmployee != null && calc.pfEmployee > 0 && (
-                <Row label="PF (employee)" value={fmtRs(calc.pfEmployee)} />
+                <Row
+                  label={`PF (employee)${calc.ratesUsed ? ` (${calc.ratesUsed.pfEmployeePct}%)` : ''}`}
+                  value={fmtRs(calc.pfEmployee)}
+                />
               )}
               {calc.netSalary != null && (
                 <Row label="Net salary" value={fmtRs(calc.netSalary)} />
