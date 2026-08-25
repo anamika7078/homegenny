@@ -5,7 +5,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/store/auth.store';
 import { Input } from '@/components/ui/input';
@@ -28,15 +28,37 @@ const schema = z.object({
   emergency_contact_name: z.string().optional(),
   emergency_contact_mobile: z.string().optional(),
   intake_notes: z.string().optional(),
+  assigned_rm_id: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
 
-export function IntakeForm() {
+interface IntakeFormProps {
+  /** Where a successfully-created candidate's detail page lives. */
+  successBasePath?: string;
+  /** Where to send the user when the restricted-list check terminates the case. */
+  terminalRedirect?: string;
+}
+
+export function IntakeForm({
+  successBasePath = '/rm/staff',
+  terminalRedirect = '/rm/terminal',
+}: IntakeFormProps = {}) {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const qc = useQueryClient();
   const [restrictedWarning, setRestrictedWarning] = useState<string | null>(null);
+  const needsRmPicker = user?.role !== 'RM';
+
+  const { data: rmUsersRaw, isLoading: rmUsersLoading } = useQuery({
+    queryKey: ['rm-users'],
+    queryFn: () => api.listRmUsers(),
+    enabled: needsRmPicker,
+  });
+  const rmUsers =
+    (rmUsersRaw as { data?: { id: string; full_name: string }[] })?.data ??
+    (rmUsersRaw as { id: string; full_name: string }[]) ??
+    [];
 
   const {
     register,
@@ -54,6 +76,9 @@ export function IntakeForm() {
 
   const submit = useMutation({
     mutationFn: async (values: FormValues) => {
+      if (needsRmPicker && !values.assigned_rm_id) {
+        throw new Error('Please select which RM this candidate belongs to');
+      }
       const check = await api.checkRestricted(values.aadhaar_number, values.mobile);
       const hit = (check as { found?: boolean; data?: { found?: boolean } })?.found
         ?? (check as { data?: { found?: boolean } })?.data?.found;
@@ -70,13 +95,14 @@ export function IntakeForm() {
     onSuccess: (res: { outcome?: string; staff?: { id?: string } }) => {
       qc.invalidateQueries({ queryKey: ['rm-kanban'] });
       qc.invalidateQueries({ queryKey: ['rm-dashboard'] });
+      qc.invalidateQueries({ queryKey: ['staff'] });
       if (res.outcome === 'RESTRICTED') {
         toast.error('Restricted list — case terminated');
-        router.push('/rm/terminal');
+        router.push(terminalRedirect);
         return;
       }
       toast.success('Intake complete — advanced to S2 Verification');
-      if (res.staff?.id) router.push(`/rm/staff/${res.staff.id}`);
+      if (res.staff?.id) router.push(`${successBasePath}/${res.staff.id}`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -91,6 +117,28 @@ export function IntakeForm() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
+        {needsRmPicker && (
+          <Field label="Assign to RM" className="md:col-span-2" error={errors.assigned_rm_id?.message}>
+            <Controller
+              control={control}
+              name="assigned_rm_id"
+              render={({ field }) => (
+                <SelectMenu
+                  value={field.value ?? ''}
+                  onValueChange={field.onChange}
+                  placeholder={rmUsersLoading ? 'Loading RMs...' : 'Select RM'}
+                  className="h-10 border-white/10 bg-card text-sm"
+                >
+                  {rmUsers.map((rm) => (
+                    <SelectMenuItem key={rm.id} value={rm.id}>
+                      {rm.full_name}
+                    </SelectMenuItem>
+                  ))}
+                </SelectMenu>
+              )}
+            />
+          </Field>
+        )}
         <Field label="Full name" error={errors.full_name?.message}>
           <Input {...register('full_name')} placeholder="Full legal name" />
         </Field>

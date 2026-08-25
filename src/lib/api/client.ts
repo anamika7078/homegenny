@@ -219,6 +219,7 @@ export interface ApiClient {
   generateRmAttendanceInvoice(staffId: string, month: number, year: number): Promise<any>;
   getRmUpgrades(): Promise<any>;
   rmIntake(body: Record<string, unknown>): Promise<any>;
+  listRmUsers(): Promise<any>;
 
   forgotPassword(phone: string): Promise<any>;
   verifyOtp(phone: string, otp: string): Promise<any>;
@@ -588,6 +589,7 @@ export const api: ApiClient = {
     apiClient.post(`/rm/attendance/${staffId}/generate-invoice`, null, { params: { month, year } }),
   getRmUpgrades: () => apiClient.get('/rm/upgrades'),
   rmIntake: (body) => apiClient.post('/rm/intake', body),
+  listRmUsers: () => apiClient.get('/rm/users'),
 
   forgotPassword: (phone) => apiClient.post('/auth/forgot-password', { phone }),
   verifyOtp: (phone, otp) => apiClient.post('/auth/verify-otp', { phone, otp }),

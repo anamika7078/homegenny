@@ -203,6 +203,12 @@ const HR_NAV: NavSection[] = [
     ],
   },
   {
+    section: 'RM Pipeline',
+    items: [
+      { href: '/hr/candidates', label: 'Candidates', icon: UserPlus },
+    ],
+  },
+  {
     section: 'Attendance',
     items: [
       { href: '/hr/attendance', label: 'Attendance', icon: Calendar },
