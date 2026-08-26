@@ -31,6 +31,25 @@ function ReviewModal({ cert, onClose, onDecision }: {
 }) {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+  const [loadingVideo, setLoadingVideo] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingVideo(true);
+    (async () => {
+      try {
+        const res = await api.getVideoCertViewUrl(cert.videoUrl);
+        const url = res?.data?.url ?? res?.url;
+        if (!cancelled) setPlaybackUrl(url ?? null);
+      } catch {
+        if (!cancelled) setPlaybackUrl(null);
+      } finally {
+        if (!cancelled) setLoadingVideo(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [cert.videoUrl]);
 
   const decide = async (status: 'APPROVED' | 'REJECTED') => {
     setSaving(true);
@@ -57,9 +76,15 @@ function ReviewModal({ cert, onClose, onDecision }: {
 
         {/* Video player */}
         <div className="rounded-xl overflow-hidden bg-black aspect-video flex items-center justify-center">
-          <video controls className="w-full h-full" src={cert.videoUrl}>
-            Your browser does not support video playback.
-          </video>
+          {loadingVideo ? (
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#FF5A1F]" />
+          ) : playbackUrl ? (
+            <video controls className="w-full h-full" src={playbackUrl}>
+              Your browser does not support video playback.
+            </video>
+          ) : (
+            <p className="text-sm text-muted-foreground">Unable to load video playback URL</p>
+          )}
         </div>
 
         <div>
