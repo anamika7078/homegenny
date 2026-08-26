@@ -1,7 +1,7 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Video, RefreshCw, AlertTriangle, Eye, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Video, RefreshCw, AlertTriangle, Eye, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import { api } from '@/lib/api/client';
 
 interface VideoCert {
@@ -117,12 +117,28 @@ function ReviewModal({ cert, onClose, onDecision }: {
   );
 }
 
+/** Natural sort for promptKey ("prompt_2" before "prompt_10") — string
+ * comparison alone puts prompt_10 before prompt_2. */
+function promptSortKey(promptKey: string): number {
+  const n = promptKey.match(/(\d+)/)?.[1];
+  return n ? parseInt(n, 10) : 0;
+}
+
+interface StaffGroup {
+  staffId: string;
+  staffName: string;
+  staffCode?: string;
+  series?: string;
+  certs: VideoCert[];
+}
+
 export default function TrainerVideoCertPage() {
   const [certs, setCerts] = useState<VideoCert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reviewing, setReviewing] = useState<VideoCert | null>(null);
   const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -152,12 +168,56 @@ export default function TrainerVideoCertPage() {
     REJECTED: certs.filter(c => c.reviewStatus === 'REJECTED').length,
   };
 
+  // Group into one card per staff member so prompts from different trainees
+  // never get mixed together — was previously one flat grid of every prompt
+  // from every staff, with the staff name as small secondary text, making it
+  // impossible to tell at a glance whose videos were whose.
+  const staffGroups = useMemo<StaffGroup[]>(() => {
+    const byStaff = new Map<string, StaffGroup>();
+    for (const c of filtered) {
+      const key = c.staffId || 'unknown';
+      let group = byStaff.get(key);
+      if (!group) {
+        group = { staffId: key, staffName: c.staffName ?? 'Staff Member', staffCode: c.staffCode, series: c.series, certs: [] };
+        byStaff.set(key, group);
+      }
+      group.certs.push(c);
+    }
+    for (const group of byStaff.values()) {
+      group.certs.sort((a, b) => promptSortKey(a.promptKey) - promptSortKey(b.promptKey));
+    }
+    return Array.from(byStaff.values()).sort((a, b) => a.staffName.localeCompare(b.staffName));
+  }, [filtered]);
+
+  const selectedGroup = selectedStaffId ? staffGroups.find(g => g.staffId === selectedStaffId) ?? null : null;
+
+  // Filter changed underneath an open drill-down (e.g. trainer approved the
+  // last PENDING item while viewing PENDING) — bounce back to the staff list
+  // instead of showing a dead-end empty screen.
+  useEffect(() => {
+    if (selectedStaffId && !selectedGroup) setSelectedStaffId(null);
+  }, [selectedStaffId, selectedGroup]);
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="page-padding max-w-5xl mx-auto space-y-6">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Video Certifications</h1>
-          <p className="text-sm text-muted-foreground mt-1">Review video submissions from your trainees</p>
+          {selectedGroup ? (
+            <button
+              onClick={() => setSelectedStaffId(null)}
+              className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground mb-2 transition-colors"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" /> All trainees
+            </button>
+          ) : null}
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            {selectedGroup ? selectedGroup.staffName : 'Video Certifications'}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {selectedGroup
+              ? `${selectedGroup.staffCode ?? selectedGroup.staffId} ${selectedGroup.series ? `· ${selectedGroup.series}` : ''} · ${selectedGroup.certs.length} prompt${selectedGroup.certs.length === 1 ? '' : 's'}`
+              : 'Select a trainee to review their prompts'}
+          </p>
         </div>
         <button onClick={load} disabled={loading} className="p-2.5 rounded-xl border border-white/15 bg-white/5 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -190,7 +250,7 @@ export default function TrainerVideoCertPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[1, 2, 3, 4].map(i => <div key={i} className="h-28 rounded-xl border border-white/8 bg-card/40 animate-pulse" />)}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : staffGroups.length === 0 ? (
         <div className="text-center py-16">
           <Video className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-40" />
           <p className="text-muted-foreground">
@@ -200,24 +260,72 @@ export default function TrainerVideoCertPage() {
             <p className="text-xs text-muted-foreground mt-2 opacity-60">Video submissions from trainees will appear here</p>
           )}
         </div>
+      ) : selectedGroup === null ? (
+        // One card per trainee — click through to see just their prompts,
+        // instead of every prompt from every trainee mixed into one grid.
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {staffGroups.map(group => {
+            const pending = group.certs.filter(c => c.reviewStatus === 'PENDING').length;
+            const approved = group.certs.filter(c => c.reviewStatus === 'APPROVED').length;
+            const rejected = group.certs.filter(c => c.reviewStatus === 'REJECTED').length;
+            return (
+              <button
+                key={group.staffId}
+                onClick={() => setSelectedStaffId(group.staffId)}
+                className="text-left rounded-xl border border-white/8 bg-card/40 p-4 space-y-3 hover:border-white/20 hover:bg-card/60 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-full bg-[#FF5A1F]/10 flex items-center justify-center flex-shrink-0">
+                      <User className="w-4 h-4 text-[#FF5A1F]" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm text-foreground truncate">{group.staffName}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {group.staffCode ?? group.staffId}{group.series ? ` · ${group.series}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-muted-foreground">{group.certs.length} prompt{group.certs.length === 1 ? '' : 's'}</span>
+                  {pending > 0 && (
+                    <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${STATUS_STYLES.PENDING.bg} ${STATUS_STYLES.PENDING.text}`}>
+                      {pending} pending
+                    </span>
+                  )}
+                  {approved > 0 && (
+                    <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${STATUS_STYLES.APPROVED.bg} ${STATUS_STYLES.APPROVED.text}`}>
+                      {approved} approved
+                    </span>
+                  )}
+                  {rejected > 0 && (
+                    <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${STATUS_STYLES.REJECTED.bg} ${STATUS_STYLES.REJECTED.text}`}>
+                      {rejected} rejected
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {filtered.map(c => {
+          {selectedGroup.certs.map(c => {
             const style = STATUS_STYLES[c.reviewStatus];
             return (
               <div key={c.id} className="rounded-xl border border-white/8 bg-card/40 p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-semibold text-sm text-foreground truncate">{c.staffName ?? 'Staff Member'}</p>
-                    <p className="text-xs text-muted-foreground truncate">{c.promptKey}</p>
+                    <p className="font-semibold text-sm text-foreground truncate">{c.promptKey}</p>
+                    <p className="text-xs text-muted-foreground truncate">Attempt #{c.attemptNumber}</p>
                   </div>
                   <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border flex-shrink-0 ${style.bg} ${style.text}`}>
                     {style.label}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <span>Attempt #{c.attemptNumber}</span>
-                  <span>·</span>
                   <span>{new Date(c.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
                   {c.series && <><span>·</span><span>{c.series}</span></>}
                 </div>
