@@ -24,6 +24,14 @@ export interface FinanceCustomer {
   bill_seq: number;
   status: string;
   created_at: string;
+  metadata?: {
+    pan_verification?: {
+      pan_number: string;
+      name_on_pan: string;
+      verified: boolean;
+      verified_at: string;
+    };
+  };
 }
 
 // ── Unit Code Generator (Preview util) ────────────────────────────────────────
@@ -546,15 +554,36 @@ function CustomerDetailDrawer({
   customer,
   onClose,
   onBillGenerated,
+  onPanVerified,
 }: {
   customer: FinanceCustomer | null;
   onClose: () => void;
   onBillGenerated: (id: string, billNo: string) => void;
+  onPanVerified: (id: string, result: NonNullable<FinanceCustomer['metadata']>['pan_verification']) => void;
 }) {
   const [generatingBill, setGeneratingBill] = useState(false);
   const [lastBill, setLastBill] = useState<string | null>(null);
+  const [verifyingPan, setVerifyingPan] = useState(false);
+  const [panError, setPanError] = useState('');
 
   if (!customer) return null;
+
+  const panVerification = customer.metadata?.pan_verification;
+
+  async function handleVerifyPan() {
+    if (!customer) return;
+    setVerifyingPan(true);
+    setPanError('');
+    try {
+      const res = await api.verifyFinanceCustomerPan(customer.id);
+      const result = (res as any).data ?? res;
+      onPanVerified(customer.id, { ...result, verified_at: new Date().toISOString() });
+    } catch (err: any) {
+      setPanError(err?.response?.data?.message ?? 'PAN verification failed');
+    } finally {
+      setVerifyingPan(false);
+    }
+  }
 
   async function handleGenerateBill() {
     if (!customer) return;
@@ -608,6 +637,35 @@ function CustomerDetailDrawer({
               </span>
             </div>
             <InfoRow icon={<Hash className="w-3 h-3" />} label="PAN Card" value={customer.pan_card} />
+            {panVerification ? (
+              <div className="flex items-center gap-2 text-xs pl-5">
+                {panVerification.verified ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase text-emerald-400 bg-emerald-400/10 border-emerald-400/20">
+                    <CheckCircle2 className="w-3 h-3" /> PAN Verified
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase text-red-400 bg-red-400/10 border-red-400/20">
+                    Verification Failed
+                  </span>
+                )}
+                <span className="text-slate-500">
+                  {new Date(panVerification.verified_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  {panVerification.name_on_pan ? ` · ${panVerification.name_on_pan}` : ''}
+                </span>
+              </div>
+            ) : (
+              <div className="pl-5">
+                <button
+                  onClick={handleVerifyPan}
+                  disabled={verifyingPan}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-[11px] font-semibold text-indigo-300 hover:bg-indigo-500/20 disabled:opacity-60 transition-colors"
+                >
+                  {verifyingPan ? <Loader2 className="w-3 h-3 animate-spin" /> : <Shield className="w-3 h-3" />}
+                  {verifyingPan ? 'Verifying…' : 'Verify PAN'}
+                </button>
+                {panError && <p className="text-[11px] text-red-400 mt-1">{panError}</p>}
+              </div>
+            )}
             {customer.gstn && (
               <InfoRow icon={<Shield className="w-3 h-3" />} label="GSTN" value={customer.gstn} />
             )}
@@ -711,6 +769,14 @@ export default function FinanceCustomersPage() {
     );
     if (selected?.id === id) {
       setSelected((s) => s ? { ...s, bill_seq: s.bill_seq + 1 } : s);
+    }
+  }
+
+  function handlePanVerified(id: string, result: NonNullable<FinanceCustomer['metadata']>['pan_verification']) {
+    const patch = (c: FinanceCustomer) => ({ ...c, metadata: { ...c.metadata, pan_verification: result } });
+    setCustomers((prev) => prev.map((c) => (c.id === id ? patch(c) : c)));
+    if (selected?.id === id) {
+      setSelected((s) => (s ? patch(s) : s));
     }
   }
 
@@ -868,6 +934,7 @@ export default function FinanceCustomersPage() {
         customer={selected}
         onClose={() => setSelected(null)}
         onBillGenerated={handleBillGenerated}
+        onPanVerified={handlePanVerified}
       />
     </div>
   );

@@ -399,6 +399,7 @@ export interface ApiClient {
   listAllCustomerBranches(): Promise<any>;
   updateFinanceCustomer(id: string, body: Record<string, unknown>): Promise<any>;
   generateFinanceCustomerBillNumber(id: string): Promise<any>;
+  verifyFinanceCustomerPan(id: string): Promise<any>;
 
   // Finance Commercial
   listWageConfigs(search?: string): Promise<any>;
@@ -832,6 +833,8 @@ export const api: ApiClient = {
     apiClient.put(`/finance/customers/${id}`, body),
   generateFinanceCustomerBillNumber: (id: string) =>
     apiClient.post(`/finance/customers/${id}/bill-number`),
+  verifyFinanceCustomerPan: (id: string) =>
+    apiClient.post(`/finance/customers/${id}/verify-pan`),
 
   // ── Finance Commercial ─────────────────────────────────────────────────────
   listWageConfigs: (search?: string) =>
