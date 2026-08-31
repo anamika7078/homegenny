@@ -178,13 +178,28 @@ export interface ApiClient {
   createPlacement(body: Record<string, unknown>): Promise<any>;
   confirmPlacement(id: string): Promise<any>;
   exitPlacement(id: string, body: Record<string, unknown>): Promise<any>;
+  calculateWage(body: Record<string, unknown>): Promise<any>;
 
   getStaffTimeline(id: string): Promise<any>;
   listAgreements(params?: Record<string, unknown>): Promise<any>;
+  createAgreement(body: { staff_id?: string; client_id?: string; type: string; placement_id?: string }): Promise<any>;
   sendAgreementEsignOtp(body: { staff_id: string; agreement_type: string; staff_name: string }): Promise<any>;
   verifyAgreementOtp(body: { staff_id: string; agreement_type: string; otp: string }): Promise<any>;
   signAgreement(id: string, body?: { otp?: string }): Promise<any>;
   generateAgreementPdf(id: string): Promise<any>;
+
+  // Scope of Work (A2)
+  listSow(placementId: string): Promise<any>;
+  getSow(id: string): Promise<any>;
+  createSow(body: { placement_id: string; content: string; is_non_standard?: boolean }): Promise<any>;
+  updateSow(id: string, content: string): Promise<any>;
+  sendSow(id: string): Promise<any>;
+  amendSow(id: string, content: string): Promise<any>;
+
+  // Client Indemnity (A3)
+  listIndemnity(placementId: string): Promise<any>;
+  getIndemnity(id: string): Promise<any>;
+  createIndemnity(body: { placement_id: string; clause_version: string; clause_text: string }): Promise<any>;
   assignScCareTypes(staffId: string, careTypes: string[]): Promise<any>;
   driverVerifyApis(staffId: string, dlNumber: string): Promise<any>;
   upgradeUcToSc(staffId: string, notes?: string): Promise<any>;
@@ -220,6 +235,16 @@ export interface ApiClient {
   getRmUpgrades(): Promise<any>;
   rmIntake(body: Record<string, unknown>): Promise<any>;
   listRmUsers(): Promise<any>;
+
+  // Verification (S2)
+  getVerificationStatus(staffId: string): Promise<any>;
+  generateAadhaarOtp(body: { aadhaar_number: string }): Promise<any>;
+  verifyAadhaarOtp(body: { reference_id: string; otp: string; aadhaar_number: string; staff_id: string }): Promise<any>;
+  verifyDL(body: { dl_number: string; dob: string; staff_id: string }): Promise<any>;
+  checkEchallan(dlNumber: string, staffId: string): Promise<any>;
+  submitPoliceVerification(staffId: string, body?: { notes?: string }): Promise<any>;
+  closePoliceVerification(staffId: string, body: { result: 'CLEAR' | 'ADVERSE'; notes?: string }): Promise<any>;
+  submitMedicalVerification(staffId: string, body: { passed: boolean; notes?: string }): Promise<any>;
 
   forgotPassword(phone: string): Promise<any>;
   verifyOtp(phone: string, otp: string): Promise<any>;
@@ -354,6 +379,8 @@ export interface ApiClient {
   reviewAdminVideoCertification(id: string, body: { status: 'APPROVED' | 'REJECTED'; notes?: string }): Promise<any>;
   overrideAdminVideoCertification(id: string, body: { neverDelete?: boolean; reviewNotes?: string; fraudFlag?: boolean; legalHold?: boolean; legalReason?: string }): Promise<any>;
   getVideoCertViewUrl(key: string): Promise<any>;
+  getVideoCertPrompts(series: string): Promise<any>;
+  listVideoCertsForStaff(staffId: string): Promise<any>;
 
   submitAdminDeleteRequest(body: Record<string, unknown>): Promise<any>;
   getAdminPrivacyRequests(): Promise<any>;
@@ -544,9 +571,12 @@ export const api: ApiClient = {
     apiClient.post(`/placements/${id}/confirm`),
   exitPlacement: (id: string, body: Record<string, unknown>) =>
     apiClient.post(`/placements/${id}/exit`, body),
+  calculateWage: (body: Record<string, unknown>) =>
+    apiClient.post('/placements/calculate-wage', body),
 
   listAgreements: (params?: Record<string, unknown>) =>
     apiClient.get('/agreements', { params }),
+  createAgreement: (body) => apiClient.post('/agreements', body),
   sendAgreementEsignOtp: (body: { staff_id: string; agreement_type: string; staff_name: string }) =>
     apiClient.post('/agreements/esign/send-otp', body),
   verifyAgreementOtp: (body: { staff_id: string; agreement_type: string; otp: string }) =>
@@ -555,6 +585,19 @@ export const api: ApiClient = {
     apiClient.post(`/agreements/${id}/sign`, body ?? {}),
   generateAgreementPdf: (id: string) =>
     apiClient.post(`/agreements/${id}/generate-pdf`),
+
+  // Scope of Work (A2)
+  listSow: (placementId) => apiClient.get('/sow', { params: { placement_id: placementId } }),
+  getSow: (id) => apiClient.get(`/sow/${id}`),
+  createSow: (body) => apiClient.post('/sow', body),
+  updateSow: (id, content) => apiClient.patch(`/sow/${id}`, { content }),
+  sendSow: (id) => apiClient.post(`/sow/${id}/send`),
+  amendSow: (id, content) => apiClient.post(`/sow/${id}/amend`, { content }),
+
+  // Client Indemnity (A3)
+  listIndemnity: (placementId) => apiClient.get('/indemnity', { params: { placement_id: placementId } }),
+  getIndemnity: (id) => apiClient.get(`/indemnity/${id}`),
+  createIndemnity: (body) => apiClient.post('/indemnity', body),
   assignScCareTypes: (staffId: string, careTypes: string[]) =>
     apiClient.post(`/series/sc/${staffId}/care-types`, { care_types: careTypes }),
   driverVerifyApis: (staffId: string, dlNumber: string) =>
@@ -591,6 +634,17 @@ export const api: ApiClient = {
   getRmUpgrades: () => apiClient.get('/rm/upgrades'),
   rmIntake: (body) => apiClient.post('/rm/intake', body),
   listRmUsers: () => apiClient.get('/rm/users'),
+
+  // Verification (S2)
+  getVerificationStatus: (staffId) => apiClient.get(`/verification/${staffId}`),
+  generateAadhaarOtp: (body) => apiClient.post('/verification/aadhaar/generate-otp', body),
+  verifyAadhaarOtp: (body) => apiClient.post('/verification/aadhaar/verify-otp', body),
+  verifyDL: (body) => apiClient.post('/verification/dl', body),
+  checkEchallan: (dlNumber, staffId) =>
+    apiClient.post(`/verification/echallan/${dlNumber}`, null, { params: { staff_id: staffId } }),
+  submitPoliceVerification: (staffId, body) => apiClient.post(`/verification/pv/submit/${staffId}`, body ?? {}),
+  closePoliceVerification: (staffId, body) => apiClient.post(`/verification/pv/${staffId}/close`, body),
+  submitMedicalVerification: (staffId, body) => apiClient.post(`/verification/medical/submit/${staffId}`, body),
 
   forgotPassword: (phone) => apiClient.post('/auth/forgot-password', { phone }),
   verifyOtp: (phone, otp) => apiClient.post('/auth/verify-otp', { phone, otp }),
@@ -793,6 +847,8 @@ export const api: ApiClient = {
   overrideAdminVideoCertification: (id: string, body: { neverDelete?: boolean; reviewNotes?: string; fraudFlag?: boolean; legalHold?: boolean; legalReason?: string }) =>
     apiClient.put(`/admin/video-certifications/${id}/override`, body),
   getVideoCertViewUrl: (key: string) => apiClient.post('/video-cert/view-url', { key }),
+  getVideoCertPrompts: (series: string) => apiClient.get(`/video-cert/prompts/${series}`),
+  listVideoCertsForStaff: (staffId: string) => apiClient.get(`/video-cert/list/${staffId}`),
 
   submitAdminDeleteRequest: (body: Record<string, unknown>) => apiClient.post('/admin/privacy/delete-request', body),
   getAdminPrivacyRequests: () => apiClient.get('/admin/privacy/requests'),
