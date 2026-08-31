@@ -121,28 +121,46 @@ function AssessmentModal({ driver, onClose, onRefresh }: { driver: Driver; onClo
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [resultPass, setResultPass] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const passed = CHECKLIST.every((c) => checks[c.id]);
   const toggle = (id: string) => setChecks((p) => ({ ...p, [id]: !p[id] }));
 
   const handleSubmitResult = async (isPass: boolean) => {
     setSubmitting(true);
-    setResultPass(isPass);
+    setSubmitError(null);
     try {
-      await api.createAssessment({
-        candidate_id: driver.id,
-        assessment_type: 'DRIVER',
+      // POST /assessments/create only opens a PENDING attempt — it ignores
+      // result/score entirely. Recording an actual result (and triggering the
+      // backend's 3-attempt DR-09 auto-termination check) requires the
+      // separate POST /assessments/submit call below.
+      const createRes = await api.createAssessment({
+        staff_id: driver.id,
+        assessment_type: 'DRIVER_PRACTICAL',
+        remarks: isPass ? 'Practical driving test passed' : 'Practical driving test failed',
+      });
+      const created = (createRes as { data?: { id?: string } })?.data ?? (createRes as { id?: string });
+      const assessmentId = created?.id;
+      if (!assessmentId) throw new Error('Could not create assessment attempt');
+
+      await api.submitDriverAssessment({
+        id: assessmentId,
         score: isPass ? 100 : 40,
         result: isPass ? 'PASS' : 'FAIL',
         remarks: isPass ? 'Practical driving test passed' : 'Practical driving test failed',
-        scenario_code: isPass ? 'DR-14' : 'DR-07',
       });
-    } catch {
-      // Fallback
-    } finally {
-      setSubmitting(false);
+
+      setResultPass(isPass);
       setSubmitted(true);
       onRefresh();
+    } catch (e) {
+      setSubmitError(
+        e instanceof Error && e.message
+          ? e.message
+          : 'Failed to submit assessment result. Please try again.',
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -196,6 +214,12 @@ function AssessmentModal({ driver, onClose, onRefresh }: { driver: Driver; onClo
               {CHECKLIST.filter(c => checks[c.id]).length}/{CHECKLIST.length} criteria met
               {passed && ' — Ready to PASS ✓'}
             </div>
+
+            {submitError && (
+              <div className="mx-6 mb-4 p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-sm font-semibold text-red-400 text-center">
+                {submitError}
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex gap-3 px-6 pb-6">
