@@ -109,8 +109,8 @@ function TrackCard({
 const inputCls =
   'w-full px-3 py-2 text-sm rounded-lg bg-white/5 border border-white/15 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#FF5A1F]/50';
 
-function AadhaarTrack({ staffId, track, staffName }: { staffId: string; track: VerificationTrack; staffName?: string }) {
-  const [aadhaar, setAadhaar] = useState('');
+function AadhaarTrack({ staffId, track, staffName, staffAadhaar }: { staffId: string; track: VerificationTrack; staffName?: string; staffAadhaar?: string }) {
+  const [aadhaar, setAadhaar] = useState(staffAadhaar ?? '');
   const [otp, setOtp] = useState('');
   const [referenceId, setReferenceId] = useState<string | null>(null);
   const [reverify, setReverify] = useState(false);
@@ -422,7 +422,7 @@ export function VerificationHub() {
       {advance.isError && <p className="text-xs text-red-400">{advance.error.message}</p>}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {aadhaar && <AadhaarTrack staffId={id} track={aadhaar} staffName={s?.full_name} />}
+        {aadhaar && <AadhaarTrack staffId={id} track={aadhaar} staffName={s?.full_name} staffAadhaar={s?.aadhaar_number} />}
         {medical && <MedicalTrack staffId={id} track={medical} />}
         {pv && <PVTrack staffId={id} track={pv} />}
         {isDriver && dl && <DLTrack staffId={id} track={dl} />}
