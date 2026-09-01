@@ -79,7 +79,11 @@ export function PayrollDashboardTab() {
   }
 
   const kpis = summary?.kpis ?? { totalGross: 0, totalNet: 0, totalDeductions: 0, totalEmployees: 0 };
-  const statTotals = statutory?.complianceTotals ?? { providentFund: 0, esic: 0, professionalTax: 0, tds: 0 };
+  const statTotals = statutory?.complianceTotals ?? {
+    providentFund: 0, esic: 0, professionalTax: 0, tds: 0,
+    totalStatutoryDeduction: 0, providentFundEmployer: 0, esicEmployer: 0,
+    totalEmployerContribution: 0, totalStatutoryLiability: 0,
+  };
 
   const pieData = [
     { name: 'Provident Fund (PF)', value: statTotals.providentFund || 1 },
@@ -202,15 +206,31 @@ export function PayrollDashboardTab() {
               </PieChart>
             </ResponsiveContainer>
           </div>
+          {/* The chart above is what comes out of salaries. The employer's own
+              PF and ESIC is a separate bill the company pays on top, and it was
+              missing entirely — so this panel used to read as the whole
+              statutory cost when it was barely half of it (F-07). */}
           <div className="grid grid-cols-2 gap-2 text-xs border-t border-white/10 pt-3 mt-2">
             <div>
-              <p className="text-slate-400">Total PF + ESIC</p>
-              <p className="font-bold text-white mt-0.5">{fmtRs(statTotals.providentFund + statTotals.esic)}</p>
+              <p className="text-slate-400">Withheld from salaries</p>
+              <p className="font-bold text-white mt-0.5">{fmtRs(statTotals.totalStatutoryDeduction ?? 0)}</p>
             </div>
             <div>
-              <p className="text-slate-400">Total TDS + PT</p>
-              <p className="font-bold text-white mt-0.5">{fmtRs(statTotals.tds + statTotals.professionalTax)}</p>
+              <p className="text-slate-400">Employer contribution</p>
+              <p className="font-bold text-amber-400 mt-0.5">{fmtRs(statTotals.totalEmployerContribution ?? 0)}</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">
+                PF {fmtRs(statTotals.providentFundEmployer ?? 0)} · ESIC {fmtRs(statTotals.esicEmployer ?? 0)}
+              </p>
             </div>
+          </div>
+          <div className="border-t border-white/10 pt-3 mt-3 flex items-baseline justify-between">
+            <p className="text-xs text-slate-400">Total payable to authorities</p>
+            <p className="text-base font-bold text-white">
+              {fmtRs(
+                statTotals.totalStatutoryLiability ??
+                  ((statTotals.totalStatutoryDeduction ?? 0) + (statTotals.totalEmployerContribution ?? 0)),
+              )}
+            </p>
           </div>
         </div>
       </div>

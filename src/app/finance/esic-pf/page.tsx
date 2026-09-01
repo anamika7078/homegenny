@@ -14,6 +14,15 @@ function fmt(n: number | string) {
 function fmtRs(n: number | string) { return `₹${fmt(n)}`; }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// A filing now aggregates all three payroll engines, so every row says which
+// one it came from — see F-06 in docs/FINANCE_MODULE_AUDIT.md.
+const SOURCE_LABELS: Record<string, string> = {
+  EOR: 'Field',
+  HR: 'HR',
+  ENTERPRISE: 'Batch',
+};
+
 const currentDate = new Date();
 
 export default function EsicPfPage() {
@@ -184,6 +193,25 @@ export default function EsicPfPage() {
               {activeTab === 'ESIC' ? 'ESIC Challan' : 'PF ECR'} — {MONTHS[month - 1]} {year}
             </span>
             {data && <span className="text-xs text-slate-500">({data.staff_count} eligible staff)</span>}
+            {/* The filing now spans all three payroll engines. Showing the
+                split makes it obvious if one of them contributed nothing. */}
+            {data?.by_source && Object.keys(data.by_source).length > 0 && (
+              <span className="flex items-center gap-1.5 ml-1">
+                {Object.entries(data.by_source as Record<string, any>).map(([src, v]) => (
+                  <span
+                    key={src}
+                    title={`${v.count} record(s) from the ${SOURCE_LABELS[src] ?? src} payroll${v.mismatches ? ` · ${v.mismatches} need checking` : ''}`}
+                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                      v.mismatches
+                        ? 'text-red-300 bg-red-500/10 border-red-500/25'
+                        : 'text-slate-300 bg-white/5 border-white/10'
+                    }`}
+                  >
+                    {SOURCE_LABELS[src] ?? src} {v.count}
+                  </span>
+                ))}
+              </span>
+            )}
           </div>
           {data && (
             <div className="text-sm font-bold text-emerald-400">
@@ -206,6 +234,7 @@ export default function EsicPfPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/5 text-[11px] text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left">Source</th>
                   <th className="px-5 py-3 text-left">Staff Code</th>
                   <th className="px-4 py-3 text-left">Name</th>
                   <th className="px-4 py-3 text-right">Gross Salary</th>
@@ -232,7 +261,14 @@ export default function EsicPfPage() {
                     const emp = parseFloat(r.esic_employee);
                     const er  = parseFloat(r.esic_employer);
                     return (
-                      <tr key={r.staff_id} className={`border-b border-white/5 hover:bg-white/2 transition ${r.compliant === false ? 'bg-red-500/5' : ''}`}>
+                      // The same person can appear once per engine, so the id
+                      // alone is no longer unique within the filing.
+                      <tr key={`${r.source}-${r.staff_id}`} className={`border-b border-white/5 hover:bg-white/2 transition ${r.compliant === false ? 'bg-red-500/5' : ''}`}>
+                        <td className="px-4 py-3">
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-400">
+                            {SOURCE_LABELS[r.source] ?? r.source ?? '—'}
+                          </span>
+                        </td>
                         <td className="px-5 py-3 font-mono text-xs text-slate-400">{r.staff_code}</td>
                         <td className="px-4 py-3 text-white">
                           <span className="flex items-center gap-1.5">
@@ -251,11 +287,19 @@ export default function EsicPfPage() {
                       </tr>
                     );
                   } else {
-                    const pfBase = Math.min(gross, 15000);
+                    // The base each engine actually used — the EOR and HR paths
+                    // compute PF on gross, the enterprise batch on basic, so
+                    // re-deriving it from gross here misstated those rows.
+                    const pfBase = Math.min(parseFloat(r.pf_base ?? r.gross_salary), 15000);
                     const emp = parseFloat(r.pf_employee);
                     const er  = parseFloat(r.pf_employer);
                     return (
-                      <tr key={r.staff_id} className={`border-b border-white/5 hover:bg-white/2 transition ${r.compliant === false ? 'bg-red-500/5' : ''}`}>
+                      <tr key={`${r.source}-${r.staff_id}`} className={`border-b border-white/5 hover:bg-white/2 transition ${r.compliant === false ? 'bg-red-500/5' : ''}`}>
+                        <td className="px-4 py-3">
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-400">
+                            {SOURCE_LABELS[r.source] ?? r.source ?? '—'}
+                          </span>
+                        </td>
                         <td className="px-5 py-3 font-mono text-xs text-slate-400">{r.staff_code}</td>
                         <td className="px-4 py-3 text-white">
                           <span className="flex items-center gap-1.5">

@@ -35,6 +35,7 @@ export default function DepositsPage() {
   const [event, setEvent]           = useState('REFUND');
   const [notes, setNotes]           = useState('');
   const [scenarioCode, setScenarioCode] = useState('');
+  const [refundAmount, setRefundAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast]           = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
@@ -64,11 +65,22 @@ export default function DepositsPage() {
 
   const handleRecord = async () => {
     if (!modal) return;
+    if (event === 'PARTIAL_REFUND' && !(Number(refundAmount) > 0)) {
+      showToast('error', 'Enter how much is being refunded');
+      return;
+    }
     setSubmitting(true);
     try {
-      await api.recordDepositEvent(modal.id, event, notes || undefined, scenarioCode || undefined);
+      // The endpoint is keyed by staff, not by deposit — send staff_id.
+      await api.recordDepositEvent(
+        modal.staff_id,
+        event,
+        notes || undefined,
+        scenarioCode || undefined,
+        event === 'PARTIAL_REFUND' ? Number(refundAmount) : undefined,
+      );
       showToast('success', `Deposit event recorded: ${event}`);
-      setModal(null); setNotes(''); setScenarioCode('');
+      setModal(null); setNotes(''); setScenarioCode(''); setRefundAmount('');
       load();
     } catch (e: any) {
       showToast('error', e.message ?? 'Failed to record event');
@@ -101,7 +113,7 @@ export default function DepositsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#0f172a] border border-white/10 rounded-2xl w-full max-w-md p-6 space-y-4">
             <h3 className="font-bold text-white text-lg">Record Deposit Event</h3>
-            <p className="text-sm text-slate-400">Staff: <span className="text-white font-medium">{modal.full_name}</span> · ₹{fmt(modal.deposit_amount)}</p>
+            <p className="text-sm text-slate-400">Staff: <span className="text-white font-medium">{modal.full_name}</span> · ₹{fmt(modal.amount)}</p>
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Event Type</label>
               <SelectMenu
@@ -117,6 +129,23 @@ export default function DepositsPage() {
                 ))}
               </SelectMenu>
             </div>
+            {event === 'PARTIAL_REFUND' && (
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">
+                  Refund Amount (of ₹{fmt(modal.amount)})
+                </label>
+                <input
+                  id="input-refund-amount"
+                  type="number"
+                  min="0"
+                  max={Number(modal.amount)}
+                  value={refundAmount}
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                  placeholder="e.g. 250"
+                  className="w-full bg-[#131c2e] border border-white/10 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+            )}
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Scenario Code (optional, e.g. DR-07)</label>
               <input
@@ -168,10 +197,12 @@ export default function DepositsPage() {
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: 'Total Staff w/ Deposit', value: String(stats.total_staff),        color: '#64748b' },
-            { label: 'Deposits Collected',      value: fmtRs(stats.total_collected),     color: '#10b981' },
-            { label: 'Outstanding',             value: fmtRs(stats.total_outstanding),   color: '#f59e0b' },
-            { label: 'Unpaid Count',            value: String(stats.unpaid_count),        color: '#ef4444' },
+            { label: 'Deposits Held',      value: fmtRs(stats.total_collected),                color: '#10b981' },
+            { label: 'Outstanding',        value: fmtRs(stats.total_outstanding),              color: '#f59e0b' },
+            { label: 'Refunded',           value: fmtRs(stats.total_refunded ?? 0),            color: '#3b82f6' },
+            // Collected, staff has exited, and no refund or forfeiture recorded
+            // — the only figure on this page that needs someone to act.
+            { label: 'Refund Due',         value: String(stats.refund_due_count ?? 0),         color: '#ef4444' },
           ].map(({ label, value, color }) => (
             <div key={label} className="rounded-xl border border-white/8 bg-[#131c2e] p-4">
               <p className="text-[11px] text-slate-400 uppercase tracking-wider">{label}</p>
@@ -223,7 +254,8 @@ export default function DepositsPage() {
               </thead>
               <tbody>
                 {deposits.map((d: any) => {
-                  const depositStatus = d.deposit_status ?? (d.deposit_paid ? 'PAID' : 'UNPAID');
+                  const depositStatus = d.deposit_status ?? (d.status === 'COLLECTED' ? 'PAID' : 'UNPAID');
+                  const resolved = !!d.event;
                   const badgeCls = depositStatusStyle[depositStatus] ?? 'text-slate-400 bg-slate-400/10 border-slate-400/20';
                   return (
                     <tr key={d.id} className="border-b border-white/5 hover:bg-white/2 transition">
@@ -234,7 +266,14 @@ export default function DepositsPage() {
                       <td className="px-4 py-3">
                         <span className="text-xs px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-slate-300">{d.series}</span>
                       </td>
-                      <td className="px-4 py-3 text-right text-white font-bold">{fmtRs(d.deposit_amount)}</td>
+                      <td className="px-4 py-3 text-right text-white font-bold">
+                        {fmtRs(d.amount)}
+                        {d.refund_amount != null && Number(d.refund_amount) > 0 && (
+                          <span className="block text-[11px] font-normal text-blue-400">
+                            {fmtRs(d.refund_amount)} refunded
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-center text-xs">
                         {d.placement_status
                           ? <span className="px-2 py-0.5 rounded-full border border-white/10 text-slate-400">{d.placement_status}</span>
@@ -242,7 +281,7 @@ export default function DepositsPage() {
                         }
                       </td>
                       <td className="px-4 py-3 text-center text-xs font-mono text-amber-400">
-                        {d.exit_scenario_code ?? d.deposit_scenario_code ?? '—'}
+                        {d.event_scenario_code ?? d.exit_scenario_code ?? '—'}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${badgeCls}`}>
@@ -253,12 +292,16 @@ export default function DepositsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
+                        {/* A resolved deposit is rejected by the API rather
+                            than overwritten, so don't offer the action. */}
                         <button
                           id={`btn-record-deposit-${d.id}`}
                           onClick={() => setModal(d)}
-                          className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-xs font-semibold border border-white/10 transition"
+                          disabled={resolved}
+                          title={resolved ? `Already resolved as ${d.event}` : undefined}
+                          className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-xs font-semibold border border-white/10 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white/5 disabled:hover:text-slate-400"
                         >
-                          Record Event
+                          {resolved ? 'Resolved' : 'Record Event'}
                         </button>
                       </td>
                     </tr>

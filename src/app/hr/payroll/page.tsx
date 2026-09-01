@@ -93,8 +93,16 @@ function HrSalarySlipsContent() {
         : p.deductions ?? {};
     const gross = Number(p.grossSalary ?? p.gross_salary ?? 0);
     const net = Number(p.netSalary ?? p.net_salary ?? 0);
+    // Payroll now records professional tax, TDS, loan EMI and advance recovery
+    // alongside ESIC and PF. Reading only the first two would show a slip whose
+    // deductions don't account for the difference between gross and net.
     const esic = Number(deductions.esic ?? 0);
     const pf = Number(deductions.pf ?? 0);
+    const professionalTax = Number(deductions.professionalTax ?? 0);
+    const tds = Number(deductions.tds ?? 0);
+    const loanEmi = Number(deductions.loanEmi ?? 0);
+    const advance = Number(deductions.advance ?? 0);
+    const totalDeductions = esic + pf + professionalTax + tds + loanEmi + advance;
     const periodMonth = Number(p.periodMonth ?? p.period_month);
     const periodYear = Number(p.periodYear ?? p.period_year);
     const presentDays = Number(p.presentDays ?? p.present_days ?? 0);
@@ -115,6 +123,11 @@ function HrSalarySlipsContent() {
         grossSalary: gross,
         esicEmployee: esic,
         pfEmployee: pf,
+        ptDeduction: professionalTax,
+        tdsDeduction: tds,
+        loanEmiDeduction: loanEmi,
+        advanceDeduction: advance,
+        totalDeductions,
         netSalary: net,
       },
     });
@@ -204,6 +217,30 @@ function HrSalarySlipsContent() {
                   <span className="text-slate-400 print:text-slate-600">PF (12%)</span>
                   <span className="text-red-400 print:text-black">
                     -{fmtRs(Number(slipModal.calculation.pfEmployee))}
+                  </span>
+                </div>
+              )}
+              {/* Payroll deducts professional tax, TDS and loan/advance recovery
+                  too. Listing only ESIC and PF left a gap between what the slip
+                  showed and the net it paid. */}
+              {([
+                ['Professional Tax', slipModal.calculation?.ptDeduction],
+                ['TDS', slipModal.calculation?.tdsDeduction],
+                ['Loan EMI', slipModal.calculation?.loanEmiDeduction],
+                ['Salary Advance', slipModal.calculation?.advanceDeduction],
+              ] as [string, number | undefined][])
+                .filter(([, v]) => Number(v ?? 0) > 0)
+                .map(([label, v]) => (
+                  <div key={label} className="flex justify-between py-1">
+                    <span className="text-slate-400 print:text-slate-600">{label}</span>
+                    <span className="text-red-400 print:text-black">-{fmtRs(Number(v))}</span>
+                  </div>
+                ))}
+              {(slipModal.calculation?.totalDeductions ?? 0) > 0 && (
+                <div className="flex justify-between py-1 border-t border-white/5 pt-2">
+                  <span className="text-slate-400 print:text-slate-600">Total Deductions</span>
+                  <span className="text-red-400 print:text-black">
+                    -{fmtRs(Number(slipModal.calculation.totalDeductions))}
                   </span>
                 </div>
               )}

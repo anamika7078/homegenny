@@ -241,7 +241,11 @@ export default function HrEmployeesPage() {
                 return (
                   <tr key={emp.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                     <td className="px-4 py-3 text-secondary-foreground">{emp.employeeId ?? '—'}</td>
-                    <td className="px-4 py-3 font-medium text-white">{emp.fullName ?? '—'}</td>
+                    <td className="px-4 py-3 font-medium text-white">
+                      <Link href={`/hr/employees/${emp.id}`} className="hover:text-primary">
+                        {emp.fullName ?? '—'}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-secondary-foreground">{emp.mobile ?? '—'}</td>
                     <td className="px-4 py-3 text-secondary-foreground">
                       {emp.category?.name ?? emp.department ?? '—'}

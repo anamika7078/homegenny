@@ -46,14 +46,17 @@ export default function AnalyticsPage() {
     );
   }
 
+  // `revenue` is the management fee alone. GST is a liability and salary +
+  // employer contributions are reimbursed by the client, so neither belongs in
+  // revenue or in the margin — see F-10 in docs/FINANCE_MODULE_AUDIT.md.
   const totalBranchRevenue = branchPnl.reduce((s, b) => s + parseFloat(b.revenue || 0), 0);
-  const totalBranchProfit = branchPnl.reduce((s, b) => s + parseFloat(b.gross_profit || 0), 0);
+  const totalBranchProfit = branchPnl.reduce((s, b) => s + parseFloat(b.contribution || 0), 0);
   const totalBranchStaff = branchPnl.reduce((s, b) => s + parseInt(b.staff_count || 0, 10), 0);
 
   const pnlChartData = branchPnl.slice(0, 10).map((b) => ({
     name: b.branch_name,
     Revenue: parseFloat(b.revenue || 0),
-    Profit: parseFloat(b.gross_profit || 0),
+    Contribution: parseFloat(b.contribution || 0),
   }));
 
   const gstChartData = (gstSummary?.monthly || []).map((m: any) => ({
@@ -85,7 +88,7 @@ export default function AnalyticsPage() {
           <p className="text-xl font-bold mt-1 text-emerald-400">{fmtRs(totalBranchRevenue)}</p>
         </div>
         <div className="rounded-xl border border-white/8 bg-[#131c2e] p-4">
-          <p className="text-[11px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><TrendingUp className="w-3 h-3" /> Total Gross Profit</p>
+          <p className="text-[11px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><TrendingUp className="w-3 h-3" /> Total Contribution</p>
           <p className="text-xl font-bold mt-1 text-indigo-400">{fmtRs(totalBranchProfit)}</p>
         </div>
         <div className="rounded-xl border border-white/8 bg-[#131c2e] p-4">
@@ -116,7 +119,7 @@ export default function AnalyticsPage() {
                   cursor={{ fill: '#1e293b' }}
                 />
                 <Bar dataKey="Revenue" fill="#10b981" radius={[0, 4, 4, 0]} barSize={12} />
-                <Bar dataKey="Profit" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={12} />
+                <Bar dataKey="Contribution" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={12} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -155,17 +158,19 @@ export default function AnalyticsPage() {
               <tr className="border-b border-white/5 text-[11px] text-slate-400 uppercase tracking-wider">
                 <th className="px-5 py-3 text-left">Branch Name</th>
                 <th className="px-4 py-3 text-center">Active Staff</th>
-                <th className="px-4 py-3 text-right">Revenue</th>
-                <th className="px-4 py-3 text-right">Payroll Cost</th>
-                <th className="px-4 py-3 text-right">Gross Profit</th>
+                <th className="px-4 py-3 text-right" title="Management fee — what HomeGenny earns">Fee Revenue</th>
+                <th className="px-4 py-3 text-right" title="Salary + employer ESIC/PF: billed to the client and paid straight out">Pass-through</th>
+                <th className="px-4 py-3 text-right" title="This branch's own employees">Internal Payroll</th>
+                <th className="px-4 py-3 text-right" title="Fee revenue minus internal payroll">Contribution</th>
                 <th className="px-4 py-3 text-right">Margin %</th>
               </tr>
             </thead>
             <tbody>
               {branchPnl.map((b) => {
                 const rev = parseFloat(b.revenue || 0);
-                const cost = parseFloat(b.payroll_cost || 0);
-                const profit = parseFloat(b.gross_profit || 0);
+                const passThrough = parseFloat(b.pass_through || 0);
+                const internal = parseFloat(b.internal_payroll_cost || 0);
+                const profit = parseFloat(b.contribution || 0);
                 const margin = rev > 0 ? (profit / rev) * 100 : 0;
                 return (
                   <tr key={b.branch_id} className="border-b border-white/5 hover:bg-white/2 transition">
@@ -175,12 +180,14 @@ export default function AnalyticsPage() {
                     </td>
                     <td className="px-4 py-3 text-center text-slate-300">{b.staff_count}</td>
                     <td className="px-4 py-3 text-right text-white">{fmtRs(rev)}</td>
-                    <td className="px-4 py-3 text-right text-slate-400">{fmtRs(cost)}</td>
-                    <td className="px-4 py-3 text-right font-bold text-emerald-400">{fmtRs(profit)}</td>
+                    <td className="px-4 py-3 text-right text-slate-500">{fmtRs(passThrough)}</td>
+                    <td className="px-4 py-3 text-right text-slate-400">{fmtRs(internal)}</td>
+                    <td className={`px-4 py-3 text-right font-bold ${profit < 0 ? 'text-red-400' : 'text-emerald-400'}`}>{fmtRs(profit)}</td>
                     <td className="px-4 py-3 text-right">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase
                         ${margin > 20 ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' :
                           margin > 10 ? 'text-blue-400 bg-blue-400/10 border-blue-400/20' :
+                          margin < 0  ? 'text-red-400 bg-red-400/10 border-red-400/20' :
                           'text-amber-400 bg-amber-400/10 border-amber-400/20'}`}>
                         {margin.toFixed(1)}%
                       </span>

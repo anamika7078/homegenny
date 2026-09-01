@@ -142,6 +142,25 @@ export interface ApiClient {
   listBranches(): Promise<any[]>;
   getEmployee(id: string): Promise<any>;
   createEmployee(body: Record<string, unknown>): Promise<any>;
+  listPendingOnboarding(params?: {
+    branchId?: string;
+    search?: string;
+    limit?: number;
+  }): Promise<any>;
+  onboardFromPipeline(body: {
+    staffApplicantId: string;
+    department: string;
+    designation: string;
+    categoryId: string;
+    employmentType: string;
+    salary: number;
+    joiningDate: string;
+    gender: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    reportingManager?: string;
+  }): Promise<any>;
   updateEmployeeStatus(id: string, status: string): Promise<any>;
   exitEmployee(
     id: string,
@@ -162,7 +181,38 @@ export interface ApiClient {
     date: string;
     status: string;
     notes?: string;
+    overtimeHours?: number;
+    /**
+     * Records HR's version over the staff member's own GPS check-in for that
+     * day. Without it the API refuses the write while a live self-check-in
+     * stands, rather than silently replacing it.
+     */
+    overrideSelfCheckIn?: boolean;
   }): Promise<any>;
+  updateAttendance(
+    id: string,
+    body: { status?: string; notes?: string; checkIn?: string; checkOut?: string; overrideSelfCheckIn?: boolean },
+  ): Promise<any>;
+  /**
+   * Pulls field check-ins (mobile app / RM) into the HR attendance ledger,
+   * which is the only table employee payroll counts. Runs nightly on the
+   * server too; this is the on-demand version. Days an HR user marked by hand
+   * are never overwritten — they come back as `skippedManual`.
+   */
+  syncAttendanceFromPipeline(body?: {
+    month?: number;
+    year?: number;
+    employeeId?: string;
+  }): Promise<any>;
+  getEmployeePipelineHistory(employeeId: string): Promise<any>;
+  getEmployeeIncidents(employeeId: string): Promise<any>;
+  getEmployeeAttendanceMonth(
+    employeeId: string,
+    params: { month: number; year: number },
+  ): Promise<any>;
+  listEmployeePayslips(employeeId: string): Promise<any>;
+  /** Fetches the rendered payslip as a Blob so the caller can save it. */
+  downloadEmployeePayslip(employeeId: string, ref: string): Promise<Blob>;
   previewEmployeePayroll(employeeId: string, month: number, year: number): Promise<any>;
   generateEmployeePayroll(employeeId: string, month: number, year: number): Promise<any>;
   getEmployeePayrolls(): Promise<any>;
@@ -251,6 +301,29 @@ export interface ApiClient {
   previewFinancePayroll(placementId: string, month: number, year: number): Promise<any>;
   confirmPayrollBatch(month: number, year: number): Promise<any>;
   disbursePayroll(payrollId: string): Promise<any>;
+  approvePayrollRecord(payrollId: string): Promise<any>;
+  getPayoutReadiness(): Promise<any>;
+  getStaffBankAccount(staffId: string): Promise<any>;
+  getConsolidatedPending(month: number, year: number): Promise<any>;
+  getProfessionalTaxRules(): Promise<any>;
+  getPfBaseImpact(): Promise<any>;
+  listCreditNotes(clientId?: string): Promise<any>;
+  getCreditNotesForInvoice(invoiceId: string): Promise<any>;
+  getIncomeTaxSlabs(financialYear?: string): Promise<any>;
+  getTaxStatus(): Promise<any>;
+  confirmTaxRates(): Promise<any>;
+  previewTax(body: { state?: string; monthly_gross: number; month: number; year: number; gender?: string }): Promise<any>;
+  listExitSettlements(status?: string): Promise<any>;
+  getPendingExits(): Promise<any>;
+  previewExitSettlement(body: { placement_id: string; exit_date: string; reason: string; trial_extended?: boolean }): Promise<any>;
+  createExitSettlement(body: { placement_id: string; exit_date: string; reason: string; trial_extended?: boolean; scenario_code?: string }): Promise<any>;
+  approveExitSettlement(id: string): Promise<any>;
+  settleExitSettlement(id: string): Promise<any>;
+  getConsolidatedPreview(customerId: string, month: number, year: number): Promise<any>;
+  generateConsolidatedInvoice(customerId: string, month: number, year: number): Promise<any>;
+  saveStaffBankAccount(staffId: string, body: {
+    account_holder_name: string; account_number: string; ifsc: string; bank_name?: string;
+  }): Promise<any>;
 
   // Invoices
   getFinanceInvoices(params?: { status?: string; page?: number }): Promise<any>;
@@ -265,7 +338,7 @@ export interface ApiClient {
   getFinanceSettlements(status?: string): Promise<any>;
   getFinanceSettlementStats(): Promise<any>;
   markSettled(invoiceId: string, paymentRef: string): Promise<any>;
-  issueCreditNote(invoiceId: string, reason: string): Promise<any>;
+  issueCreditNote(invoiceId: string, reason: string, amount?: number): Promise<any>;
 
   // ESIC / PF
   getEsicChallan(month: number, year: number): Promise<any>;
@@ -277,7 +350,7 @@ export interface ApiClient {
   // Deposits
   getFinanceDeposits(status?: string): Promise<any>;
   getFinanceDepositStats(): Promise<any>;
-  recordDepositEvent(staffId: string, event: string, notes?: string, scenarioCode?: string): Promise<any>;
+  recordDepositEvent(staffId: string, event: string, notes?: string, scenarioCode?: string, refundAmount?: number): Promise<any>;
 
   // Analytics
   getFinanceDashboard(): Promise<any>;
@@ -492,6 +565,10 @@ export const api: ApiClient = {
   getEmployee: (id: string) => apiClient.get(`/employees/${id}`),
   createEmployee: (body: Record<string, unknown>) =>
     apiClient.post('/employees', body),
+  listPendingOnboarding: (params?: { branchId?: string; search?: string; limit?: number }) =>
+    apiClient.get('/employees/pending-onboarding', { params }),
+  onboardFromPipeline: (body: Record<string, unknown>) =>
+    apiClient.post('/employees/onboard-from-pipeline', body),
   updateEmployeeStatus: (id: string, status: string) =>
     apiClient.patch(`/employees/${id}/status`, { status }),
   exitEmployee: (
@@ -514,7 +591,33 @@ export const api: ApiClient = {
     date: string;
     status: string;
     notes?: string;
+    overtimeHours?: number;
+    overrideSelfCheckIn?: boolean;
   }) => apiClient.post(`/attendance/mark`, body),
+  updateAttendance: (
+    id: string,
+    body: { status?: string; notes?: string; checkIn?: string; checkOut?: string; overrideSelfCheckIn?: boolean },
+  ) => apiClient.put(`/attendance/${id}`, body),
+  syncAttendanceFromPipeline: (body?: { month?: number; year?: number; employeeId?: string }) =>
+    apiClient.post('/attendance/sync-from-pipeline', body ?? {}),
+  getEmployeePipelineHistory: (employeeId: string) =>
+    apiClient.get(`/employees/${employeeId}/pipeline-history`),
+  getEmployeeIncidents: (employeeId: string) =>
+    apiClient.get(`/employees/${employeeId}/incidents`),
+  getEmployeeAttendanceMonth: (employeeId: string, params: { month: number; year: number }) =>
+    apiClient.get(`/employees/${employeeId}/attendance-month`, { params }),
+  listEmployeePayslips: (employeeId: string) =>
+    apiClient.get(`/employees/${employeeId}/payslips`),
+  // The shared response interceptor already returns the body rather than the
+  // axios response, and a Blob has no `success`/`data` keys, so it comes back
+  // untouched — this awaits the Blob itself, not `res.data`.
+  downloadEmployeePayslip: async (employeeId: string, ref: string) => {
+    const blob = await apiClient.get(`/employees/${employeeId}/payslips/pdf`, {
+      params: { ref },
+      responseType: 'blob',
+    });
+    return blob as unknown as Blob;
+  },
   previewEmployeePayroll: (employeeId: string, month: number, year: number) =>
     apiClient.get(`/attendance/${employeeId}/payroll-preview`, { params: { month, year } }),
   generateEmployeePayroll: (employeeId: string, month: number, year: number) =>
@@ -642,6 +745,52 @@ export const api: ApiClient = {
     apiClient.post('/finance/payroll/confirm-batch', { month, year }),
   disbursePayroll: (payrollId: string) =>
     apiClient.post(`/finance/payroll/${payrollId}/disburse`),
+  // Only an APPROVED payroll record can be disbursed (F-12).
+  approvePayrollRecord: (payrollId: string) =>
+    apiClient.post(`/finance/payroll/${payrollId}/approve`),
+  // Whether RazorpayX is configured — false means disbursement only simulates.
+  getPayoutReadiness: () =>
+    apiClient.get('/finance/payroll/payout-readiness'),
+  getStaffBankAccount: (staffId: string) =>
+    apiClient.get(`/finance/payroll/staff/${staffId}/bank-account`),
+  // One invoice per customer per month, instead of one per placement (F-15).
+  getConsolidatedPending: (month: number, year: number) =>
+    apiClient.get('/finance/invoices/consolidated/pending', { params: { month, year } }),
+
+  // Tax rules (F-16) — PT is a state levy, TDS an annual projection.
+  getProfessionalTaxRules: () => apiClient.get('/finance/tax/professional-tax'),
+  // How the PF base is derived, and what changing the rule would cost (F-20).
+  getPfBaseImpact: () => apiClient.get('/finance/tax/pf-base'),
+
+  // Credit notes are real documents with their own series (F-18).
+  listCreditNotes: (clientId?: string) =>
+    apiClient.get('/finance/settlements/credit-notes', { params: clientId ? { clientId } : {} }),
+  getCreditNotesForInvoice: (invoiceId: string) =>
+    apiClient.get(`/finance/settlements/${invoiceId}/credit-notes`),
+  getIncomeTaxSlabs: (financialYear?: string) =>
+    apiClient.get('/finance/tax/income-tax', { params: financialYear ? { financialYear } : {} }),
+  getTaxStatus: () => apiClient.get('/finance/tax/status'),
+  confirmTaxRates: () => apiClient.post('/finance/tax/confirm'),
+  previewTax: (body: { state?: string; monthly_gross: number; month: number; year: number; gender?: string }) =>
+    apiClient.post('/finance/tax/preview', body),
+
+  // Exit settlements (F-17) — the spec's late-exit fee matrix.
+  listExitSettlements: (status?: string) =>
+    apiClient.get('/finance/exit-settlements', { params: status ? { status } : {} }),
+  getPendingExits: () => apiClient.get('/finance/exit-settlements/pending'),
+  previewExitSettlement: (body: { placement_id: string; exit_date: string; reason: string; trial_extended?: boolean }) =>
+    apiClient.post('/finance/exit-settlements/preview', body),
+  createExitSettlement: (body: { placement_id: string; exit_date: string; reason: string; trial_extended?: boolean; scenario_code?: string }) =>
+    apiClient.post('/finance/exit-settlements', body),
+  approveExitSettlement: (id: string) => apiClient.post(`/finance/exit-settlements/${id}/approve`),
+  settleExitSettlement: (id: string) => apiClient.post(`/finance/exit-settlements/${id}/settle`),
+  getConsolidatedPreview: (customerId: string, month: number, year: number) =>
+    apiClient.get('/finance/invoices/consolidated/preview', { params: { customerId, month, year } }),
+  generateConsolidatedInvoice: (customerId: string, month: number, year: number) =>
+    apiClient.post('/finance/invoices/consolidated/generate', { customer_id: customerId, month, year }),
+  saveStaffBankAccount: (staffId: string, body: {
+    account_holder_name: string; account_number: string; ifsc: string; bank_name?: string;
+  }) => apiClient.post(`/finance/payroll/staff/${staffId}/bank-account`, body),
 
   // Invoices
   getFinanceInvoices: (params?: { status?: string; page?: number }) =>
@@ -672,8 +821,12 @@ export const api: ApiClient = {
     apiClient.get('/finance/settlements/stats'),
   markSettled: (invoiceId: string, paymentRef: string) =>
     apiClient.post(`/finance/settlements/${invoiceId}/mark-settled`, { payment_ref: paymentRef }),
-  issueCreditNote: (invoiceId: string, reason: string) =>
-    apiClient.post(`/finance/settlements/${invoiceId}/credit-note`, { reason }),
+  // Omit amount for a full reversal; pass one to credit part of the invoice (F-18).
+  issueCreditNote: (invoiceId: string, reason: string, amount?: number) =>
+    apiClient.post(`/finance/settlements/${invoiceId}/credit-note`, {
+      reason,
+      ...(amount != null ? { amount } : {}),
+    }),
 
   // ESIC / PF
   getEsicChallan: (month: number, year: number) =>
@@ -697,8 +850,15 @@ export const api: ApiClient = {
     apiClient.get('/finance/deposits', { params: status ? { status } : {} }),
   getFinanceDepositStats: () =>
     apiClient.get('/finance/deposits/stats'),
-  recordDepositEvent: (staffId: string, event: string, notes?: string, scenarioCode?: string) =>
-    apiClient.post(`/finance/deposits/${staffId}/event`, { event, notes, scenario_code: scenarioCode }),
+  // The path takes the STAFF id, not the deposit id — the row's `staff_id`,
+  // not its `id`. PARTIAL_REFUND is rejected without a refund_amount.
+  recordDepositEvent: (staffId: string, event: string, notes?: string, scenarioCode?: string, refundAmount?: number) =>
+    apiClient.post(`/finance/deposits/${staffId}/event`, {
+      event,
+      notes,
+      scenario_code: scenarioCode,
+      ...(refundAmount != null ? { refund_amount: refundAmount } : {}),
+    }),
 
   // Analytics
   getFinanceDashboard: () =>

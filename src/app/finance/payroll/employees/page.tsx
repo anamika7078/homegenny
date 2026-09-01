@@ -83,6 +83,27 @@ export default function EmployeePayrollsPage() {
                   <span className="text-slate-400">Monthly Salary</span>
                   <span className="text-white">{fmtRs(payrollModal.monthly_salary)}</span>
                 </div>
+                {/* Gross now folds in approved overtime, bonuses and
+                    reimbursements, so show what made it up rather than a single
+                    number the employee cannot reconcile to salary × days. */}
+                {payrollModal.calculation?.basicProrated != null && (
+                  <div className="flex justify-between py-1">
+                    <span className="text-slate-400">Basic (pro-rated)</span>
+                    <span className="text-slate-300">{fmtRs(payrollModal.calculation.basicProrated)}</span>
+                  </div>
+                )}
+                {([
+                  ['Overtime', payrollModal.calculation?.overtimeAmount],
+                  ['Bonus', payrollModal.calculation?.bonusAmount],
+                  ['Reimbursement', payrollModal.calculation?.reimbursementAmount],
+                ] as [string, number | undefined][])
+                  .filter(([, v]) => Number(v ?? 0) > 0)
+                  .map(([label, v]) => (
+                    <div key={label} className="flex justify-between py-1">
+                      <span className="text-slate-400">{label}</span>
+                      <span className="text-emerald-400/80">+{fmtRs(Number(v))}</span>
+                    </div>
+                  ))}
                 <div className="flex justify-between py-1">
                   <span className="text-slate-400">Pro-rated Gross</span>
                   <span className="text-white font-medium text-emerald-400">{fmtRs(payrollModal.prorated_gross)}</span>
@@ -99,6 +120,21 @@ export default function EmployeePayrollsPage() {
                     <span className="text-red-400">-{fmtRs(payrollModal.calculation.pfEmployee)}</span>
                   </div>
                 )}
+                {/* Everything else payroll now takes off — without these the
+                    listed deductions don't explain the net. */}
+                {([
+                  ['Professional Tax', payrollModal.calculation?.ptDeduction],
+                  ['TDS', payrollModal.calculation?.tdsDeduction],
+                  ['Loan EMI', payrollModal.calculation?.loanEmiDeduction],
+                  ['Salary Advance', payrollModal.calculation?.advanceDeduction],
+                ] as [string, number | undefined][])
+                  .filter(([, v]) => Number(v ?? 0) > 0)
+                  .map(([label, v]) => (
+                    <div key={label} className="flex justify-between py-1">
+                      <span className="text-slate-400">{label}</span>
+                      <span className="text-red-400">-{fmtRs(Number(v))}</span>
+                    </div>
+                  ))}
                 <div className="flex justify-between py-2 border-t border-white/10 mt-2 font-bold text-lg">
                   <span className="text-white">Net Payable</span>
                   <span className="text-white">{fmtRs(payrollModal.calculation?.netSalary ?? 0)}</span>

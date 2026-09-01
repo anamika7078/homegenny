@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
 import {
-  Loader2, PlayCircle, CheckCircle2,
+  Loader2, PlayCircle, CheckCircle2, AlertTriangle,
   RefreshCw, IndianRupee, Calendar,
 } from 'lucide-react';
 import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
@@ -20,12 +20,17 @@ const MONTHS = [
 
 const currentDate = new Date();
 
-type StatusBadge = 'disbursed' | 'confirmed' | 'pending';
 function Badge({ s }: { s: string }) {
+  // Mirrors payroll_records.status / disbursement_status. SIMULATED and
+  // PROCESSING are deliberately distinct from PAID: neither means the staff
+  // member has the money. See F-09 / F-12.
   const map: Record<string, { label: string; color: string }> = {
-    disbursed: { label: 'Disbursed', color: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' },
-    confirmed: { label: 'Confirmed', color: 'text-blue-400 bg-blue-400/10 border-blue-400/20' },
-    pending:   { label: 'Pending',   color: 'text-amber-400 bg-amber-400/10 border-amber-400/20' },
+    PAID:       { label: 'Paid',       color: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' },
+    PROCESSING: { label: 'Processing', color: 'text-indigo-400 bg-indigo-400/10 border-indigo-400/20' },
+    SIMULATED:  { label: 'Simulated',  color: 'text-fuchsia-400 bg-fuchsia-400/10 border-fuchsia-400/25' },
+    APPROVED:   { label: 'Approved',   color: 'text-blue-400 bg-blue-400/10 border-blue-400/20' },
+    PENDING:    { label: 'Needs approval', color: 'text-amber-400 bg-amber-400/10 border-amber-400/20' },
+    FAILED:     { label: 'Failed',     color: 'text-red-400 bg-red-400/10 border-red-400/20' },
   };
   const { label, color } = map[s] ?? { label: s, color: 'text-slate-400 bg-slate-400/10 border-slate-400/20' };
   return (
@@ -42,6 +47,10 @@ export function LegacyDisbursementTab() {
   const [loading, setLoading]       = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [disbursing, setDisbursing] = useState<string | null>(null);
+  const [approving, setApproving]   = useState<string | null>(null);
+  // Whether real payouts are possible at all — worth knowing before clicking,
+  // not after (F-09).
+  const [payoutReady, setPayoutReady] = useState<{ configured: boolean; hint: string | null } | null>(null);
   const [toast, setToast]           = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   const showToast = (type: 'success' | 'error', msg: string) => {
@@ -64,6 +73,12 @@ export function LegacyDisbursementTab() {
 
   useEffect(() => { load(); }, [month, year]);
 
+  useEffect(() => {
+    api.getPayoutReadiness?.()
+      .then((r: any) => setPayoutReady(r?.data ?? r))
+      .catch(() => setPayoutReady(null));
+  }, []);
+
   const handleConfirmBatch = async () => {
     if (!confirm(`Confirm & post payroll batch for ${MONTHS[month - 1]} ${year}? This cannot be undone.`)) return;
     setConfirming(true);
@@ -78,12 +93,34 @@ export function LegacyDisbursementTab() {
     }
   };
 
-  const handleDisburse = async (id: string) => {
-    if (!confirm('Trigger Razorpay disbursement for this record?')) return;
-    setDisbursing(id);
+  const handleApprove = async (id: string) => {
+    setApproving(id);
     try {
-      await api.disbursePayroll(id);
-      showToast('success', 'Disbursement triggered via Razorpay');
+      await api.approvePayrollRecord(id);
+      showToast('success', 'Payroll approved — it can now be paid');
+      load();
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Approval failed');
+    } finally {
+      setApproving(null);
+    }
+  };
+
+  const handleDisburse = async (r: any) => {
+    const amount = fmtRs(r.net_salary);
+    const warning = payoutReady?.configured
+      ? `Pay ${amount} to ${r.staff_name}? This sends real money and cannot be undone.`
+      : `Payouts are not configured, so no money will move — this records a SIMULATED result for ${r.staff_name}. Continue?`;
+    if (!confirm(warning)) return;
+
+    setDisbursing(r.id);
+    try {
+      const res = await api.disbursePayroll(r.id);
+      const out = res?.data ?? res;
+      // Say what actually happened rather than "triggered" for every outcome.
+      if (out?.disbursement_status === 'PAID') showToast('success', `Paid ${amount} to ${r.staff_name}`);
+      else if (out?.disbursement_status === 'PROCESSING') showToast('success', `Payout submitted for ${r.staff_name} — awaiting settlement`);
+      else showToast('error', out?.note ?? 'Recorded as SIMULATED — no money moved');
       load();
     } catch (e: any) {
       showToast('error', e.message ?? 'Disbursement failed');
@@ -101,6 +138,19 @@ export function LegacyDisbursementTab() {
 
   return (
     <div className="space-y-6">
+      {/* Nobody should discover that payouts are switched off by reading a
+          toast after clicking Pay. */}
+      {payoutReady && !payoutReady.configured && (
+        <div className="rounded-2xl border border-fuchsia-500/25 bg-fuchsia-500/5 px-5 py-3 flex items-start gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-fuchsia-400 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-fuchsia-300">Payouts are not live</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {payoutReady.hint} Disbursement still runs and records a SIMULATED result, but no money moves.
+            </p>
+          </div>
+        </div>
+      )}
       {toast && (
         <div className={`fixed top-5 right-5 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-medium border
           ${toast.type === 'success'
@@ -222,7 +272,16 @@ export function LegacyDisbursementTab() {
               </thead>
               <tbody>
                 {records.map((r: any) => {
-                  const status: StatusBadge = r.disbursed_at ? 'disbursed' : 'confirmed';
+                  // Prefer the real disbursement state. `disbursed_at` alone
+                  // used to be the whole story, which is how a simulated run
+                  // read as "Paid" (F-09).
+                  const status =
+                    r.disbursement_status && r.disbursement_status !== 'NOT_STARTED'
+                      ? r.disbursement_status
+                      : (r.status ?? 'PENDING');
+                  const needsApproval = r.type !== 'EMPLOYEE' && (r.status ?? 'PENDING') === 'PENDING';
+                  const payable = r.type === 'EMPLOYEE' || r.status === 'APPROVED';
+                  const settled = r.disbursement_status === 'PAID' || (r.type === 'EMPLOYEE' && r.disbursed_at);
                   return (
                     <tr key={r.id} className="border-b border-white/5 hover:bg-white/2 transition">
                       <td className="px-5 py-3">
@@ -236,23 +295,45 @@ export function LegacyDisbursementTab() {
                       <td className="px-4 py-3 text-right text-emerald-400 font-bold">{fmtRs(r.net_salary)}</td>
                       <td className="px-4 py-3 text-center"><Badge s={status} /></td>
                       <td className="px-4 py-3 text-center">
-                        {!r.disbursed_at ? (
+                        {settled ? (
+                          <div className="flex items-center justify-center gap-1 text-emerald-400">
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span className="text-xs">Paid</span>
+                          </div>
+                        ) : needsApproval ? (
+                          // Approval comes first now — disbursing an unapproved
+                          // record is refused by the API, so don't offer it.
                           <button
-                            onClick={() => handleDisburse(r.id)}
+                            onClick={() => handleApprove(r.id)}
+                            disabled={approving === r.id}
+                            className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 text-xs font-semibold border border-blue-600/30 transition disabled:opacity-50 flex items-center gap-1.5 mx-auto"
+                          >
+                            {approving === r.id
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : <CheckCircle2 className="w-3 h-3" />
+                            }
+                            Approve
+                          </button>
+                        ) : payable ? (
+                          <button
+                            onClick={() => handleDisburse(r)}
                             disabled={disbursing === r.id}
+                            title={payoutReady && !payoutReady.configured ? payoutReady.hint ?? undefined : undefined}
                             className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 text-xs font-semibold border border-emerald-600/30 transition disabled:opacity-50 flex items-center gap-1.5 mx-auto"
                           >
                             {disbursing === r.id
                               ? <Loader2 className="w-3 h-3 animate-spin" />
                               : <IndianRupee className="w-3 h-3" />
                             }
-                            Disburse
+                            {payoutReady && !payoutReady.configured ? 'Simulate' : 'Pay'}
                           </button>
                         ) : (
-                          <div className="flex items-center justify-center gap-1 text-emerald-400">
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span className="text-xs">Paid</span>
-                          </div>
+                          <span className="text-xs text-slate-500">—</span>
+                        )}
+                        {r.disbursement_failure_reason && (
+                          <p className="text-[10px] text-red-400 mt-1 max-w-[180px] mx-auto">
+                            {r.disbursement_failure_reason}
+                          </p>
                         )}
                       </td>
                     </tr>

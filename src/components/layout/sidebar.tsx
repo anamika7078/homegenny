@@ -10,6 +10,7 @@ import {
   Bell,
   GitBranch,
   UserPlus,
+  UserCheck,
   Video,
   FileText,
   DollarSign,
@@ -25,6 +26,9 @@ import {
   Calendar,
   BarChart2,
   TrendingUp,
+  Layers,
+  LogOut,
+  Scale,
   Calculator,
   X,
   type LucideIcon,
@@ -206,6 +210,7 @@ const HR_NAV: NavSection[] = [
     section: 'RM Pipeline',
     items: [
       { href: '/hr/candidates', label: 'Candidates', icon: UserPlus },
+      { href: '/hr/onboarding', label: 'Pending Onboarding', icon: UserCheck },
     ],
   },
   {
@@ -302,9 +307,12 @@ const FINANCE_NAV: NavSection[] = [
       { href: '/finance/payroll', label: 'Payroll', icon: DollarSign },
       { href: '/finance/payroll/attendance', label: 'Attendance Payroll', icon: Calculator },
       { href: '/finance/invoices', label: 'Invoices', icon: FileText },
+      { href: '/finance/invoices/consolidated', label: 'Month-end Invoicing', icon: Layers },
       { href: '/finance/deposits', label: 'Deposits', icon: TrendingUp },
       { href: '/finance/settlements', label: 'Settlements', icon: DollarSign },
+      { href: '/finance/exit-settlements', label: 'Exit Settlements', icon: LogOut },
       { href: '/finance/esic-pf', label: 'ESIC & PF', icon: ShieldCheck },
+      { href: '/finance/tax-rules', label: 'Tax Rules', icon: Scale },
 
     ],
   },

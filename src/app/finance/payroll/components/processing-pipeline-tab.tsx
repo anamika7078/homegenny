@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/store/auth.store';
 import {
-  Loader2, PlayCircle, CheckCircle2, AlertCircle, Clock,
+  Loader2, PlayCircle, CheckCircle2, AlertCircle, AlertTriangle, Clock,
   Lock, Download, RefreshCw, ChevronRight, FileSpreadsheet, Building2,
 } from 'lucide-react';
 import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
@@ -30,6 +30,7 @@ export function ProcessingPipelineTab() {
   const [processing, setProcessing] = useState(false);
   const [activeBatch, setActiveBatch] = useState<any>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [skippedEmployees, setSkippedEmployees] = useState<any[]>([]);
   // UX-only gating — the backend (enterprise-payroll.service.ts approveTier/
   // rejectTier) is the actual security boundary now; this just hides buttons
   // the click would 403/400 on anyway, instead of showing them to everyone.
@@ -64,6 +65,9 @@ export function ProcessingPipelineTab() {
   };
 
   useEffect(() => {
+    // The skipped list belongs to one run of one period — clear it when the
+    // period changes so it can't be read against a different batch.
+    setSkippedEmployees([]);
     fetchBatchForPeriod();
   }, [month, year, branchId]);
 
@@ -76,7 +80,15 @@ export function ProcessingPipelineTab() {
         branchId: branchId || undefined,
       });
       const batchData = res?.data ?? res;
-      toast.success(`Pipeline complete! Processed ${batchData.totalEmployees || 0} employees.`);
+      // Employees with no attendance for the period are left out of the batch
+      // rather than paid a full month on no evidence. Surface them — a silently
+      // shorter run is indistinguishable from a smaller payroll.
+      const skipped = Array.isArray(batchData?.skipped) ? batchData.skipped : [];
+      setSkippedEmployees(skipped);
+      toast.success(
+        `Pipeline complete! Processed ${batchData.totalEmployees || 0} employees.` +
+        (skipped.length ? ` ${skipped.length} skipped — see below.` : ''),
+      );
       if (batchData?.id) {
         const full = await api.getEnterpriseBatch(batchData.id);
         setActiveBatch(full?.data ?? full);
@@ -379,6 +391,33 @@ export function ProcessingPipelineTab() {
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Employees the run left out. Shown before the batch summary so the
+              totals are read knowing who is missing from them. */}
+          {skippedEmployees.length > 0 && (
+            <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-5">
+              <h3 className="text-sm font-bold text-amber-300 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                {skippedEmployees.length} employee{skippedEmployees.length > 1 ? 's' : ''} not paid in this batch
+              </h3>
+              <p className="text-xs text-slate-400 mt-1 mb-3 max-w-2xl">
+                No attendance was marked for them in {MONTHS[month - 1]} {year}. They are left out
+                rather than paid a full month on no record — mark their attendance, then recalculate.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {skippedEmployees.map((s: any) => (
+                  <span
+                    key={s.employeeId}
+                    title={s.reason}
+                    className="text-[11px] px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-slate-300"
+                  >
+                    {s.fullName}
+                    <span className="text-slate-500 ml-1.5 font-mono">{s.employeeCode}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Workflow Approval Stepper */}
           <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-[#162032] via-[#131c2e] to-[#162032] p-6 shadow-xl">
             <div className="flex items-center justify-between flex-wrap gap-4 mb-6 border-b border-white/10 pb-4">

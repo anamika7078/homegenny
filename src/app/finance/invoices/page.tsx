@@ -5,8 +5,9 @@ import { api } from '@/lib/api/client';
 import {
   Loader2, FileText, CheckCircle2, Send, Search,
   AlertTriangle, RefreshCw, Eye, Download, Plus,
-  User, Calculator, X, ChevronRight, Receipt,
+  User, Calculator, X, ChevronRight, Receipt, Layers,
 } from 'lucide-react';
+import Link from 'next/link';
 import axios from 'axios';
 import { BASE_URL, tokenStore } from '@/lib/api/client';
 import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
@@ -22,23 +23,46 @@ const MONTHS = [
 ];
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+// Mirrors the server's state machine (common/finance/invoice-status.ts).
+// 'PENDING' is gone — a freshly generated invoice is a DRAFT nobody has
+// approved yet. See F-12.
 const STATUS_TABS = [
-  { id: '',         label: 'All' },
-  { id: 'PENDING',  label: 'Pending' },
-  { id: 'APPROVED', label: 'Approved' },
-  { id: 'SENT',     label: 'Sent' },
-  { id: 'PAID',     label: 'Paid' },
-  { id: 'CREDIT_NOTE', label: 'Credit Note' },
+  { id: '',               label: 'All' },
+  { id: 'DRAFT',          label: 'Draft' },
+  { id: 'APPROVED',       label: 'Approved' },
+  { id: 'SENT',           label: 'Sent' },
+  { id: 'PARTIALLY_PAID', label: 'Part paid' },
+  { id: 'PAID',           label: 'Paid' },
+  { id: 'OVERDUE',        label: 'Overdue' },
+  { id: 'CREDIT_NOTE',    label: 'Credit Note' },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
-  PENDING:     'text-amber-400 bg-amber-400/10 border-amber-400/20',
-  APPROVED:    'text-blue-400 bg-blue-400/10 border-blue-400/20',
-  SENT:        'text-indigo-400 bg-indigo-400/10 border-indigo-400/20',
-  PAID:        'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
-  OVERDUE:     'text-red-400 bg-red-400/10 border-red-400/20',
-  CREDIT_NOTE: 'text-slate-400 bg-slate-400/10 border-slate-400/20',
+  DRAFT:          'text-slate-300 bg-white/5 border-white/15',
+  APPROVED:       'text-blue-400 bg-blue-400/10 border-blue-400/20',
+  SENT:           'text-indigo-400 bg-indigo-400/10 border-indigo-400/20',
+  PARTIALLY_PAID: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
+  PAID:           'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
+  OVERDUE:        'text-red-400 bg-red-400/10 border-red-400/20',
+  CREDIT_NOTE:    'text-slate-400 bg-slate-400/10 border-slate-400/20',
+  CANCELLED:      'text-slate-500 bg-slate-500/10 border-slate-500/20',
 };
+
+/**
+ * What each status can become, matching the server. Buttons the API would
+ * reject are not shown at all — clicking into a 400 is not a UI.
+ */
+const ALLOWED_NEXT: Record<string, string[]> = {
+  DRAFT:          ['APPROVED'],
+  APPROVED:       ['SENT'],
+  SENT:           ['PAID', 'CREDIT_NOTE'],
+  PARTIALLY_PAID: ['PAID', 'CREDIT_NOTE'],
+  OVERDUE:        ['PAID', 'CREDIT_NOTE'],
+  PAID:           [],
+  CREDIT_NOTE:    [],
+  CANCELLED:      [],
+};
+const canGo = (from: string, to: string) => (ALLOWED_NEXT[from] ?? []).includes(to);
 
 function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_COLORS[status] ?? 'text-slate-400 bg-slate-400/10 border-slate-400/20';
@@ -165,7 +189,7 @@ function GenerateInvoiceModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
       <div className="bg-[#0d1526] border border-white/10 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden">
-        {/* Header */}
+      {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center">
@@ -436,6 +460,13 @@ export default function InvoicesPage() {
   const [loading, setLoading]       = useState(false);
   const [search, setSearch]         = useState('');
   const [actioning, setActioning]   = useState<string | null>(null);
+  // Credit notes are real documents now, so issuing one needs a reason and
+  // optionally an amount — a dispute is usually about part of an invoice. (F-18)
+  const [creditFor, setCreditFor]     = useState<any | null>(null);
+  const [creditReason, setCreditReason] = useState('');
+  const [creditAmount, setCreditAmount] = useState('');
+  const [creditPartial, setCreditPartial] = useState(false);
+  const [crediting, setCrediting]     = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [selected, setSelected]     = useState<any | null>(null);
   const [toast, setToast]           = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -484,6 +515,30 @@ export default function InvoicesPage() {
       showToast('error', e.message ?? 'Send failed');
     } finally {
       setActioning(null);
+    }
+  };
+
+  const handleIssueCreditNote = async () => {
+    if (!creditFor) return;
+    if (!creditReason.trim()) { showToast('error', 'A reason is required'); return; }
+    if (creditPartial && !(Number(creditAmount) > 0)) {
+      showToast('error', 'Enter the amount to credit back'); return;
+    }
+    setCrediting(true);
+    try {
+      const res: any = await api.issueCreditNote(
+        creditFor.id,
+        creditReason.trim(),
+        creditPartial ? Number(creditAmount) : undefined,
+      );
+      const out = res?.data ?? res;
+      showToast('success', `Issued ${out?.credit_note_number ?? 'credit note'} for ${fmtRs(out?.credit_amount ?? 0)}`);
+      setCreditFor(null); setCreditReason(''); setCreditAmount(''); setCreditPartial(false);
+      load();
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Could not issue the credit note');
+    } finally {
+      setCrediting(false);
     }
   };
 
@@ -599,7 +654,7 @@ export default function InvoicesPage() {
               ))}
             </div>
             <div className="flex gap-3 pt-2">
-              {selected.status === 'PENDING' && (
+              {canGo(selected.status, 'APPROVED') && (
                 <button
                   id={`btn-modal-approve-${selected.id}`}
                   onClick={() => { handleApprove(selected.id); setSelected(null); }}
@@ -608,7 +663,7 @@ export default function InvoicesPage() {
                   Approve
                 </button>
               )}
-              {selected.status === 'APPROVED' && (
+              {canGo(selected.status, 'SENT') && (
                 <button
                   id={`btn-modal-send-${selected.id}`}
                   onClick={() => { handleSend(selected.id); setSelected(null); }}
@@ -617,7 +672,18 @@ export default function InvoicesPage() {
                   Send to Client
                 </button>
               )}
-              {selected.status !== 'PAID' && selected.status !== 'PENDING' && (
+              {/* A payment link only makes sense once the client has the
+                  invoice, and never after it is settled or credit-noted. */}
+              {canGo(selected.status, 'CREDIT_NOTE') && (
+                <button
+                  id={`btn-modal-credit-note-${selected.id}`}
+                  onClick={() => { setCreditFor(selected); setSelected(null); }}
+                  className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm font-semibold transition"
+                >
+                  Credit Note
+                </button>
+              )}
+              {canGo(selected.status, 'PAID') && (
                 <button
                   id={`btn-modal-payment-link-${selected.id}`}
                   onClick={() => handleGeneratePaymentLink(selected.id, selected.total_amount)}
@@ -640,6 +706,79 @@ export default function InvoicesPage() {
         />
       )}
 
+      {/* Credit note dialog */}
+      {creditFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#0f172a] border border-white/10 rounded-2xl w-full max-w-md p-6 space-y-4">
+            <div>
+              <h3 className="font-bold text-white text-lg">Issue a credit note</h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Against {creditFor.invoice_number} · {fmtRs(creditFor.total_amount)}
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Reason</label>
+              <textarea
+                id="input-credit-reason"
+                value={creditReason}
+                onChange={(e) => setCreditReason(e.target.value)}
+                rows={2}
+                placeholder="Why is this being credited back?"
+                className="w-full bg-[#131c2e] border border-white/10 text-white text-sm rounded-xl px-4 py-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-xs text-slate-300">
+              <input
+                type="checkbox"
+                checked={creditPartial}
+                onChange={(e) => setCreditPartial(e.target.checked)}
+                className="rounded"
+              />
+              Credit only part of this invoice
+            </label>
+
+            {creditPartial && (
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">
+                  Amount to credit (of {fmtRs(creditFor.total_amount)})
+                </label>
+                <input
+                  id="input-credit-amount"
+                  type="number"
+                  min="0"
+                  value={creditAmount}
+                  onChange={(e) => setCreditAmount(e.target.value)
+                  }
+                  className="w-full bg-[#131c2e] border border-white/10 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  GST is reversed in the same proportion. The invoice stays payable for the balance.
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setCreditFor(null); setCreditPartial(false); }}
+                className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white text-sm transition"
+              >
+                Cancel
+              </button>
+              <button
+                id="btn-confirm-credit-note"
+                onClick={handleIssueCreditNote}
+                disabled={crediting}
+                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold disabled:opacity-60 transition"
+              >
+                {crediting ? 'Issuing…' : 'Issue credit note'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
@@ -647,6 +786,15 @@ export default function InvoicesPage() {
           <p className="text-sm text-slate-400 mt-0.5">GST-compliant client invoices · EOR billing</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* One invoice per customer per month, rather than one per
+              placement — see F-15. */}
+          <Link
+            href="/finance/invoices/consolidated"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm font-semibold transition"
+          >
+            <Layers className="w-4 h-4" />
+            Month-end Consolidated
+          </Link>
           <button
             id="btn-generate-invoice-open"
             onClick={() => setShowGenerate(true)}
@@ -789,7 +937,7 @@ export default function InvoicesPage() {
                               : <Download className="w-3.5 h-3.5" />
                             }
                           </button>
-                          {inv.status === 'PENDING' && (
+                          {canGo(inv.status, 'APPROVED') && (
                             <button
                               id={`btn-approve-inv-${inv.id}`}
                               onClick={() => handleApprove(inv.id)}
@@ -803,7 +951,7 @@ export default function InvoicesPage() {
                               }
                             </button>
                           )}
-                          {inv.status === 'APPROVED' && (
+                          {canGo(inv.status, 'SENT') && (
                             <button
                               id={`btn-send-inv-${inv.id}`}
                               onClick={() => handleSend(inv.id)}
