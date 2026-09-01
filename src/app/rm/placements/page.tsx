@@ -2,10 +2,18 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, ChevronDown, Clock, CheckCircle2, XCircle, Plus, AlertTriangle, Search, X } from 'lucide-react';
+import { MapPin, ChevronDown, Clock, CheckCircle2, XCircle, Plus, AlertTriangle, Search, X, FileText, ShieldAlert } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api/client';
-import { useRmKanban } from '@/lib/rm/hooks';
+import {
+  useRmKanban,
+  usePlacementSow,
+  useCreateSow,
+  useSendSow,
+  usePlacementIndemnity,
+  useCreateIndemnity,
+} from '@/lib/rm/hooks';
+import { WageConfigForm } from '@/components/rm/wage-config-form';
 
 // Kept in lockstep with the backend's PlacementStatus enum (TRIAL | CONFIRMED | EXITED |
 // TERMINATED) — earlier drafts of this screen modeled a richer trial_7/trial_14/extended/
@@ -77,6 +85,128 @@ function DaysLeftBadge({ days }: { days: number | null }) {
       <Clock className="w-3 h-3" />
       {days <= 0 ? 'Trial ended' : `${days}d left`}
     </span>
+  );
+}
+
+const sowInputCls =
+  'w-full px-3 py-2 text-xs rounded-lg bg-white/5 border border-white/15 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#FF5A1F]/50';
+
+interface SowRow {
+  id: string;
+  content: string;
+  status: 'DRAFT' | 'SENT' | 'ACKNOWLEDGED' | 'SUPERSEDED';
+  version: number;
+}
+
+function SowSection({ placementId }: { placementId: string }) {
+  const [content, setContent] = useState('');
+  const { data, isLoading } = usePlacementSow(placementId);
+  const rows = (Array.isArray(data) ? data : []) as SowRow[];
+  const current = rows.find((r) => r.status !== 'SUPERSEDED');
+  const createSow = useCreateSow(placementId);
+  const sendSow = useSendSow(placementId);
+
+  return (
+    <div className="p-3 rounded-lg bg-white/3 border border-white/8 space-y-2">
+      <div className="flex items-center gap-2">
+        <FileText className="w-3.5 h-3.5 text-[#FF5A1F]" />
+        <p className="text-xs font-semibold text-foreground">Scope of Work (A2)</p>
+        {current && (
+          <span className="ml-auto text-[9px] font-bold uppercase text-muted-foreground border border-white/15 rounded-full px-1.5 py-0.5">
+            {current.status} · v{current.version}
+          </span>
+        )}
+      </div>
+      {isLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
+      {!isLoading && !current && (
+        <div className="space-y-2">
+          <textarea
+            className={sowInputCls}
+            rows={3}
+            placeholder="Duties, shift timing, residential/non-residential, excluded tasks…"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+          />
+          {createSow.isError && <p className="text-xs text-red-400">{createSow.error.message}</p>}
+          <button
+            disabled={!content || createSow.isPending}
+            onClick={() => createSow.mutate({ content })}
+            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-[#FF5A1F] text-white hover:bg-[#e04d17] transition-colors disabled:opacity-50"
+          >
+            {createSow.isPending ? 'Creating…' : 'Create Draft'}
+          </button>
+        </div>
+      )}
+      {current && current.status === 'DRAFT' && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground whitespace-pre-wrap">{current.content}</p>
+          {sendSow.isError && <p className="text-xs text-red-400">{sendSow.error.message}</p>}
+          <button
+            disabled={sendSow.isPending}
+            onClick={() => sendSow.mutate(current.id)}
+            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-[#FF5A1F] text-white hover:bg-[#e04d17] transition-colors disabled:opacity-50"
+          >
+            {sendSow.isPending ? 'Sending…' : 'Send to Client'}
+          </button>
+        </div>
+      )}
+      {current && (current.status === 'SENT' || current.status === 'ACKNOWLEDGED') && (
+        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{current.content}</p>
+      )}
+    </div>
+  );
+}
+
+interface IndemnityRow {
+  id: string;
+  clause_version: string;
+  clause_text: string;
+  acknowledged_at: string | null;
+  contested: boolean;
+}
+
+function IndemnitySection({ placementId }: { placementId: string }) {
+  const [version, setVersion] = useState('v1.0');
+  const [text, setText] = useState('');
+  const { data, isLoading } = usePlacementIndemnity(placementId);
+  const rows = (Array.isArray(data) ? data : []) as IndemnityRow[];
+  const latest = rows[0];
+  const createIndemnity = useCreateIndemnity(placementId);
+
+  return (
+    <div className="p-3 rounded-lg bg-white/3 border border-white/8 space-y-2">
+      <div className="flex items-center gap-2">
+        <ShieldAlert className="w-3.5 h-3.5 text-[#FF5A1F]" />
+        <p className="text-xs font-semibold text-foreground">Client Indemnity (A3)</p>
+        {latest && (
+          <span className="ml-auto text-[9px] font-bold uppercase text-muted-foreground border border-white/15 rounded-full px-1.5 py-0.5">
+            {latest.acknowledged_at ? 'Acknowledged' : latest.contested ? 'Contested' : 'Sent'}
+          </span>
+        )}
+      </div>
+      {isLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
+      {!isLoading && !latest && (
+        <div className="space-y-2">
+          <input className={sowInputCls} placeholder="Clause version (e.g. v1.0)" value={version} onChange={(e) => setVersion(e.target.value)} />
+          <textarea
+            className={sowInputCls}
+            rows={3}
+            placeholder="Client liability waiver, dispute resolution, insurance clauses…"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          {createIndemnity.isError && <p className="text-xs text-red-400">{createIndemnity.error.message}</p>}
+          <button
+            disabled={!version || !text || createIndemnity.isPending}
+            onClick={() => createIndemnity.mutate({ clause_version: version, clause_text: text })}
+            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-[#FF5A1F] text-white hover:bg-[#e04d17] transition-colors disabled:opacity-50"
+          >
+            {createIndemnity.isPending ? 'Sending…' : 'Send to Client'}
+          </button>
+        </div>
+      )}
+      {latest && <p className="text-xs text-muted-foreground whitespace-pre-wrap">{latest.clause_text}</p>}
+    </div>
   );
 }
 
@@ -188,6 +318,14 @@ function PlacementCard({
                   </button>
                 </div>
               )}
+
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Agreements</p>
+                <div className="space-y-2">
+                  <SowSection placementId={p.id} />
+                  <IndemnitySection placementId={p.id} />
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
@@ -204,6 +342,8 @@ function NewPlacementModal({ onClose, onCreate, creating }: { onClose: () => voi
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [salary, setSalary] = useState('');
   const [fee, setFee] = useState('');
+  const [mode, setMode] = useState<'simple' | 'detailed'>('simple');
+  const [wageResult, setWageResult] = useState<{ staffSalary: number; managementFee: number } | null>(null);
 
   // Only staff at S5-Deploy are eligible — the backend itself doesn't gate this (any staff at
   // any stage would be silently accepted by POST /placements), so this filter is the only place
@@ -220,15 +360,17 @@ function NewPlacementModal({ onClose, onCreate, creating }: { onClose: () => voi
     queryFn: () => api.listFinanceCustomers(clientSearch || undefined),
   });
 
-  const canSubmit = Boolean(selectedStaff && selectedClient && salary && fee);
+  const effectiveSalary = mode === 'detailed' ? wageResult?.staffSalary : Number(salary) || undefined;
+  const effectiveFee = mode === 'detailed' ? wageResult?.managementFee : Number(fee) || undefined;
+  const canSubmit = Boolean(selectedStaff && selectedClient && effectiveSalary && effectiveFee);
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     await onCreate({
       staff_id: selectedStaff.id,
       client_id: selectedClient.id,
-      staff_salary: Number(salary),
-      management_fee: Number(fee),
+      staff_salary: effectiveSalary,
+      management_fee: effectiveFee,
     });
   };
 
@@ -321,28 +463,46 @@ function NewPlacementModal({ onClose, onCreate, creating }: { onClose: () => voi
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[#8D9AB5]">Staff Salary (₹/mo)</label>
-            <input
-              type="number"
-              value={salary}
-              onChange={(e) => setSalary(e.target.value)}
-              placeholder="18000"
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#E8EDF8] focus:outline-none focus:border-[#FF5A1F]/50"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[#8D9AB5]">Management Fee (₹/mo)</label>
-            <input
-              type="number"
-              value={fee}
-              onChange={(e) => setFee(e.target.value)}
-              placeholder="4500"
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#E8EDF8] focus:outline-none focus:border-[#FF5A1F]/50"
-            />
-          </div>
+        <div className="flex gap-1 p-1 rounded-lg bg-white/5 border border-white/8 w-fit">
+          {(['simple', 'detailed'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all capitalize ${
+                mode === m ? 'bg-[#FF5A1F] text-white shadow' : 'text-[#8D9AB5] hover:text-white'
+              }`}
+            >
+              {m}
+            </button>
+          ))}
         </div>
+
+        {mode === 'simple' ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[#8D9AB5]">Staff Salary (₹/mo)</label>
+              <input
+                type="number"
+                value={salary}
+                onChange={(e) => setSalary(e.target.value)}
+                placeholder="18000"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#E8EDF8] focus:outline-none focus:border-[#FF5A1F]/50"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[#8D9AB5]">Management Fee (₹/mo)</label>
+              <input
+                type="number"
+                value={fee}
+                onChange={(e) => setFee(e.target.value)}
+                placeholder="4500"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#E8EDF8] focus:outline-none focus:border-[#FF5A1F]/50"
+              />
+            </div>
+          </div>
+        ) : (
+          <WageConfigForm onResult={(r) => setWageResult(r ? { staffSalary: r.staffSalary, managementFee: r.managementFee } : null)} />
+        )}
 
         <div className="flex gap-2 pt-2">
           <button onClick={onClose} className="px-4 py-2.5 rounded-xl text-sm font-bold border border-white/15 text-[#8D9AB5] hover:text-white transition-colors">
