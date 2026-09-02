@@ -5,7 +5,7 @@ import { api } from '@/lib/api/client';
 import {
   Loader2, FileText, CheckCircle2, Send, Search,
   AlertTriangle, RefreshCw, Eye, Download, DollarSign, IndianRupee,
-  User, Calculator, X, ChevronRight, Receipt, Layers,
+  User, Calculator, X, ChevronRight, Receipt,
 } from 'lucide-react';
 import Link from 'next/link';
 import axios from 'axios';
@@ -516,6 +516,9 @@ export default function InvoicesPage() {
   const [creditFor, setCreditFor]     = useState<any | null>(null);
   const [settleFor, setSettleFor]     = useState<any | null>(null);
   const [settleRef, setSettleRef]     = useState('');
+  const [pending, setPending]         = useState<any[]>([]);
+  const [pendingPeriod, setPendingPeriod] = useState({ month: 1, year: 2026 });
+  const [issuing, setIssuing]         = useState<string | null>(null);
   const [creditReason, setCreditReason] = useState('');
   const [creditAmount, setCreditAmount] = useState('');
   const [creditPartial, setCreditPartial] = useState(false);
@@ -542,7 +545,43 @@ export default function InvoicesPage() {
     }
   };
 
+  /**
+   * Clients whose staff were paid but whose invoice never got made.
+   *
+   * Payroll issues the invoice itself, so this is normally empty — it fills
+   * only when the invoice could not be touched, usually because it had already
+   * been sent. That used to be a whole separate "Month-end Invoicing" page,
+   * which meant the one thing you could not see from the invoice list was the
+   * invoice that does not exist yet. It belongs here, in the way.
+   */
+  const loadPending = useCallback(async () => {
+    const now = new Date();
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    try {
+      const res: any = await api.getConsolidatedPending(prev.getMonth() + 1, prev.getFullYear());
+      const items = res?.data ?? res;
+      setPending(Array.isArray(items) ? items : []);
+      setPendingPeriod({ month: prev.getMonth() + 1, year: prev.getFullYear() });
+    } catch {
+      setPending([]);
+    }
+  }, []);
+
+  const handleIssuePending = async (customerId: string, name: string) => {
+    setIssuing(customerId);
+    try {
+      await api.generateConsolidatedInvoice(customerId, pendingPeriod.month, pendingPeriod.year);
+      showToast('success', `Invoice issued for ${name}`);
+      await Promise.all([load(), loadPending()]);
+    } catch (e: any) {
+      showToast('error', e.message ?? `Could not issue an invoice for ${name}`);
+    } finally {
+      setIssuing(null);
+    }
+  };
+
   useEffect(() => { load(); }, [status]);
+  useEffect(() => { loadPending(); }, [loadPending]);
 
   const handleApprove = async (id: string) => {
     setActioning(id + '_approve');
@@ -905,18 +944,11 @@ export default function InvoicesPage() {
         </div>
         <div className="flex items-center gap-2">
           {/*
-            One action here: issue the month's invoices. Running payroll used to
-            sit on this page too, which is how the same job ended up in two
-            places — it belongs on Finance → Payroll, and that is where the link
-            below points. See ONE_STAFF_MODEL_PLAN.md §F6.
+            No "Month-end Invoicing" button any more. Payroll issues the
+            invoice itself, so that page only ever listed the leftovers — and
+            those now appear on this page, in the strip below, where they
+            cannot be missed. See ONE_STAFF_MODEL_PLAN.md §F6.
           */}
-          <Link
-            href="/finance/invoices/consolidated"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition"
-          >
-            <Layers className="w-4 h-4" />
-            Issue Month-end Invoices
-          </Link>
           <Link
             href="/finance/payroll"
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm font-semibold transition"
@@ -933,6 +965,54 @@ export default function InvoicesPage() {
           </button>
         </div>
       </div>
+
+      {/*
+        The invoices that do not exist yet. Shown here because a list of what
+        was billed cannot, by itself, tell you what was missed — and a client
+        who never receives a bill is the expensive kind of mistake.
+      */}
+      {pending.length > 0 && (
+        <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 px-5 py-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-200">
+                {pending.length} client{pending.length === 1 ? '' : 's'} still un-invoiced for{' '}
+                {MONTHS_SHORT[pendingPeriod.month - 1]} {pendingPeriod.year}
+              </p>
+              <p className="text-xs text-amber-300/70 mt-0.5">
+                Their staff have been paid, but no invoice was issued — usually because
+                that client&apos;s invoice had already been sent.
+              </p>
+              <div className="mt-3 space-y-2">
+                {pending.map((p: any) => (
+                  <div
+                    key={p.customer_id}
+                    className="flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-white truncate">{p.customer_name}</p>
+                      <p className="text-[10px] text-slate-400">
+                        {p.staff_count} staff · {fmtRs(p.salary_total)} in salaries
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleIssuePending(p.customer_id, p.customer_name)}
+                      disabled={issuing === p.customer_id}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs font-semibold border border-amber-500/25 disabled:opacity-50 transition"
+                    >
+                      {issuing === p.customer_id
+                        ? <Loader2 className="w-3 h-3 animate-spin" />
+                        : <Receipt className="w-3 h-3" />}
+                      Issue invoice
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs + Search */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -978,15 +1058,16 @@ export default function InvoicesPage() {
             <div className="text-center">
               <p className="text-slate-300 text-sm font-medium">No invoices found</p>
               <p className="text-slate-500 text-xs mt-1">
-                Invoices are issued per client at month end, once their staff have been paid.
+                Invoices are issued when payroll runs. Run payroll for the month and each
+                client&apos;s invoice appears here.
               </p>
             </div>
             <Link
-              href="/finance/invoices/consolidated"
+              href="/finance/payroll"
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-sm font-semibold border border-emerald-500/20 transition"
             >
-              <Layers className="w-4 h-4" />
-              Issue Month-end Invoices
+              <DollarSign className="w-4 h-4" />
+              Go to Payroll
             </Link>
           </div>
         ) : (
