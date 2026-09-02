@@ -306,10 +306,21 @@ const FINANCE_NAV: NavSection[] = [
         who has a link; they are simply not advertised until the rate card
         actually binds the placement. See ONE_STAFF_MODEL_PLAN.md §F5.
       */
+      /*
+        Two Finance screens, not five. Payroll is where a staff member's salary
+        is worked out from their attendance; Invoices is where each client's
+        single monthly bill is issued and sent. Everything else was the same
+        job wearing a different hat:
+
+        - "Attendance Payroll" ran exactly what the Payroll screen runs
+        - "Month-end Invoicing" is now a tab inside Invoices, not a second page
+        - finance/payroll/employees and hr/payroll drove the retired HR engine
+
+        Their routes redirect rather than 404, so old links still land
+        somewhere useful.
+      */
       { href: '/finance/payroll', label: 'Payroll', icon: DollarSign },
-      { href: '/finance/payroll/attendance', label: 'Attendance Payroll', icon: Calculator },
       { href: '/finance/invoices', label: 'Invoices', icon: FileText },
-      { href: '/finance/invoices/consolidated', label: 'Month-end Invoicing', icon: Layers },
       { href: '/finance/deposits', label: 'Deposits', icon: TrendingUp },
       { href: '/finance/settlements', label: 'Settlements', icon: DollarSign },
       { href: '/finance/exit-settlements', label: 'Exit Settlements', icon: LogOut },

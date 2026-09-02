@@ -164,8 +164,11 @@ export function LegacyDisbursementTab() {
 
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h2 className="text-lg font-bold text-white">Legacy Placement Disbursements</h2>
-          <p className="text-xs text-slate-400 mt-0.5">EOR monthly placement payroll · Razorpay bank payout</p>
+          {/* Not "legacy" — this is the payroll this business runs. */}
+          <h2 className="text-lg font-bold text-white">This month&apos;s payroll</h2>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Pick a month, then run payroll for a staff member. Approve it, and pay it out.
+          </p>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">

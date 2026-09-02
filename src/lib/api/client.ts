@@ -241,6 +241,8 @@ export interface ApiClient {
     params: { month: number; year: number },
   ): Promise<any>;
   listEmployeePayslips(employeeId: string): Promise<any>;
+  /** Every salary slip for a period, across everyone — HR's month-end view. */
+  listPayslipsForPeriod(month: number, year: number): Promise<any>;
   /** Fetches the rendered payslip as a Blob so the caller can save it. */
   downloadEmployeePayslip(employeeId: string, ref: string): Promise<Blob>;
   previewEmployeePayroll(employeeId: string, month: number, year: number): Promise<any>;
@@ -665,6 +667,8 @@ export const api: ApiClient = {
     apiClient.get(`/employees/${employeeId}/attendance-month`, { params }),
   listEmployeePayslips: (employeeId: string) =>
     apiClient.get(`/employees/${employeeId}/payslips`),
+  listPayslipsForPeriod: (month: number, year: number) =>
+    apiClient.get('/employees/payslips', { params: { month, year } }),
   // The shared response interceptor already returns the body rather than the
   // axios response, and a Blob has no `success`/`data` keys, so it comes back
   // untouched — this awaits the Blob itself, not `res.data`.
