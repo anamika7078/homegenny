@@ -17,12 +17,16 @@
  * See ONE_STAFF_MODEL_PLAN.md §F6.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { ShieldCheck, FileText, Users } from 'lucide-react';
+import { ShieldCheck, FileText, Users, Eye } from 'lucide-react';
 import { LegacyDisbursementTab } from './components/legacy-disbursement-tab';
+import { RunStaffPayrollModal } from './components/run-staff-payroll-modal';
 
 export default function FinancePayrollPage() {
+  const [showPreview, setShowPreview] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
   return (
     <div className="page-padding space-y-6 min-h-screen bg-[#0b101b] text-white">
       <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-r from-[#131d31] via-[#162238] to-[#111827] p-6 sm:p-8 shadow-2xl">
@@ -46,6 +50,18 @@ export default function FinancePayrollPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+            {/*
+              Check one person before committing the month. Run Payroll pays
+              everyone at once, which is the right default but a poor way to
+              find out a figure looks wrong.
+            */}
+            <button
+              onClick={() => setShowPreview(true)}
+              className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-semibold text-sm border border-white/10 transition"
+            >
+              <Eye className="w-4 h-4 text-amber-400" />
+              Check one staff member
+            </button>
             <Link
               href="/finance/invoices"
               className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-semibold text-sm border border-white/10 transition"
@@ -64,7 +80,17 @@ export default function FinancePayrollPage() {
         </div>
       </div>
 
-      <LegacyDisbursementTab />
+      <LegacyDisbursementTab key={reloadKey} />
+
+      {showPreview && (
+        <RunStaffPayrollModal
+          onClose={() => setShowPreview(false)}
+          onGenerated={() => {
+            setShowPreview(false);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      )}
     </div>
   );
 }
