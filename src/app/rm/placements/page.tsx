@@ -340,11 +340,14 @@ function NewPlacementModal({
   onCreate,
   creating,
   initialStaffId,
+  activeStaffIds,
 }: {
   onClose: () => void;
   onCreate: (body: Record<string, unknown>) => Promise<void>;
   creating: boolean;
   initialStaffId?: string | null;
+  /** staff_ids that already have a TRIAL/CONFIRMED placement — must exit that one first. */
+  activeStaffIds: Set<string>;
 }) {
   const { data: kanban } = useRmKanban();
   const [staffSearch, setStaffSearch] = useState('');
@@ -359,21 +362,27 @@ function NewPlacementModal({
   // Only staff at S5-Deploy are eligible — the backend itself doesn't gate this (any staff at
   // any stage would be silently accepted by POST /placements), so this filter is the only place
   // that rule is enforced. See docs/MOBILE_API_REFERENCE.md for the reasoning.
-  const s5Staff: any[] = kanban?.columns?.S5_DEPLOY ?? [];
+  // Also excludes anyone with an existing active (TRIAL/CONFIRMED) placement — a staff member
+  // stays in the S5_DEPLOY kanban column even after being placed (pipeline_stage and placement
+  // status are tracked separately), so without this a duplicate placement could be created for
+  // someone already deployed. They must be exited from their current placement first.
+  const s5Staff: any[] = (kanban?.columns?.S5_DEPLOY ?? []).filter((s: any) => !activeStaffIds.has(s.id));
   const filteredStaff = useMemo(() => {
     if (!staffSearch) return s5Staff;
     const q = staffSearch.toLowerCase();
     return s5Staff.filter((s) => s.full_name?.toLowerCase().includes(q) || s.staff_code?.toLowerCase().includes(q));
   }, [s5Staff, staffSearch]);
 
+  const initialStaffAlreadyPlaced = Boolean(initialStaffId && activeStaffIds.has(initialStaffId));
+
   // Arrived here from a specific staff's Deployment CTA (mirrors the mobile app's S5
   // Deploy hub, which jumps straight to client selection for that staff instead of
   // making the RM search for them again in a generic staff picker).
   useEffect(() => {
-    if (!initialStaffId || selectedStaff) return;
+    if (!initialStaffId || selectedStaff || initialStaffAlreadyPlaced) return;
     const match = s5Staff.find((s) => s.id === initialStaffId);
     if (match) setSelectedStaff(match);
-  }, [initialStaffId, s5Staff, selectedStaff]);
+  }, [initialStaffId, s5Staff, selectedStaff, initialStaffAlreadyPlaced]);
 
   const { data: clients, isFetching: clientsLoading } = useQuery({
     queryKey: ['finance-customers-picker', clientSearch],
@@ -395,8 +404,8 @@ function NewPlacementModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="w-full max-w-lg bg-[#0E1420] border border-white/15 rounded-2xl p-6 space-y-5 my-8">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 backdrop-blur-sm p-4 py-8 overflow-y-auto">
+      <div className="w-full max-w-lg bg-[#0E1420] border border-white/15 rounded-2xl p-6 space-y-5">
         <div className="flex justify-between items-start">
           <div>
             <h2 className="font-bold text-white text-lg flex items-center gap-2">
@@ -406,6 +415,13 @@ function NewPlacementModal({
           </div>
           <button onClick={onClose} className="text-[#8D9AB5] hover:text-white text-xl w-8 h-8 flex items-center justify-center">×</button>
         </div>
+
+        {initialStaffAlreadyPlaced && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>This staff member already has an active placement. Exit that placement first, then create a new one for the different client.</span>
+          </div>
+        )}
 
         {/* Staff picker */}
         <div className="space-y-1.5">
@@ -556,8 +572,8 @@ function ExitPlacementModal({
   const [reason, setReason] = useState(EXIT_REASONS[0].value);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="w-full max-w-sm bg-[#0E1420] border border-white/15 rounded-2xl p-6 space-y-5 my-8">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 backdrop-blur-sm p-4 py-8 overflow-y-auto">
+      <div className="w-full max-w-sm bg-[#0E1420] border border-white/15 rounded-2xl p-6 space-y-5">
         <div className="flex justify-between items-start">
           <div>
             <h2 className="font-bold text-white text-lg flex items-center gap-2">
@@ -631,6 +647,10 @@ export default function PlacementsPage() {
     refetchInterval: 30_000,
   });
   const placements: Placement[] = data?.items ?? [];
+  const activeStaffIds = useMemo(
+    () => new Set(placements.filter((p) => p.status === 'TRIAL' || p.status === 'CONFIRMED').map((p) => p.staff_id)),
+    [placements],
+  );
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['placements'] });
 
@@ -741,6 +761,7 @@ export default function PlacementsPage() {
           onCreate={(body) => createMutation.mutateAsync(body)}
           creating={createMutation.isPending}
           initialStaffId={staffIdParam}
+          activeStaffIds={activeStaffIds}
         />
       )}
 
