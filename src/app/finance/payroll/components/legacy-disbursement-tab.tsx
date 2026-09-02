@@ -20,6 +20,14 @@ const MONTHS = [
 
 const currentDate = new Date();
 
+/**
+ * Payroll is run for a month that has finished — a month still in progress has
+ * partial attendance, and paying from it would short every staff member. This
+ * screen used to open on the current month, which is always empty, so it looked
+ * broken on the one day someone new tried it.
+ */
+const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+
 function Badge({ s }: { s: string }) {
   // Mirrors payroll_records.status / disbursement_status. SIMULATED and
   // PROCESSING are deliberately distinct from PAID: neither means the staff
@@ -41,8 +49,8 @@ function Badge({ s }: { s: string }) {
 }
 
 export function LegacyDisbursementTab() {
-  const [month, setMonth]           = useState(currentDate.getMonth() + 1);
-  const [year, setYear]             = useState(currentDate.getFullYear());
+  const [month, setMonth]           = useState(lastMonth.getMonth() + 1);
+  const [year, setYear]             = useState(lastMonth.getFullYear());
   const [records, setRecords]       = useState<any[]>([]);
   const [loading, setLoading]       = useState(false);
   const [confirming, setConfirming] = useState(false);
