@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { ShieldCheck, ClipboardCheck, GraduationCap, FileText, Lock, CheckCircle2, ArrowRight } from 'lucide-react';
+import { ShieldCheck, ClipboardCheck, GraduationCap, FileText, MapPin, Lock, CheckCircle2, ArrowRight } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { RmPageHeader } from '@/components/rm/rm-page-header';
 import { TableSkeleton } from '@/components/ui/loading';
@@ -29,6 +29,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'S2_5_ASSESS', label: 'Assessment', icon: ClipboardCheck, href: () => `/rm/assessment`, cta: 'Open Assessment' },
   { key: 'S3_TRAIN', label: 'Training', icon: GraduationCap, href: () => `/rm/training`, cta: 'Open Training' },
   { key: 'S4_AGREEMENTS', label: 'Agreements', icon: FileText, href: (id) => `/rm/staff/${id}/agreements`, cta: 'Open Agreements' },
+  { key: 'S5_DEPLOY', label: 'Deployment', icon: MapPin, href: (id) => `/rm/placements?staffId=${id}`, cta: 'Select Client & Place' },
 ];
 
 function stageIndex(stage?: string): number {

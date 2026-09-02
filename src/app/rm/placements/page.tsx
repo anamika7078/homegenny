@@ -1,5 +1,6 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, ChevronDown, Clock, CheckCircle2, XCircle, Plus, AlertTriangle, Search, X, FileText, ShieldAlert } from 'lucide-react';
@@ -334,7 +335,17 @@ function PlacementCard({
   );
 }
 
-function NewPlacementModal({ onClose, onCreate, creating }: { onClose: () => void; onCreate: (body: Record<string, unknown>) => Promise<void>; creating: boolean }) {
+function NewPlacementModal({
+  onClose,
+  onCreate,
+  creating,
+  initialStaffId,
+}: {
+  onClose: () => void;
+  onCreate: (body: Record<string, unknown>) => Promise<void>;
+  creating: boolean;
+  initialStaffId?: string | null;
+}) {
   const { data: kanban } = useRmKanban();
   const [staffSearch, setStaffSearch] = useState('');
   const [clientSearch, setClientSearch] = useState('');
@@ -354,6 +365,15 @@ function NewPlacementModal({ onClose, onCreate, creating }: { onClose: () => voi
     const q = staffSearch.toLowerCase();
     return s5Staff.filter((s) => s.full_name?.toLowerCase().includes(q) || s.staff_code?.toLowerCase().includes(q));
   }, [s5Staff, staffSearch]);
+
+  // Arrived here from a specific staff's Deployment CTA (mirrors the mobile app's S5
+  // Deploy hub, which jumps straight to client selection for that staff instead of
+  // making the RM search for them again in a generic staff picker).
+  useEffect(() => {
+    if (!initialStaffId || selectedStaff) return;
+    const match = s5Staff.find((s) => s.id === initialStaffId);
+    if (match) setSelectedStaff(match);
+  }, [initialStaffId, s5Staff, selectedStaff]);
 
   const { data: clients, isFetching: clientsLoading } = useQuery({
     queryKey: ['finance-customers-picker', clientSearch],
@@ -594,8 +614,16 @@ function ExitPlacementModal({
 
 export default function PlacementsPage() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const staffIdParam = searchParams.get('staffId');
   const [showNewModal, setShowNewModal] = useState(false);
   const [exitingPlacement, setExitingPlacement] = useState<Placement | null>(null);
+
+  // Deep-linked from a staff's Deployment CTA (see candidate-detail.tsx) — jump
+  // straight into placement creation instead of making the RM re-open the modal.
+  useEffect(() => {
+    if (staffIdParam) setShowNewModal(true);
+  }, [staffIdParam]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['placements'],
@@ -712,6 +740,7 @@ export default function PlacementsPage() {
           onClose={() => setShowNewModal(false)}
           onCreate={(body) => createMutation.mutateAsync(body)}
           creating={createMutation.isPending}
+          initialStaffId={staffIdParam}
         />
       )}
 
