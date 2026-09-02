@@ -10,6 +10,18 @@ export const BASE_URL =
     ? 'https://homegennyserver-po5u.onrender.com/api/v1'
     : 'http://localhost:3001/api/v1');
 
+// Local video storage mode (VIDEO_STORAGE_MODE=local on the server) returns
+// a relative path like "/api/v1/video-cert/local-file?key=..." instead of an
+// absolute GCS signed URL. Used directly as a <video src>, that path resolves
+// against the frontend's own origin (which serves no such route) instead of
+// the API origin, so the video silently fails to load. Prefix it here.
+export function resolveMediaUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  const origin = BASE_URL.replace(/\/api\/v1\/?$/, '');
+  return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
 export const apiClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,
   // Keep a reasonable upper bound so the UI doesn't sit “stuck” for a full minute.
@@ -51,6 +63,24 @@ export const tokenStore = {
     tokenStore.clearSessionCookie();
   },
 };
+
+// The local-file route above is behind JwtAuthGuard, which only reads the
+// Authorization header — a plain <video src> request can't attach that
+// header, so the request 401s even once the URL itself is correct. GCS
+// signed URLs (the real, non-local storage mode) don't have this problem —
+// the signature IS the auth, no header needed. So: only for our own
+// same-origin local-file route, fetch the bytes through apiClient (which
+// does attach the bearer token) and hand back a blob: URL the <video> tag
+// can play directly. Caller is responsible for URL.revokeObjectURL later.
+export async function resolvePlayableVideoUrl(url: string | null | undefined): Promise<string | null> {
+  const resolved = resolveMediaUrl(url);
+  if (!resolved) return null;
+  const base = BASE_URL.replace(/\/$/, ''); // e.g. http://localhost:3001/api/v1
+  if (!resolved.startsWith(base) || !resolved.includes('/local-file')) return resolved;
+  const path = resolved.slice(base.length); // "/video-cert/local-file?key=..." — relative to apiClient's baseURL
+  const blob = await apiClient.get(path, { responseType: 'blob' });
+  return URL.createObjectURL(blob as unknown as Blob);
+}
 
 // ── Request interceptor: attach JWT ──────────────────────────────────────
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {

@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Video, RefreshCw, AlertTriangle, Eye, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, User } from 'lucide-react';
-import { api } from '@/lib/api/client';
+import { api, resolvePlayableVideoUrl } from '@/lib/api/client';
 
 interface VideoCert {
   id: string;
@@ -36,19 +36,25 @@ function ReviewModal({ cert, onClose, onDecision }: {
 
   useEffect(() => {
     let cancelled = false;
+    let objectUrl: string | null = null;
     setLoadingVideo(true);
     (async () => {
       try {
         const res = await api.getVideoCertViewUrl(cert.videoUrl);
         const url = res?.data?.url ?? res?.url;
-        if (!cancelled) setPlaybackUrl(url ?? null);
+        const playable = await resolvePlayableVideoUrl(url);
+        if (playable?.startsWith('blob:')) objectUrl = playable;
+        if (!cancelled) setPlaybackUrl(playable);
       } catch {
         if (!cancelled) setPlaybackUrl(null);
       } finally {
         if (!cancelled) setLoadingVideo(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [cert.videoUrl]);
 
   const decide = async (status: 'APPROVED' | 'REJECTED') => {
