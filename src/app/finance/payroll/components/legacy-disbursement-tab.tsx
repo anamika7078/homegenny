@@ -88,11 +88,29 @@ export function LegacyDisbursementTab() {
   }, []);
 
   const handleConfirmBatch = async () => {
-    if (!confirm(`Confirm & post payroll batch for ${MONTHS[month - 1]} ${year}? This cannot be undone.`)) return;
+    if (!confirm(`Run payroll for ${MONTHS[month - 1]} ${year}? Anyone already paid is skipped.`)) return;
     setConfirming(true);
     try {
       const res = await api.confirmPayrollBatch(month, year);
-      showToast('success', `Batch confirmed — ${res.processed} records processed`);
+      // "0 processed" is a real answer, not a failure — it means everyone
+      // eligible has been paid and the rest have no attendance to bill. Saying
+      // "batch confirmed" over it would hide that.
+      const done = Number(res?.processed ?? 0);
+      const skipped = Number(res?.skipped ?? 0);
+      if (done === 0) {
+        showToast(
+          'success',
+          skipped > 0
+            ? `Nothing to run — ${skipped} placement(s) have no attendance for this month.`
+            : 'Nothing to run — everyone has already been paid for this month.',
+        );
+      } else {
+        showToast(
+          'success',
+          `Payroll run for ${done} staff member${done === 1 ? '' : 's'}` +
+            (skipped > 0 ? ` · ${skipped} skipped, no attendance` : ''),
+        );
+      }
       load();
     } catch (e: any) {
       showToast('error', e.message ?? 'Batch confirmation failed');
@@ -217,16 +235,21 @@ export function LegacyDisbursementTab() {
             <RefreshCw className="w-4 h-4 text-slate-400" />
           </button>
 
-          {records.length === 0 && !loading && (
-            <button
-              onClick={handleConfirmBatch}
-              disabled={confirming}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold disabled:opacity-60 transition"
-            >
-              {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
-              Confirm Batch
-            </button>
-          )}
+          {/*
+            Always available. This used to appear only when the month was
+            completely empty, so the moment one person was paid the button
+            vanished — and a staff member placed mid-month could never be run.
+            The backend works on whoever is left and refuses per placement, so
+            pressing it again is safe.
+          */}
+          <button
+            onClick={handleConfirmBatch}
+            disabled={confirming || loading}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold disabled:opacity-60 transition"
+          >
+            {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
+            Run Payroll
+          </button>
         </div>
       </div>
 

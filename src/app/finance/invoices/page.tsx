@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
 import {
   Loader2, FileText, CheckCircle2, Send, Search,
-  AlertTriangle, RefreshCw, Eye, Download, Plus,
+  AlertTriangle, RefreshCw, Eye, Download, DollarSign, IndianRupee,
   User, Calculator, X, ChevronRight, Receipt, Layers,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -31,7 +31,9 @@ const STATUS_TABS = [
   { id: 'DRAFT',          label: 'Draft' },
   { id: 'APPROVED',       label: 'Approved' },
   { id: 'SENT',           label: 'Sent' },
-  { id: 'PARTIALLY_PAID', label: 'Part paid' },
+  // "Part paid" is deliberately absent: PARTIALLY_PAID exists in the status
+  // machine but nothing ever sets it, so the tab was always empty and read as
+  // a broken filter. Recording a payment marks an invoice PAID.
   { id: 'PAID',           label: 'Paid' },
   { id: 'OVERDUE',        label: 'Overdue' },
   { id: 'CREDIT_NOTE',    label: 'Credit Note' },
@@ -512,6 +514,8 @@ export default function InvoicesPage() {
   // Credit notes are real documents now, so issuing one needs a reason and
   // optionally an amount — a dispute is usually about part of an invoice. (F-18)
   const [creditFor, setCreditFor]     = useState<any | null>(null);
+  const [settleFor, setSettleFor]     = useState<any | null>(null);
+  const [settleRef, setSettleRef]     = useState('');
   const [creditReason, setCreditReason] = useState('');
   const [creditAmount, setCreditAmount] = useState('');
   const [creditPartial, setCreditPartial] = useState(false);
@@ -519,7 +523,6 @@ export default function InvoicesPage() {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [selected, setSelected]     = useState<any | null>(null);
   const [toast, setToast]           = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
-  const [showGenerate, setShowGenerate] = useState(false);
 
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
@@ -562,6 +565,23 @@ export default function InvoicesPage() {
       load();
     } catch (e: any) {
       showToast('error', e.message ?? 'Send failed');
+    } finally {
+      setActioning(null);
+    }
+  };
+
+  const handleMarkSettled = async () => {
+    if (!settleFor) return;
+    if (!settleRef.trim()) { showToast('error', 'A payment reference is required'); return; }
+    setActioning(settleFor.id + '_settle');
+    try {
+      await api.markSettled(settleFor.id, settleRef.trim());
+      showToast('success', `${settleFor.invoice_number} marked paid`);
+      setSettleFor(null);
+      setSettleRef('');
+      load();
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Could not record the payment');
     } finally {
       setActioning(null);
     }
@@ -750,12 +770,56 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      {/* Generate Invoice Modal */}
-      {showGenerate && (
-        <GenerateInvoiceModal
-          onClose={() => setShowGenerate(false)}
-          onGenerated={() => { setShowGenerate(false); load(); showToast('success', "Payroll recorded and added to the client's invoice"); }}
-        />
+      {/* Record payment */}
+      {settleFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#0f172a] border border-white/10 rounded-2xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-white font-bold">Record payment</h3>
+                <p className="text-slate-400 text-xs mt-0.5">
+                  {settleFor.invoice_number} · {fmtRs(settleFor.total_amount)}
+                </p>
+              </div>
+              <button onClick={() => { setSettleFor(null); setSettleRef(''); }} className="text-slate-400 hover:text-white text-xl">×</button>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                Payment reference
+              </label>
+              <input
+                value={settleRef}
+                onChange={(e) => setSettleRef(e.target.value)}
+                placeholder="UTR, cheque number, or bank reference"
+                className="mt-1.5 w-full rounded-xl bg-[#131c2e] border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-teal-500/40"
+              />
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                Marks the invoice paid in full. There is no partial state — record the
+                payment once the whole amount has arrived.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-1">
+              <button
+                onClick={() => { setSettleFor(null); setSettleRef(''); }}
+                className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium border border-white/8"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMarkSettled}
+                disabled={actioning === settleFor.id + '_settle'}
+                className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold disabled:opacity-50 transition flex items-center gap-2"
+              >
+                {actioning === settleFor.id + '_settle'
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <IndianRupee className="w-3.5 h-3.5" />}
+                Mark paid
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Credit note dialog */}
@@ -841,26 +905,25 @@ export default function InvoicesPage() {
         </div>
         <div className="flex items-center gap-2">
           {/*
-            Month-end invoicing is the primary action, and per-staff payroll the
-            secondary one — the reverse of how this header used to read. An
-            invoice belongs to a client, not to a placement. See
-            ONE_STAFF_MODEL_PLAN.md §F3.
+            One action here: issue the month's invoices. Running payroll used to
+            sit on this page too, which is how the same job ended up in two
+            places — it belongs on Finance → Payroll, and that is where the link
+            below points. See ONE_STAFF_MODEL_PLAN.md §F6.
           */}
           <Link
             href="/finance/invoices/consolidated"
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition"
           >
             <Layers className="w-4 h-4" />
-            Month-end Invoicing
+            Issue Month-end Invoices
           </Link>
-          <button
-            id="btn-generate-invoice-open"
-            onClick={() => setShowGenerate(true)}
+          <Link
+            href="/finance/payroll"
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm font-semibold transition"
           >
-            <Plus className="w-4 h-4" />
-            Run Staff Payroll
-          </button>
+            <DollarSign className="w-4 h-4" />
+            Payroll
+          </Link>
           <button
             id="btn-refresh-invoices"
             onClick={load}
@@ -914,15 +977,17 @@ export default function InvoicesPage() {
             </div>
             <div className="text-center">
               <p className="text-slate-300 text-sm font-medium">No invoices found</p>
-              <p className="text-slate-500 text-xs mt-1">Generate an invoice from a salary slip to get started</p>
+              <p className="text-slate-500 text-xs mt-1">
+                Invoices are issued per client at month end, once their staff have been paid.
+              </p>
             </div>
-            <button
-              onClick={() => setShowGenerate(true)}
+            <Link
+              href="/finance/invoices/consolidated"
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-sm font-semibold border border-emerald-500/20 transition"
             >
-              <Plus className="w-4 h-4" />
-              Generate First Invoice
-            </button>
+              <Layers className="w-4 h-4" />
+              Issue Month-end Invoices
+            </Link>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -1037,6 +1102,22 @@ export default function InvoicesPage() {
                                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                 : <Send className="w-3.5 h-3.5" />
                               }
+                            </button>
+                          )}
+                          {/*
+                            Recording payment lived only on a separate
+                            Settlements page, so the invoice's own row could
+                            take it from Draft to Sent and then stop. The whole
+                            life of an invoice belongs in one place.
+                          */}
+                          {canGo(inv.status, 'PAID') && (
+                            <button
+                              id={`btn-settle-inv-${inv.id}`}
+                              onClick={() => setSettleFor(inv)}
+                              className="p-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 transition border border-teal-500/20"
+                              title="Record payment"
+                            >
+                              <IndianRupee className="w-3.5 h-3.5" />
                             </button>
                           )}
                         </div>
