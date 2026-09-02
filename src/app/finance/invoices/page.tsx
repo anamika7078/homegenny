@@ -84,6 +84,9 @@ interface Calc {
   managementFee: number;
   gstOnFee: number;
   clientTotalCharge: number;
+  /** BILL_OF_SUPPLY when the supplier has no GSTIN — then gstOnFee is 0. */
+  documentType?: 'TAX_INVOICE' | 'BILL_OF_SUPPLY';
+  gstNote?: string;
   ratesUsed?: {
     pfEmployeePct: number; pfEmployerPct: number; pfCeiling: number;
     esicEmployeePct: number; esicEmployerPct: number; gstPct: number;
@@ -188,9 +191,15 @@ function GenerateInvoiceModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-      <div className="bg-[#0d1526] border border-white/10 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden">
+      {/*
+        max-h + flex column so the salary slip scrolls inside the modal instead
+        of being clipped by `overflow-hidden`. On a laptop screen the preview
+        runs past the fold, and the total — the number you actually came to
+        read — was the part being cut off.
+      */}
+      <div className="bg-[#0d1526] border border-white/10 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
       {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/8 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center">
               <Receipt className="w-4 h-4 text-emerald-400" />
@@ -207,7 +216,7 @@ function GenerateInvoiceModal({
           </button>
         </div>
 
-        <div className="px-6 py-5 space-y-5">
+        <div className="px-6 py-5 space-y-5 overflow-y-auto grow">
           {/* Step 1: Lookup */}
           <div className="space-y-3">
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -373,10 +382,29 @@ function GenerateInvoiceModal({
                           <span className="text-xs text-indigo-400/80">Management Fee</span>
                           <span className="text-xs text-indigo-400">{fmtRs(calc.managementFee)}</span>
                         </div>
+                        {/*
+                          A Bill of Supply carries no GST, so saying "GST on Fee
+                          (18%) — ₹0" would read as a mistake. Name the reason
+                          instead: the supplier is not registered, and the
+                          invoice will not charge it.
+                        */}
                         <div className="px-4 py-2 flex items-center justify-between border-b border-white/5">
-                          <span className="text-xs text-indigo-400/80">GST on Fee{calc.ratesUsed ? ` (${calc.ratesUsed.gstPct}%)` : ''}</span>
+                          <span className="text-xs text-indigo-400/80">
+                            {calc.documentType === 'BILL_OF_SUPPLY'
+                              ? 'GST — not charged'
+                              : `GST on Fee${calc.ratesUsed ? ` (${calc.ratesUsed.gstPct}%)` : ''}`}
+                          </span>
                           <span className="text-xs text-indigo-400">{fmtRs(calc.gstOnFee)}</span>
                         </div>
+                        {calc.documentType === 'BILL_OF_SUPPLY' && (
+                          <div className="px-4 py-2 border-b border-white/5">
+                            <p className="text-[10px] leading-relaxed text-amber-300/80">
+                              Issued as a <strong>Bill of Supply</strong> — <code>finance.supplier_gstin</code>{' '}
+                              is not set, so no GST is charged. Fill it in and the next
+                              invoice becomes a Tax Invoice with GST on the fee only.
+                            </p>
+                          </div>
+                        )}
                         <div className="px-4 py-3 flex items-center justify-between bg-indigo-500/5 border-b border-indigo-500/10">
                           <span className="text-xs text-indigo-300 font-semibold">Total Client Charge</span>
                           <span className="text-sm text-indigo-300 font-bold">{fmtRs(calc.clientTotalCharge)}</span>
@@ -437,7 +465,7 @@ function GenerateInvoiceModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-white/8 flex items-center justify-end gap-3">
+        <div className="px-6 py-4 border-t border-white/8 flex items-center justify-end gap-3 shrink-0">
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium transition border border-white/8"
@@ -640,7 +668,7 @@ export default function InvoicesPage() {
       {/* Detail Modal */}
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#0f172a] border border-white/10 rounded-2xl w-full max-w-lg p-6 space-y-4">
+          <div className="bg-[#0f172a] border border-white/10 rounded-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-white text-lg">{selected.invoice_number}</h3>
               <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-white text-xl">×</button>
@@ -733,7 +761,7 @@ export default function InvoicesPage() {
       {/* Credit note dialog */}
       {creditFor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#0f172a] border border-white/10 rounded-2xl w-full max-w-md p-6 space-y-4">
+          <div className="bg-[#0f172a] border border-white/10 rounded-2xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div>
               <h3 className="font-bold text-white text-lg">Issue a credit note</h3>
               <p className="text-xs text-slate-400 mt-0.5">
