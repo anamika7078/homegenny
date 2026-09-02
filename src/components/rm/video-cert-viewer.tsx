@@ -83,7 +83,7 @@ function CertCard({ cert }: { cert: VideoCertRecord }) {
                 <video
                   controls
                   className="w-full rounded-lg bg-black aspect-video"
-                  src={(viewUrl.data as { url: string }).url}
+                  src={(viewUrl.data as { url?: string }).url}
                 >
                   <Play className="w-6 h-6" />
                 </video>

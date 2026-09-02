@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api/client';
+import { api, resolvePlayableVideoUrl } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/store/auth.store';
 
 export function useRmScope() {
@@ -252,7 +252,12 @@ export function useStaffVideoCerts(staffId: string) {
 
 export function useVideoCertViewUrl() {
   return useMutation({
-    mutationFn: (key: string) => api.getVideoCertViewUrl(key),
+    mutationFn: async (key: string) => {
+      const res = (await api.getVideoCertViewUrl(key)) as { data?: { url?: string } } & { url?: string };
+      const raw = res?.data?.url ?? res?.url;
+      const url = await resolvePlayableVideoUrl(raw);
+      return { url };
+    },
   });
 }
 

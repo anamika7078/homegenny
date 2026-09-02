@@ -14,7 +14,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { getRealtimeSocket } from '@/lib/realtime/socket';
-import { Search } from 'lucide-react';
+import { Search, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRmKanban, useRmAdvanceStage } from '@/lib/rm/hooks';
 import { PIPELINE_STAGES, STAGE_COLORS, STAGE_LABELS, FSM_NEXT } from '@/lib/rm/constants';
@@ -214,6 +214,9 @@ export function PipelineKanban() {
         <p className="mb-3 text-sm text-muted-foreground">
           Current: {advanceTarget && STAGE_LABELS[advanceTarget.pipeline_stage]}
         </p>
+        {advanceTarget && (
+          <AdvanceWarnings staff={advanceTarget} />
+        )}
         <div className="mb-4">
           <SelectMenu
             value={toStage}
@@ -232,6 +235,30 @@ export function PipelineKanban() {
           Confirm transition
         </Button>
       </Modal>
+    </div>
+  );
+}
+
+function AdvanceWarnings({ staff }: { staff: StaffApplicant }) {
+  const missing: string[] = [];
+  if (staff.restricted_list_flag) missing.push('Restricted-list flag is set');
+  if (!staff.verified_docs?.aadhaar) missing.push('Aadhaar eKYC not verified');
+  if (staff.pv_status === 'IN_PROGRESS' || staff.pv_status === 'NOT_INITIATED') missing.push('Police Verification not cleared');
+  if (staff.series === 'DR' && !staff.verified_docs?.dl) missing.push('Driving Licence not verified');
+
+  if (missing.length === 0) return null;
+
+  return (
+    <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2.5 text-xs text-amber-400">
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <div>
+        <p className="font-medium">Advancing may be blocked:</p>
+        <ul className="mt-0.5 list-inside list-disc">
+          {missing.map((m) => (
+            <li key={m}>{m}</li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

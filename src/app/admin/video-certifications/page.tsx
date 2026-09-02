@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { api } from '@/lib/api/client';
+import { api, resolvePlayableVideoUrl } from '@/lib/api/client';
 import {
   Video,
   RefreshCw,
@@ -72,18 +72,24 @@ function ReviewAndOverrideModal({
 
   React.useEffect(() => {
     let cancelled = false;
+    let objectUrl: string | null = null;
     (async () => {
       try {
         const res = await api.getVideoCertViewUrl(cert.videoUrl);
         const url = res?.data?.url ?? res?.url;
-        if (!cancelled) setPlaybackUrl(url ?? null);
+        const playable = await resolvePlayableVideoUrl(url);
+        if (playable?.startsWith('blob:')) objectUrl = playable;
+        if (!cancelled) setPlaybackUrl(playable);
       } catch {
         if (!cancelled) setPlaybackUrl(null);
-      } font: {
+      } finally {
         if (!cancelled) setLoadingVideo(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [cert.videoUrl]);
 
   const decide = async (status: 'APPROVED' | 'REJECTED') => {
