@@ -292,18 +292,20 @@ const FINANCE_NAV: NavSection[] = [
     section: 'Finance',
     items: [
       { href: '/finance/customers', label: 'Customers', icon: Users },
-      {
-        href: '/finance/commercial',
-        label: 'Commercial',
-        icon: Calculator,
-        subItems: [
-          { href: '/finance/commercial/calculator', label: 'Commercial Calculator' },
-          { href: '/finance/commercial/quotations', label: 'Quotations' },
-          { href: '/finance/commercial/rate-cards', label: 'Rate Cards' },
-          { href: '/finance/commercial/reports', label: 'Reports' },
-          { href: '/finance/commercial/approvals', label: 'Approval' },
-        ]
-      },
+      /*
+        "Commercial" (wage config, calculator, quotations, rate cards,
+        approvals) is hidden. Its approved rate card never reached the
+        placement: RM types `staff_salary` and `management_fee` by hand at S4,
+        so the approval chain could be bypassed by typing a different number.
+        Production bore that out — 13 wage configs at 10%, but 0 calculations,
+        0 quotations, 0 rate cards, and real placements at 12%, 15% and
+        hand-typed figures.
+
+        A menu entry that is configured and ignored teaches people to distrust
+        the menu. The pages still exist and the routes still work for anyone
+        who has a link; they are simply not advertised until the rate card
+        actually binds the placement. See ONE_STAFF_MODEL_PLAN.md §F5.
+      */
       { href: '/finance/payroll', label: 'Payroll', icon: DollarSign },
       { href: '/finance/payroll/attendance', label: 'Attendance Payroll', icon: Calculator },
       { href: '/finance/invoices', label: 'Invoices', icon: FileText },
@@ -377,9 +379,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuthStore();
   const [mounted, setMounted] = useState(false);
-  const [openSubMenus, setOpenSubMenus] = useState<Record<string, boolean>>({
-    'Commercial': true,
-  });
+  const [openSubMenus, setOpenSubMenus] = useState<Record<string, boolean>>({});
 
   useEffect(() => { setMounted(true); }, []);
   if (!mounted) return null;

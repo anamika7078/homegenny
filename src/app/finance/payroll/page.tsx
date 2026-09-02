@@ -2,17 +2,15 @@
 
 import React, { useState } from 'react';
 import {
-  BarChart2, PlayCircle, Layers, UserCheck, Clock, History, Building2, ShieldCheck,
+  BarChart2, PlayCircle, Clock, History, Building2, ShieldCheck,
 } from 'lucide-react';
 import { PayrollDashboardTab } from './components/payroll-dashboard-tab';
 import { ProcessingPipelineTab } from './components/processing-pipeline-tab';
-import { SalaryStructureTab } from './components/salary-structure-tab';
-import { EmployeeSalaryTab } from './components/employee-salary-tab';
 import { AttendanceIntegrationTab } from './components/attendance-integration-tab';
 import { LegacyDisbursementTab } from './components/legacy-disbursement-tab';
 
 export default function EnterpriseFinancePayrollPage() {
-  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'PIPELINE' | 'STRUCTURES' | 'EMPLOYEES' | 'INTEGRATION' | 'LEGACY'>('DASHBOARD');
+  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'PIPELINE' | 'INTEGRATION' | 'LEGACY'>('DASHBOARD');
 
   return (
     <div className="page-padding space-y-6 min-h-screen bg-[#0b101b] text-white">
@@ -25,13 +23,13 @@ export default function EnterpriseFinancePayrollPage() {
           <div className="space-y-2 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold tracking-wide uppercase">
               <ShieldCheck className="w-3.5 h-3.5" />
-              Enterprise Clean Architecture · HR & Finance Synchronized
+              Placement Payroll · HR & Finance Synchronized
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Enterprise Payroll & Statutory Management
+              Payroll & Statutory Management
             </h1>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Automated 10-step salary calculation pipeline with multi-tier approvals (Level 1 HR → Level 2 Finance → Level 3 Admin), attendance proration, overtime evaluations, statutory compliance (PF, ESIC, PT, TDS), loan recovery, and direct bank transfer exports.
+              Staff placed with a client are paid from their own attendance, with statutory compliance (PF, ESIC, PT, TDS) applied per person. Each client then receives a single monthly invoice listing every staff member placed with them.
             </p>
           </div>
 
@@ -44,11 +42,11 @@ export default function EnterpriseFinancePayrollPage() {
               Run Batch Pipeline
             </button>
             <button
-              onClick={() => setActiveTab('STRUCTURES')}
+              onClick={() => setActiveTab('LEGACY')}
               className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-semibold text-sm border border-white/10 transition"
             >
-              <Layers className="w-4 h-4 text-indigo-400" />
-              Salary Templates
+              <History className="w-4 h-4 text-emerald-400" />
+              Placement Payroll
             </button>
           </div>
         </div>
@@ -78,27 +76,14 @@ export default function EnterpriseFinancePayrollPage() {
           10-Step Processing Pipeline
         </button>
 
-        <button
-          onClick={() => setActiveTab('STRUCTURES')}
-          className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-sm whitespace-nowrap transition
-            ${activeTab === 'STRUCTURES'
-              ? 'bg-gradient-to-r from-indigo-600/20 to-purple-600/20 text-indigo-400 border border-indigo-500/30 shadow-lg shadow-indigo-950/50'
-              : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-        >
-          <Layers className="w-4 h-4" />
-          Salary Structures
-        </button>
-
-        <button
-          onClick={() => setActiveTab('EMPLOYEES')}
-          className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-sm whitespace-nowrap transition
-            ${activeTab === 'EMPLOYEES'
-              ? 'bg-gradient-to-r from-indigo-600/20 to-purple-600/20 text-indigo-400 border border-indigo-500/30 shadow-lg shadow-indigo-950/50'
-              : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-        >
-          <UserCheck className="w-4 h-4" />
-          Employee Salaries & Bank
-        </button>
+        {/*
+          "Salary Structures" and "Employee Salaries & Bank" used to sit here.
+          They belong to a company with internal salaried departments — their
+          own dashboard named Engineering and Sales & Marketing. HomeGenny has
+          one kind of staff: the person RM places with a client. Those tabs also
+          depend on 17 tables that were never deployed to production, which is
+          why they returned 500. See ONE_STAFF_MODEL_PLAN.md §F1.
+        */}
 
         <button
           onClick={() => setActiveTab('INTEGRATION')}
@@ -111,15 +96,22 @@ export default function EnterpriseFinancePayrollPage() {
           Attendance & Statutory Logs
         </button>
 
+        {/*
+          Not "legacy" — this is the payroll this business actually runs. Every
+          staff member is placed with a client and paid from their attendance,
+          and the client invoice is built from these records. It was styled as
+          deprecated while the enterprise batch tabs took top billing, which had
+          it exactly backwards.
+        */}
         <button
           onClick={() => setActiveTab('LEGACY')}
           className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-sm whitespace-nowrap transition
             ${activeTab === 'LEGACY'
-              ? 'bg-white/10 text-white border border-white/20'
-              : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+              ? 'bg-gradient-to-r from-emerald-600/20 to-teal-600/20 text-emerald-400 border border-emerald-500/30 shadow-lg shadow-emerald-950/50'
+              : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
         >
           <History className="w-4 h-4" />
-          Legacy Placement Payroll
+          Placement Payroll
         </button>
       </div>
 
@@ -127,8 +119,6 @@ export default function EnterpriseFinancePayrollPage() {
       <div className="pt-2">
         {activeTab === 'DASHBOARD' && <PayrollDashboardTab />}
         {activeTab === 'PIPELINE' && <ProcessingPipelineTab />}
-        {activeTab === 'STRUCTURES' && <SalaryStructureTab />}
-        {activeTab === 'EMPLOYEES' && <EmployeeSalaryTab />}
         {activeTab === 'INTEGRATION' && <AttendanceIntegrationTab />}
         {activeTab === 'LEGACY' && <LegacyDisbursementTab />}
       </div>

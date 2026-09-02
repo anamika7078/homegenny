@@ -194,12 +194,17 @@ export default function HrEmployeesPage() {
             <DollarSign className="h-4 w-4 text-emerald-400" />
             Salary Slips
           </Link>
+          {/*
+            Onboarding, not a blank create form: an employee is a pipeline
+            candidate who reached S5_DEPLOY, so the first step is choosing that
+            person. See ONE_STAFF_MODEL_PLAN.md §F4.
+          */}
           <Link
-            href="/hr/employees/create"
+            href="/hr/onboarding"
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             <Plus className="h-4 w-4" />
-            Add Employee
+            Onboard Employee
           </Link>
         </div>
       </div>

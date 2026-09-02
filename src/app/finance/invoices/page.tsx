@@ -196,8 +196,10 @@ function GenerateInvoiceModal({
               <Receipt className="w-4 h-4 text-emerald-400" />
             </div>
             <div>
-              <h2 className="text-white font-semibold text-sm">Generate Invoice from Salary Slip</h2>
-              <p className="text-slate-500 text-xs">Attendance-based payroll → client invoice</p>
+              <h2 className="text-white font-semibold text-sm">Run Payroll for One Staff Member</h2>
+              <p className="text-slate-500 text-xs">
+                Attendance → payroll → added to their client&apos;s invoice for the month
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/8 text-slate-400 hover:text-white transition">
@@ -389,12 +391,16 @@ function GenerateInvoiceModal({
               {alreadyGenerated && (
                 <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-950/40 border border-amber-500/20 rounded-xl">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  {/*
+                    Keyed off payroll, not the invoice: the duplicate guard the
+                    backend enforces is one payroll run per placement per
+                    period, since a consolidated invoice covers a whole client.
+                  */}
                   <span className="text-xs text-amber-300">
-                    {preview.type === 'EMPLOYEE' ? (
-                      <>Payroll record already exists for this period.</>
-                    ) : (
-                      <>Invoice <strong>{preview.invoice_number}</strong> already exists for this period.</>
-                    )}
+                    Payroll has already been run for this person in this period.
+                    {preview.invoice_number ? (
+                      <> It is on the client&apos;s invoice <strong>{preview.invoice_number}</strong>.</>
+                    ) : null}
                   </span>
                 </div>
               )}
@@ -407,9 +413,24 @@ function GenerateInvoiceModal({
               <div className="w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center">
                 <CheckCircle2 className="w-6 h-6 text-emerald-400" />
               </div>
+              {/*
+                The invoice number shown is the *client's* invoice for the
+                month, which this staff member has just been added to — it is
+                not an invoice for this person alone. See §F3.
+              */}
               <div className="text-center">
-                <p className="text-white font-semibold">Invoice Generated!</p>
-                {invoiceNo && <p className="text-slate-400 text-sm mt-0.5">Invoice # <strong className="text-white">{invoiceNo}</strong></p>}
+                <p className="text-white font-semibold">Payroll recorded</p>
+                {invoiceNo ? (
+                  <p className="text-slate-400 text-sm mt-1">
+                    Added to the client&apos;s invoice{' '}
+                    <strong className="text-white">{invoiceNo}</strong> for this month.
+                  </p>
+                ) : (
+                  <p className="text-slate-400 text-sm mt-1 max-w-xs">
+                    The client&apos;s invoice was not updated — it may already have been
+                    sent. Check Month-end Invoicing.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -432,7 +453,7 @@ function GenerateInvoiceModal({
               className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold disabled:opacity-50 transition flex items-center gap-2"
             >
               {generateLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Receipt className="w-3.5 h-3.5" />}
-              Generate Invoice
+              Run Payroll
             </button>
           )}
 
@@ -629,9 +650,12 @@ export default function InvoicesPage() {
                 <span className="text-slate-400">Client</span>
                 <span className="text-white font-medium">{selected.client_name ?? selected.client_id}</span>
               </div>
+              {/* The line items below name every staff member on the invoice. */}
               <div className="flex justify-between py-2 border-b border-white/5">
-                <span className="text-slate-400">Staff</span>
-                <span className="text-white">{selected.staff_name ?? '—'}</span>
+                <span className="text-slate-400">Staff billed</span>
+                <span className="text-white">
+                  {selected.staff_name ?? `${selected.staff_count ?? 0} staff`}
+                </span>
               </div>
               <div className="flex justify-between py-2 border-b border-white/5">
                 <span className="text-slate-400">Period</span>
@@ -702,7 +726,7 @@ export default function InvoicesPage() {
       {showGenerate && (
         <GenerateInvoiceModal
           onClose={() => setShowGenerate(false)}
-          onGenerated={() => { setShowGenerate(false); load(); showToast('success', 'Invoice generated successfully!'); }}
+          onGenerated={() => { setShowGenerate(false); load(); showToast('success', "Payroll recorded and added to the client's invoice"); }}
         />
       )}
 
@@ -782,26 +806,32 @@ export default function InvoicesPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Invoice Generation</h1>
-          <p className="text-sm text-slate-400 mt-0.5">GST-compliant client invoices · EOR billing</p>
+          <h1 className="text-2xl font-bold text-white">Client Invoices</h1>
+          <p className="text-sm text-slate-400 mt-0.5">
+            One invoice per client per month · every staff member placed with them appears as a line item
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* One invoice per customer per month, rather than one per
-              placement — see F-15. */}
+          {/*
+            Month-end invoicing is the primary action, and per-staff payroll the
+            secondary one — the reverse of how this header used to read. An
+            invoice belongs to a client, not to a placement. See
+            ONE_STAFF_MODEL_PLAN.md §F3.
+          */}
           <Link
             href="/finance/invoices/consolidated"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm font-semibold transition"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition"
           >
             <Layers className="w-4 h-4" />
-            Month-end Consolidated
+            Month-end Invoicing
           </Link>
           <button
             id="btn-generate-invoice-open"
             onClick={() => setShowGenerate(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm font-semibold transition"
           >
             <Plus className="w-4 h-4" />
-            Generate Invoice
+            Run Staff Payroll
           </button>
           <button
             id="btn-refresh-invoices"
@@ -873,7 +903,7 @@ export default function InvoicesPage() {
                 <tr className="border-b border-white/5 text-[11px] text-slate-400 uppercase tracking-wider">
                   <th className="px-5 py-3 text-left">Invoice #</th>
                   <th className="px-4 py-3 text-left">Client</th>
-                  <th className="px-4 py-3 text-left">Staff</th>
+                  <th className="px-4 py-3 text-left">Staff billed</th>
                   <th className="px-4 py-3 text-center">Period</th>
                   <th className="px-4 py-3 text-right">Salary</th>
                   <th className="px-4 py-3 text-right">Fee + GST</th>
@@ -897,9 +927,25 @@ export default function InvoicesPage() {
                     <tr key={inv.id} className={`border-b border-white/5 hover:bg-white/2 transition ${overdue ? 'bg-red-500/3' : ''}`}>
                       <td className="px-5 py-3 font-mono text-xs text-slate-300">{inv.invoice_number}</td>
                       <td className="px-4 py-3 text-white">{inv.client_name ?? inv.client_id?.slice(0, 8)}</td>
+                      {/*
+                        A consolidated invoice bills a whole client, so it says
+                        how many people are on it. Only a legacy per-placement
+                        invoice names one person. See §F3.
+                      */}
                       <td className="px-4 py-3">
-                        <p className="text-white text-xs">{inv.staff_name ?? '—'}</p>
-                        {inv.staff_code && <p className="text-[10px] text-slate-500">{inv.staff_code}</p>}
+                        {inv.staff_name ? (
+                          <>
+                            <p className="text-white text-xs">{inv.staff_name}</p>
+                            {inv.staff_code && <p className="text-[10px] text-slate-500">{inv.staff_code}</p>}
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-white text-xs">
+                              {inv.staff_count ?? 0} staff
+                            </p>
+                            <p className="text-[10px] text-slate-500">on this invoice</p>
+                          </>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-center text-slate-400">{MONTHS_SHORT[inv.period_month - 1]} {inv.period_year}</td>
                       <td className="px-4 py-3 text-right text-slate-300">{fmtRs(inv.staff_salary_component)}</td>

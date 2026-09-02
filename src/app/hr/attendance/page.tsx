@@ -329,13 +329,13 @@ export default function HrAttendancePage() {
         <div className="rounded-2xl border border-white/10 bg-background/40 p-12 text-center">
           <Users className="mx-auto h-10 w-10 text-secondary-foreground/40 mb-3" />
           <p className="text-secondary-foreground text-sm mb-4">
-            No active employees found. Add employees first, then mark attendance.
+            No active employees found. Onboard a deployed candidate first, then mark attendance.
           </p>
           <Link
-            href="/hr/employees/create"
+            href="/hr/onboarding"
             className="inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
           >
-            Add Employee
+            Onboard Employee
           </Link>
         </div>
       ) : (

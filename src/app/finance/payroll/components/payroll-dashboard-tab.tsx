@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
 import {
   Loader2, DollarSign, Users, ShieldAlert,
-  TrendingUp, Building2, Calendar, CheckCircle2, AlertCircle, Clock,
+  Building2, Calendar, CheckCircle2, AlertCircle, Clock,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -19,6 +19,7 @@ const COLORS = ['#10B981', '#6366F1', '#F59E0B', '#EC4899', '#8B5CF6'];
 
 export function PayrollDashboardTab() {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<any>(null);
   const [deptData, setDeptData] = useState<any[]>([]);
   const [statutory, setStatutory] = useState<any>(null);
@@ -26,40 +27,38 @@ export function PayrollDashboardTab() {
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const now = new Date();
       const month = now.getMonth() + 1;
       const year = now.getFullYear();
 
+      // These used to be wrapped in `.catch(() => null)` with hardcoded
+      // fallbacks below — ₹12,45,000 gross across 42 employees — so a failing
+      // API produced a plausible, entirely fictional report. Finance reads
+      // this screen; a wrong number here is worse than no number.
       const [sumRes, deptRes, statRes, batchesRes] = await Promise.all([
-        api.getEnterprisePayrollSummary({ month, year }).catch(() => null),
-        api.getDepartmentPayrollBreakdown({ month, year }).catch(() => []),
-        api.getStatutoryComplianceReport({ month, year }).catch(() => null),
-        api.listEnterpriseBatches({ limit: 5 }).catch(() => []),
+        api.getEnterprisePayrollSummary({ month, year }),
+        api.getDepartmentPayrollBreakdown({ month, year }),
+        api.getStatutoryComplianceReport({ month, year }),
+        api.listEnterpriseBatches({ limit: 5 }),
       ]);
 
-      const sumObj = sumRes?.data ?? sumRes ?? {
-        kpis: { totalGross: 1245000, totalNet: 1085000, totalDeductions: 160000, totalEmployees: 42, batchCount: 3 },
-      };
-      setSummary(sumObj);
+      setSummary(sumRes?.data ?? sumRes ?? null);
 
-      const deptArr = Array.isArray(deptRes?.data ?? deptRes) ? (deptRes?.data ?? deptRes) : [
-        { department: 'Engineering', gross: 520000, net: 460000, deductions: 60000 },
-        { department: 'Operations', gross: 340000, net: 295000, deductions: 45000 },
-        { department: 'Sales & Marketing', gross: 225000, net: 195000, deductions: 30000 },
-        { department: 'Human Resources', gross: 160000, net: 135000, deductions: 25000 },
-      ];
-      setDeptData(deptArr);
+      const deptArr = deptRes?.data ?? deptRes;
+      setDeptData(Array.isArray(deptArr) ? deptArr : []);
 
-      const statObj = statRes?.data ?? statRes ?? {
-        complianceTotals: { providentFund: 84000, esic: 18500, professionalTax: 8400, tds: 49100, totalStatutoryDeduction: 160000 },
-      };
-      setStatutory(statObj);
+      setStatutory(statRes?.data ?? statRes ?? null);
 
-      const batchesArr = Array.isArray(batchesRes?.data ?? batchesRes) ? (batchesRes?.data ?? batchesRes) : [];
-      setRecentBatches(batchesArr);
-    } catch {
-      // Fallback displayed if API fails
+      const batchesArr = batchesRes?.data ?? batchesRes;
+      setRecentBatches(Array.isArray(batchesArr) ? batchesArr : []);
+    } catch (e: unknown) {
+      setError((e as Error)?.message || 'Could not load payroll analytics.');
+      setSummary(null);
+      setDeptData([]);
+      setStatutory(null);
+      setRecentBatches([]);
     } finally {
       setLoading(false);
     }
@@ -78,19 +77,54 @@ export function PayrollDashboardTab() {
     );
   }
 
-  const kpis = summary?.kpis ?? { totalGross: 0, totalNet: 0, totalDeductions: 0, totalEmployees: 0 };
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-rose-500/20 bg-rose-500/5 py-20 px-6 text-center">
+        <AlertCircle className="w-8 h-8 text-rose-400" />
+        <p className="text-sm font-semibold text-rose-200">Could not load payroll analytics</p>
+        <p className="max-w-md text-xs text-slate-400">{error}</p>
+        <button
+          onClick={loadData}
+          className="mt-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-slate-200 hover:bg-white/10"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  const kpis = summary?.kpis;
+
+  // No batch has been processed for this period. Saying so is the honest
+  // answer — this screen used to invent figures when it had none.
+  if (!kpis) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] py-20 px-6 text-center">
+        <Calendar className="w-8 h-8 text-slate-500" />
+        <p className="text-sm font-semibold text-slate-200">No payroll data for this period</p>
+        <p className="max-w-md text-xs text-slate-400">
+          Nothing has been processed yet. Run a batch from the
+          <span className="text-slate-300"> 10-Step Processing Pipeline </span>
+          tab, and the figures will appear here.
+        </p>
+      </div>
+    );
+  }
+
   const statTotals = statutory?.complianceTotals ?? {
     providentFund: 0, esic: 0, professionalTax: 0, tds: 0,
     totalStatutoryDeduction: 0, providentFundEmployer: 0, esicEmployer: 0,
     totalEmployerContribution: 0, totalStatutoryLiability: 0,
   };
 
+  // `|| 1` used to be padded in here so every slice drew even when the real
+  // figure was zero — a zero deduction should read as zero, not as a sliver.
   const pieData = [
-    { name: 'Provident Fund (PF)', value: statTotals.providentFund || 1 },
-    { name: 'TDS (Income Tax)', value: statTotals.tds || 1 },
-    { name: 'ESIC Contribution', value: statTotals.esic || 1 },
-    { name: 'Professional Tax (PT)', value: statTotals.professionalTax || 1 },
-  ];
+    { name: 'Provident Fund (PF)', value: Number(statTotals.providentFund) || 0 },
+    { name: 'TDS (Income Tax)', value: Number(statTotals.tds) || 0 },
+    { name: 'ESIC Contribution', value: Number(statTotals.esic) || 0 },
+    { name: 'Professional Tax (PT)', value: Number(statTotals.professionalTax) || 0 },
+  ].filter((d) => d.value > 0);
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -104,9 +138,9 @@ export function PayrollDashboardTab() {
             </div>
           </div>
           <p className="mt-3 text-2xl font-extrabold text-white tracking-tight">{fmtRs(kpis.totalGross)}</p>
-          <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>+4.2% from previous month</span>
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+            <Calendar className="w-3.5 h-3.5" />
+            <span>{kpis.batchCount ?? 0} batch(es) this period</span>
           </div>
         </div>
 
