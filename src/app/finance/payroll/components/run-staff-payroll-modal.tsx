@@ -139,7 +139,7 @@ export function RunStaffPayrollModal({
       setStep('done');
       onGenerated();
     } catch (e: any) {
-      setError(e.message ?? 'Invoice generation failed');
+      setError(e.message ?? 'Could not run payroll');
     } finally {
       setGenerateLoading(false);
     }
@@ -166,7 +166,7 @@ export function RunStaffPayrollModal({
             <div>
               <h2 className="text-white font-semibold text-sm">Run Payroll for One Staff Member</h2>
               <p className="text-slate-500 text-xs">
-                Attendance → payroll → added to their client&apos;s invoice for the month
+                Attendance → payroll. The client&apos;s invoice is raised separately, from their unit code.
               </p>
             </div>
           </div>
