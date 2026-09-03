@@ -183,7 +183,12 @@ export interface ApiClient {
     designation: string;
     categoryId: string;
     employmentType: string;
-    salary: number;
+    /**
+     * Normally left out. A placed staff member's pay is settled by the RM on
+     * the placement — per client, and per hour for a temporary one — and the
+     * server reads it from there. Pass it only for someone with no placement.
+     */
+    salary?: number;
     joiningDate: string;
     gender: string;
     city?: string;

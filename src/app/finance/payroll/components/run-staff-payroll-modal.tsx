@@ -15,8 +15,9 @@ import React, { useCallback, useState } from 'react';
 import { api } from '@/lib/api/client';
 import {
   Loader2, Search, User, Calculator, X, ChevronRight,
-  Receipt, Eye, CheckCircle2, AlertTriangle, RefreshCw,
+  Receipt, Eye, CheckCircle2, AlertTriangle, RefreshCw, ArrowRight,
 } from 'lucide-react';
+import Link from 'next/link';
 import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 
 const MONTHS = [
@@ -132,12 +133,8 @@ export function RunStaffPayrollModal({
     try {
       const res = await api.generateFinanceAttendancePayroll(code, month, year);
       const data = (res as any)?.data ?? res;
-      setInvoiceId(data.invoice_id ?? null);
-      setInvoiceNo(data.invoice_number ?? null);
-      // Payroll can succeed while the invoice cannot be touched — an already
-      // sent invoice, for one. Say so, rather than showing a success with no
-      // invoice on it and leaving the reason in a server log.
-      setNotInvoiced(data.invoice_id ? null : (data.not_invoiced_because ?? null));
+      // Payroll returns no invoice — billing is raised separately, from the
+      // client's unit code on the Invoices screen.
       setRuns(Array.isArray(data.runs) && data.runs.length > 1 ? data.runs : null);
       setStep('done');
       onGenerated();
@@ -433,46 +430,42 @@ export function RunStaffPayrollModal({
                 <CheckCircle2 className="w-6 h-6 text-emerald-400" />
               </div>
               {/*
-                The invoice number shown is the *client's* invoice for the
-                month, which this staff member has just been added to — it is
-                not an invoice for this person alone. See §F3.
+                Payroll no longer issues an invoice. It works out what is owed;
+                billing is a separate, deliberate act on the Invoices screen,
+                so nothing goes out to a client as a side effect of this button.
               */}
               <div className="text-center">
                 <p className="text-white font-semibold">Payroll recorded</p>
-                {/* Several houses in one press — say which, and on whose
-                    invoice each landed. */}
-                {runs ? (
+
+                {/* Several houses in one press — say which. */}
+                {runs && (
                   <div className="mt-2 w-full max-w-sm rounded-xl border border-white/10 overflow-hidden text-left">
                     {runs.map((r: any) => (
                       <div key={r.placement_id} className="px-4 py-2 border-b border-white/5 last:border-b-0">
                         <p className="text-xs text-white">{r.client_name ?? 'Unknown client'}</p>
                         <p className="text-[10px] text-slate-500">
-                          {r.invoice_number
-                            ? `on invoice ${r.invoice_number}`
-                            : (r.not_invoiced_because ?? 'not billed')}
+                          {r.placement_type === 'TEMPORARY' ? 'hourly' : 'permanent'} · ready to bill
                         </p>
                       </div>
                     ))}
                   </div>
-                ) : invoiceNo ? (
-                  <p className="text-slate-400 text-sm mt-1">
-                    Added to the client&apos;s invoice{' '}
-                    <strong className="text-white">{invoiceNo}</strong> for this month.
-                  </p>
-                ) : (
-                  <div className="mt-2 max-w-sm rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3">
-                    <p className="text-amber-400 text-sm font-semibold">
-                      The client&apos;s invoice was not updated
-                    </p>
-                    <p className="text-slate-400 text-xs mt-1">
-                      {notInvoiced ?? 'The invoice may already have been sent.'}
-                    </p>
-                    <p className="text-slate-500 text-xs mt-1.5">
-                      The payroll is recorded either way. Find the client on the Invoices
-                      screen by their unit code to bill it.
-                    </p>
-                  </div>
                 )}
+
+                <div className="mt-3 max-w-sm rounded-xl border border-white/10 bg-white/3 px-4 py-3 text-left">
+                  <p className="text-slate-300 text-xs">
+                    No invoice has been raised. Open <strong className="text-white">Invoices</strong>,
+                    enter the client&apos;s unit code and press{' '}
+                    <strong className="text-white">Create invoice</strong> — it arrives as a draft
+                    for you to check before it goes anywhere.
+                  </p>
+                  <Link
+                    href="/finance/invoices"
+                    className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold text-emerald-400 hover:text-emerald-300"
+                  >
+                    Go to Invoices
+                    <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
               </div>
             </div>
           )}

@@ -21,7 +21,6 @@ const EMPTY_FORM = {
   designation: '',
   categoryId: '',
   employmentType: 'Full Time',
-  salary: '',
   joiningDate: todayIso(),
   gender: 'Female',
   city: '',
@@ -74,8 +73,8 @@ export default function HrOnboardingPage() {
     if (!selected) return;
     const missing = (['department', 'designation', 'categoryId', 'employmentType', 'joiningDate', 'gender'] as const)
       .filter((k) => !form[k]);
-    if (missing.length || !form.salary) {
-      toast.error(`Please fill: ${[...missing, ...(form.salary ? [] : ['salary'])].join(', ')}`);
+    if (missing.length) {
+      toast.error(`Please fill: ${missing.join(', ')}`);
       return;
     }
     setSaving(true);
@@ -86,7 +85,6 @@ export default function HrOnboardingPage() {
         designation: form.designation.trim(),
         categoryId: form.categoryId,
         employmentType: form.employmentType,
-        salary: Number(form.salary),
         joiningDate: form.joiningDate,
         gender: form.gender,
         city: form.city.trim() || undefined,
@@ -202,16 +200,13 @@ export default function HrOnboardingPage() {
                 </select>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-white">Monthly salary (₹) *</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={form.salary}
-                  onChange={(e) => setForm((s) => ({ ...s, salary: e.target.value }))}
-                  className="w-full rounded-xl border border-white/10 bg-background px-3 py-2 text-sm text-white"
-                />
-              </div>
+              {/*
+                No salary field. What a placed staff member is paid was settled
+                by the RM on the placement — per client, and per hour for a
+                temporary one — so asking HR for a second figure here would only
+                produce a number that disagrees with the one actually billed.
+                The server reads it off the active placement.
+              */}
 
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-white">Joining date *</label>
