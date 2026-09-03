@@ -340,14 +340,15 @@ function NewPlacementModal({
   onCreate,
   creating,
   initialStaffId,
-  activeStaffIds,
+  activePairs,
 }: {
   onClose: () => void;
   onCreate: (body: Record<string, unknown>) => Promise<void>;
   creating: boolean;
   initialStaffId?: string | null;
-  /** staff_ids that already have a TRIAL/CONFIRMED placement — must exit that one first. */
-  activeStaffIds: Set<string>;
+  /** "staffId::clientId" for every TRIAL/CONFIRMED placement — one staff member
+   *  may work at many clients, but not twice at the same one. */
+  activePairs: Set<string>;
 }) {
   const { data: kanban } = useRmKanban();
   const [staffSearch, setStaffSearch] = useState('');
@@ -358,6 +359,13 @@ function NewPlacementModal({
   const [fee, setFee] = useState('');
   const [mode, setMode] = useState<'simple' | 'detailed'>('simple');
   const [wageResult, setWageResult] = useState<{ staffSalary: number; managementFee: number } | null>(null);
+  // How this placement is paid. PERMANENT holds the client's whole shift and is
+  // billed monthly; TEMPORARY is billed on the hours actually worked there, and
+  // the same staff member can carry a different rate at each client.
+  const [placementType, setPlacementType] = useState<'PERMANENT' | 'TEMPORARY'>('PERMANENT');
+  const [shiftHours, setShiftHours] = useState<'8' | '12'>('8');
+  const [hourlyRate, setHourlyRate] = useState('');
+  const [hourlyFee, setHourlyFee] = useState('');
 
   // Only staff at S5-Deploy are eligible — the backend itself doesn't gate this (any staff at
   // any stage would be silently accepted by POST /placements), so this filter is the only place
@@ -366,14 +374,21 @@ function NewPlacementModal({
   // stays in the S5_DEPLOY kanban column even after being placed (pipeline_stage and placement
   // status are tracked separately), so without this a duplicate placement could be created for
   // someone already deployed. They must be exited from their current placement first.
-  const s5Staff: any[] = (kanban?.columns?.S5_DEPLOY ?? []).filter((s: any) => !activeStaffIds.has(s.id));
+  // Filtered against the chosen client, so the list only hides someone who is
+  // already working at *that* house. Before a client is picked, everyone at
+  // S5-Deploy is on offer.
+  const s5Staff: any[] = (kanban?.columns?.S5_DEPLOY ?? []).filter(
+    (s: any) => !selectedClient || !activePairs.has(`${s.id}::${selectedClient.id}`),
+  );
   const filteredStaff = useMemo(() => {
     if (!staffSearch) return s5Staff;
     const q = staffSearch.toLowerCase();
     return s5Staff.filter((s) => s.full_name?.toLowerCase().includes(q) || s.staff_code?.toLowerCase().includes(q));
   }, [s5Staff, staffSearch]);
 
-  const initialStaffAlreadyPlaced = Boolean(initialStaffId && activeStaffIds.has(initialStaffId));
+  const initialStaffAlreadyPlaced = Boolean(
+    initialStaffId && selectedClient && activePairs.has(`${initialStaffId}::${selectedClient.id}`),
+  );
 
   // Arrived here from a specific staff's Deployment CTA (mirrors the mobile app's S5
   // Deploy hub, which jumps straight to client selection for that staff instead of
@@ -389,17 +404,30 @@ function NewPlacementModal({
     queryFn: () => api.listFinanceCustomers(clientSearch || undefined),
   });
 
+  const isHourly = placementType === 'TEMPORARY';
   const effectiveSalary = mode === 'detailed' ? wageResult?.staffSalary : Number(salary) || undefined;
   const effectiveFee = mode === 'detailed' ? wageResult?.managementFee : Number(fee) || undefined;
-  const canSubmit = Boolean(selectedStaff && selectedClient && effectiveSalary && effectiveFee);
+  const rateNum = Number(hourlyRate) || undefined;
+  const feePerHourNum = Number(hourlyFee) || undefined;
+
+  const canSubmit = Boolean(
+    selectedStaff && selectedClient &&
+    (isHourly ? rateNum && feePerHourNum : effectiveSalary && effectiveFee),
+  );
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     await onCreate({
       staff_id: selectedStaff.id,
       client_id: selectedClient.id,
-      staff_salary: effectiveSalary,
-      management_fee: effectiveFee,
+      placement_type: placementType,
+      ...(isHourly
+        ? { hourly_rate: rateNum, hourly_fee: feePerHourNum }
+        : {
+            staff_salary: effectiveSalary,
+            management_fee: effectiveFee,
+            shift_hours: Number(shiftHours),
+          }),
     });
   };
 
@@ -499,21 +527,105 @@ function NewPlacementModal({
           )}
         </div>
 
-        <div className="flex gap-1 p-1 rounded-lg bg-white/5 border border-white/8 w-fit">
-          {(['simple', 'detailed'] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all capitalize ${
-                mode === m ? 'bg-[#FF5A1F] text-white shadow' : 'text-[#8D9AB5] hover:text-white'
-              }`}
-            >
-              {m}
-            </button>
-          ))}
+        {/* How this placement is paid — everything below follows from it. */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-[#8D9AB5]">How is this placement paid?</label>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              { id: 'PERMANENT', title: 'Permanent', blurb: 'Holds this client’s full shift. Paid a monthly salary.' },
+              { id: 'TEMPORARY', title: 'Hourly', blurb: 'Works a few hours here. Paid for the hours worked.' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.id}
+                id={`btn-placement-type-${opt.id.toLowerCase()}`}
+                onClick={() => setPlacementType(opt.id)}
+                className={`text-left px-3 py-2.5 rounded-lg border transition-colors ${
+                  placementType === opt.id
+                    ? 'bg-[#FF5A1F]/10 border-[#FF5A1F]/50'
+                    : 'bg-white/5 border-white/10 hover:border-white/20'
+                }`}
+              >
+                <p className={`text-xs font-bold ${placementType === opt.id ? 'text-[#FF5A1F]' : 'text-[#E8EDF8]'}`}>
+                  {opt.title}
+                </p>
+                <p className="text-[10px] text-[#8D9AB5] mt-0.5 leading-snug">{opt.blurb}</p>
+              </button>
+            ))}
+          </div>
+          {isHourly && (
+            <p className="text-[10px] text-[#8D9AB5]">
+              The rate is per client — the same staff member can be worth a different rate at the next house.
+            </p>
+          )}
         </div>
 
-        {mode === 'simple' ? (
+        {isHourly ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[#8D9AB5]">Staff rate (₹/hour)</label>
+              <input
+                id="input-hourly-rate"
+                type="number"
+                min="0"
+                value={hourlyRate}
+                onChange={(e) => setHourlyRate(e.target.value)}
+                placeholder="150"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#E8EDF8] focus:outline-none focus:border-[#FF5A1F]/50"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[#8D9AB5]">Our fee (₹/hour)</label>
+              <input
+                id="input-hourly-fee"
+                type="number"
+                min="0"
+                value={hourlyFee}
+                onChange={(e) => setHourlyFee(e.target.value)}
+                placeholder="30"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#E8EDF8] focus:outline-none focus:border-[#FF5A1F]/50"
+              />
+            </div>
+            {rateNum && feePerHourNum ? (
+              <p className="col-span-2 text-[11px] text-[#8D9AB5]">
+                A 4-hour day bills this client{' '}
+                <span className="text-[#E8EDF8] font-semibold">
+                  ₹{(4 * (rateNum + feePerHourNum)).toLocaleString('en-IN')}
+                </span>{' '}
+                before statutory and GST. The invoice is raised on attendance.
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex gap-1 p-1 rounded-lg bg-white/5 border border-white/8 w-fit">
+                {(['simple', 'detailed'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all capitalize ${
+                      mode === m ? 'bg-[#FF5A1F] text-white shadow' : 'text-[#8D9AB5] hover:text-white'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-[#8D9AB5]">Shift</label>
+                <select
+                  id="select-shift-hours"
+                  value={shiftHours}
+                  onChange={(e) => setShiftHours(e.target.value as '8' | '12')}
+                  className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#E8EDF8] focus:outline-none focus:border-[#FF5A1F]/50"
+                >
+                  <option value="8">8 hours</option>
+                  <option value="12">12 hours</option>
+                </select>
+              </div>
+            </div>
+
+            {mode === 'simple' ? (
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-[#8D9AB5]">Staff Salary (₹/mo)</label>
@@ -536,8 +648,10 @@ function NewPlacementModal({
               />
             </div>
           </div>
-        ) : (
-          <WageConfigForm onResult={(r) => setWageResult(r ? { staffSalary: r.staffSalary, managementFee: r.managementFee } : null)} />
+            ) : (
+              <WageConfigForm onResult={(r) => setWageResult(r ? { staffSalary: r.staffSalary, managementFee: r.managementFee } : null)} />
+            )}
+          </>
         )}
 
         <div className="flex gap-2 pt-2">
@@ -647,8 +761,17 @@ export default function PlacementsPage() {
     refetchInterval: 30_000,
   });
   const placements: Placement[] = data?.items ?? [];
-  const activeStaffIds = useMemo(
-    () => new Set(placements.filter((p) => p.status === 'TRIAL' || p.status === 'CONFIRMED').map((p) => p.staff_id)),
+  // Who is already working where. A maid does several houses in a day, so
+  // being placed somewhere no longer disqualifies her from being placed
+  // elsewhere — only from being placed twice at the *same* client. The
+  // backend enforces exactly that (placement.service §B1); this mirrors it
+  // rather than hiding staff the backend would happily accept.
+  const activePairs = useMemo(
+    () => new Set(
+      placements
+        .filter((p) => p.status === 'TRIAL' || p.status === 'CONFIRMED')
+        .map((p) => `${p.staff_id}::${p.client_id}`),
+    ),
     [placements],
   );
 
@@ -761,7 +884,7 @@ export default function PlacementsPage() {
           onCreate={(body) => createMutation.mutateAsync(body)}
           creating={createMutation.isPending}
           initialStaffId={staffIdParam}
-          activeStaffIds={activeStaffIds}
+          activePairs={activePairs}
         />
       )}
 

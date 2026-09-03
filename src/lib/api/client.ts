@@ -218,7 +218,14 @@ export interface ApiClient {
      * stands, rather than silently replacing it.
      */
     overrideSelfCheckIn?: boolean;
+    /** Which client's day this was. Required once the staff member works at
+     *  more than one — attendance decides whose invoice carries the day. */
+    placementId?: string;
+    /** What an hourly placement is billed on. */
+    hoursWorked?: number;
   }): Promise<any>;
+  /** One row per place a staff member works, for a given date. */
+  getAttendanceRoster(date: string, branchId?: string): Promise<any>;
   updateAttendance(
     id: string,
     body: { status?: string; notes?: string; checkIn?: string; checkOut?: string; overrideSelfCheckIn?: boolean },
@@ -362,6 +369,8 @@ export interface ApiClient {
   getPayoutReadiness(): Promise<any>;
   getStaffBankAccount(staffId: string): Promise<any>;
   getConsolidatedPending(month: number, year: number): Promise<any>;
+  /** A client, their placements and their invoice status, by the code Finance knows them by. */
+  getClientByUnitCode(unitCode: string, month: number, year: number): Promise<any>;
   getProfessionalTaxRules(): Promise<any>;
   getPfBaseImpact(): Promise<any>;
   listCreditNotes(clientId?: string): Promise<any>;
@@ -652,7 +661,15 @@ export const api: ApiClient = {
     notes?: string;
     overtimeHours?: number;
     overrideSelfCheckIn?: boolean;
+    /** Which client's day this was. Required once the staff member works at
+     *  more than one — attendance decides whose invoice carries the day. */
+    placementId?: string;
+    /** What an hourly placement is billed on. */
+    hoursWorked?: number;
   }) => apiClient.post(`/attendance/mark`, body),
+  /** One row per place a staff member works, for a given date. */
+  getAttendanceRoster: (date: string, branchId?: string) =>
+    apiClient.get('/attendance/roster', { params: { date, ...(branchId ? { branchId } : {}) } }),
   updateAttendance: (
     id: string,
     body: { status?: string; notes?: string; checkIn?: string; checkOut?: string; overrideSelfCheckIn?: boolean },
@@ -842,6 +859,10 @@ export const api: ApiClient = {
   getStaffBankAccount: (staffId: string) =>
     apiClient.get(`/finance/payroll/staff/${staffId}/bank-account`),
   // One invoice per customer per month, instead of one per placement (F-15).
+  getClientByUnitCode: (unitCode: string, month: number, year: number) =>
+    apiClient.get('/finance/invoices/by-unit-code', {
+      params: { unit_code: unitCode, month, year },
+    }),
   getConsolidatedPending: (month: number, year: number) =>
     apiClient.get('/finance/invoices/consolidated/pending', { params: { month, year } }),
 

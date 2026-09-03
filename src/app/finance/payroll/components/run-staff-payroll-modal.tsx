@@ -64,6 +64,9 @@ export function RunStaffPayrollModal({
   const [preview, setPreview] = useState<any>(null);
   const [invoiceId, setInvoiceId] = useState<string | null>(null);
   const [invoiceNo, setInvoiceNo] = useState<string | null>(null);
+  const [notInvoiced, setNotInvoiced] = useState<string | null>(null);
+  /** Set only when the run covered more than one client. */
+  const [runs, setRuns] = useState<any[] | null>(null);
 
   const [lookupLoading, setLookupLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -131,6 +134,11 @@ export function RunStaffPayrollModal({
       const data = (res as any)?.data ?? res;
       setInvoiceId(data.invoice_id ?? null);
       setInvoiceNo(data.invoice_number ?? null);
+      // Payroll can succeed while the invoice cannot be touched — an already
+      // sent invoice, for one. Say so, rather than showing a success with no
+      // invoice on it and leaving the reason in a server log.
+      setNotInvoiced(data.invoice_id ? null : (data.not_invoiced_because ?? null));
+      setRuns(Array.isArray(data.runs) && data.runs.length > 1 ? data.runs : null);
       setStep('done');
       onGenerated();
     } catch (e: any) {
@@ -283,6 +291,35 @@ export function RunStaffPayrollModal({
                 </button>
               </div>
 
+              {/*
+                A staff member working several houses is run for all of them in
+                one press, so the preview has to name them. Showing one house's
+                figures and then billing three is worse than no preview at all.
+              */}
+              {Array.isArray(preview.placements) && preview.placements.length > 1 && (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 overflow-hidden">
+                  <p className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-amber-400 border-b border-amber-500/15">
+                    Works at {preview.placements.length} clients — all are run together
+                  </p>
+                  {preview.placements.map((p: any) => (
+                    <div key={p.placement_id} className="px-4 py-2 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs text-white truncate">{p.client_name ?? 'Unknown client'}</p>
+                        <p className="text-[10px] text-slate-500">
+                          {p.placement_type === 'TEMPORARY'
+                            ? `${p.preview?.hours_worked ?? 0} hours`
+                            : `${p.preview?.billable_days ?? 0} days`}
+                          {p.already_run ? ' · already run' : ''}
+                        </p>
+                      </div>
+                      <span className="text-xs text-white font-semibold tabular-nums shrink-0">
+                        {fmtRs(p.preview?.prorated_gross ?? 0)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="bg-[#131c2e] border border-white/8 rounded-xl overflow-hidden">
                 {/* Attendance summary */}
                 <div className="px-4 py-2.5 border-b border-white/5 flex items-center justify-between">
@@ -402,16 +439,39 @@ export function RunStaffPayrollModal({
               */}
               <div className="text-center">
                 <p className="text-white font-semibold">Payroll recorded</p>
-                {invoiceNo ? (
+                {/* Several houses in one press — say which, and on whose
+                    invoice each landed. */}
+                {runs ? (
+                  <div className="mt-2 w-full max-w-sm rounded-xl border border-white/10 overflow-hidden text-left">
+                    {runs.map((r: any) => (
+                      <div key={r.placement_id} className="px-4 py-2 border-b border-white/5 last:border-b-0">
+                        <p className="text-xs text-white">{r.client_name ?? 'Unknown client'}</p>
+                        <p className="text-[10px] text-slate-500">
+                          {r.invoice_number
+                            ? `on invoice ${r.invoice_number}`
+                            : (r.not_invoiced_because ?? 'not billed')}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : invoiceNo ? (
                   <p className="text-slate-400 text-sm mt-1">
                     Added to the client&apos;s invoice{' '}
                     <strong className="text-white">{invoiceNo}</strong> for this month.
                   </p>
                 ) : (
-                  <p className="text-slate-400 text-sm mt-1 max-w-xs">
-                    The client&apos;s invoice was not updated — it may already have been
-                    sent. Check Month-end Invoicing.
-                  </p>
+                  <div className="mt-2 max-w-sm rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3">
+                    <p className="text-amber-400 text-sm font-semibold">
+                      The client&apos;s invoice was not updated
+                    </p>
+                    <p className="text-slate-400 text-xs mt-1">
+                      {notInvoiced ?? 'The invoice may already have been sent.'}
+                    </p>
+                    <p className="text-slate-500 text-xs mt-1.5">
+                      The payroll is recorded either way. Find the client on the Invoices
+                      screen by their unit code to bill it.
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

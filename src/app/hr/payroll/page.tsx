@@ -38,6 +38,18 @@ interface Slip {
   netSalary: number;
   status: string;
   invoiced: boolean;
+  /**
+   * The houses this month's pay came from, when it came from several. A maid
+   * working three clients is paid once, so she is one row here — this is what
+   * the one figure is made of.
+   */
+  clients?: {
+    clientName: string;
+    placementType: 'PERMANENT' | 'TEMPORARY';
+    worked: string;
+    grossSalary: number;
+    invoiced: boolean;
+  }[];
 }
 
 export default function HrSalarySlipsPage() {
@@ -188,7 +200,16 @@ export default function HrSalarySlipsPage() {
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.ref} className="border-b border-border/60 last:border-0">
-                    <td className="px-5 py-3 font-medium text-foreground">{r.staffName ?? '—'}</td>
+                    <td className="px-5 py-3">
+                      <p className="font-medium text-foreground">{r.staffName ?? '—'}</p>
+                      {/* One net figure, several houses behind it. Naming them
+                          stops the total reading as unexplained. */}
+                      {r.clients?.length ? (
+                        <p className="text-[11px] text-secondary-foreground mt-0.5">
+                          {r.clients.map((c) => `${c.clientName} (${c.worked})`).join(' · ')}
+                        </p>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs text-secondary-foreground">{r.employeeCode ?? '—'}</td>
                     <td className="px-4 py-3 text-center tabular-nums text-secondary-foreground">{r.presentDays}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-foreground">{fmtRs(r.grossSalary)}</td>

@@ -10,6 +10,7 @@ import Link from 'next/link';
 import axios from 'axios';
 import { BASE_URL, tokenStore } from '@/lib/api/client';
 import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
+import ClientLookup from './components/client-lookup';
 
 function fmt(n: number | string) {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(Number(n));
@@ -519,6 +520,16 @@ export default function InvoicesPage() {
           </button>
         </div>
       </div>
+
+      {/*
+        Bill a client by their unit code. This sits above the list because it
+        is the thing Finance comes here to do — the list below is the record of
+        what has already been done. See HOURLY_MULTI_CLIENT_PLAN.md §F1.
+      */}
+      <ClientLookup
+        onIssued={(msg) => { showToast('success', msg); load(); }}
+        onViewInvoice={handleDetail}
+      />
 
       {/* Tabs + Search */}
       <div className="flex items-center justify-between flex-wrap gap-3">

@@ -16,7 +16,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { unwrapData, unwrapItems } from '@/lib/hr/utils';
+import { unwrapData } from '@/lib/hr/utils';
 
 const STATUS_OPTIONS = [
   { value: 'Present', label: 'Present', icon: CheckCircle, tone: 'text-green-400' },
@@ -27,6 +27,30 @@ const STATUS_OPTIONS = [
 ] as const;
 
 type StatusValue = (typeof STATUS_OPTIONS)[number]['value'] | '';
+
+/** staff_daily_attendance stores its own short form; HR's select uses these. */
+const SAVED_TO_OPTION: Record<string, StatusValue> = {
+  PRESENT: 'Present',
+  HALF_DAY: 'Half Day',
+  LEAVE: 'Leave',
+  ABSENT: 'Absent',
+  OVERTIME: 'Present',
+};
+
+interface RosterRow {
+  placement_id: string;
+  placement_type: 'PERMANENT' | 'TEMPORARY';
+  shift_hours: number | null;
+  hourly_rate: number | null;
+  staff_name: string | null;
+  staff_code: string | null;
+  series: string | null;
+  client_name: string | null;
+  unit_code: string | null;
+  employee_id: string | null;
+  marked_status: string | null;
+  marked_hours: number | null;
+}
 
 function todayIso() {
   const d = new Date();
@@ -65,31 +89,34 @@ function StatusIcon({ status }: { status: string }) {
 export default function HrAttendancePage() {
   const queryClient = useQueryClient();
   const [date, setDate] = useState(todayIso);
+  // Keyed by placement, not by person — the same maid holds a separate day at
+  // each house she works.
   const [drafts, setDrafts] = useState<Record<string, StatusValue>>({});
+  const [hourDrafts, setHourDrafts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setDrafts({});
+    setHourDrafts({});
   }, [date]);
 
+  // The day's marking list. A staff member placed at three houses appears
+  // three times, because the day belongs to a client — it decides whose
+  // invoice carries it, and for an hourly placement the hours decide the price.
   const {
-    data: empRaw,
+    data: rosterRaw,
     isLoading: empLoading,
     error: empError,
+    refetch: refetchRoster,
   } = useQuery({
-    queryKey: ['employees', 'hr', 'active'],
-    queryFn: () => api.listEmployees({ limit: 200, status: 'Active' }),
+    queryKey: ['attendance', 'roster', date],
+    queryFn: () => api.getAttendanceRoster(date),
   });
 
-  const {
-    data: attRaw,
-    isLoading: attLoading,
-    error: attError,
-    refetch: refetchAttendance,
-  } = useQuery({
-    queryKey: ['attendance', 'hr', date],
-    queryFn: () => api.listAttendance({ date, page: 1, limit: 200 }),
-  });
+  // The HR ledger listing used to be fetched here to show what was already
+  // marked. The roster carries that per placement now — which is the only form
+  // that can distinguish a maid's day at one house from her day at the next —
+  // so fetching it again would only be a second answer to the same question.
 
   const {
     data: statsRaw,
@@ -99,83 +126,109 @@ export default function HrAttendancePage() {
     queryFn: () => api.getAttendanceStats({ date }),
   });
 
-  const employees = unwrapItems(empRaw);
-  const attendanceLogs = unwrapItems(attRaw);
+  const roster: RosterRow[] = (unwrapData(rosterRaw) as any)?.rows ?? [];
   const stats = unwrapData(statsRaw) as
     | { Present?: number; Absent?: number; Leave?: number; HalfDay?: number; Late?: number }
     | undefined;
 
-  const attendanceByEmployee = useMemo(() => {
-    const map: Record<string, { id: string; status: string; notes?: string | null }> = {};
-    for (const log of attendanceLogs) {
-      if (log?.employeeId) {
-        map[log.employeeId] = {
-          id: log.id,
-          status: log.status,
-          notes: log.notes,
-        };
-      }
-    }
-    return map;
-  }, [attendanceLogs]);
-
+  // The roster's own status is the DB's short form (PRESENT); HR's select
+  // speaks the long form. Map between them rather than showing two vocabularies.
   const rows = useMemo(() => {
-    return employees.map((emp: any) => {
-      const saved = attendanceByEmployee[emp.id];
-      const draft = drafts[emp.id];
-      const status: StatusValue =
-        draft !== undefined ? draft : ((saved?.status as StatusValue) || '');
+    return roster.map((r) => {
+      const savedStatus = (SAVED_TO_OPTION[r.marked_status ?? ''] ?? '') as StatusValue;
+      const draft = drafts[r.placement_id];
+      const status: StatusValue = draft !== undefined ? draft : savedStatus;
+      const hoursDraft = hourDrafts[r.placement_id];
+      const hours = hoursDraft !== undefined
+        ? hoursDraft
+        : (r.marked_hours != null ? String(r.marked_hours) : '');
       return {
-        emp,
-        savedStatus: saved?.status as StatusValue | undefined,
+        row: r,
+        savedStatus: savedStatus || undefined,
         status,
-        isDirty: draft !== undefined && draft !== (saved?.status || ''),
-        unmarked: !saved && (draft === undefined || draft === ''),
+        hours,
+        isDirty:
+          (draft !== undefined && draft !== savedStatus) ||
+          (hoursDraft !== undefined && hoursDraft !== (r.marked_hours != null ? String(r.marked_hours) : '')),
+        unmarked: !r.marked_status && (draft === undefined || draft === ''),
       };
     });
-  }, [employees, attendanceByEmployee, drafts]);
+  }, [roster, drafts, hourDrafts]);
 
   const markedCount = rows.filter((r) => r.savedStatus || (r.status && r.isDirty)).length;
   const dirtyCount = rows.filter((r) => r.isDirty && r.status).length;
 
-  const handleStatusChange = (empId: string, status: StatusValue) => {
-    setDrafts((prev) => ({ ...prev, [empId]: status }));
+  const handleStatusChange = (placementId: string, status: StatusValue) => {
+    setDrafts((prev) => ({ ...prev, [placementId]: status }));
+  };
+
+  const handleHoursChange = (placementId: string, hours: string) => {
+    setHourDrafts((prev) => ({ ...prev, [placementId]: hours }));
   };
 
   const markAllPresent = () => {
     const next: Record<string, StatusValue> = {};
-    for (const emp of employees) {
-      next[emp.id] = 'Present';
+    const nextHours: Record<string, string> = {};
+    for (const r of roster) {
+      next[r.placement_id] = 'Present';
+      // A permanent placement works its whole shift; an hourly one has to be
+      // told, so leave it for the person marking rather than inventing hours.
+      if (r.placement_type === 'PERMANENT' && r.shift_hours) {
+        nextHours[r.placement_id] = String(r.shift_hours);
+      }
     }
     setDrafts(next);
+    setHourDrafts((prev) => ({ ...prev, ...nextHours }));
   };
 
   const handleSave = async () => {
-    const changes = rows.filter((r) => {
-      if (!r.status) return false;
-      if (drafts[r.emp.id] === undefined) return false;
-      return drafts[r.emp.id] !== (r.savedStatus || '');
-    });
+    const changes = rows.filter((r) => r.status && r.isDirty);
 
     if (changes.length === 0) {
       toast('No attendance changes to save', { icon: 'ℹ️' });
       return;
     }
 
+    // An hourly day with no hours cannot be priced — refuse before writing
+    // half the rows rather than leaving an invoice short.
+    const missingHours = changes.filter(
+      (r) => r.row.placement_type === 'TEMPORARY' && r.status === 'Present' && !(Number(r.hours) > 0),
+    );
+    if (missingHours.length) {
+      toast.error(
+        `Enter hours for ${missingHours.map((r) => r.row.staff_name).join(', ')} — ` +
+        'an hourly day is billed on its hours.',
+      );
+      return;
+    }
+
+    const notOnboarded = changes.filter((r) => !r.row.employee_id);
+    if (notOnboarded.length) {
+      toast.error(
+        `${notOnboarded.map((r) => r.row.staff_name).join(', ')} has no HR record yet. ` +
+        'Onboard them first, then mark the day.',
+      );
+      return;
+    }
+
     setSaving(true);
     try {
       await Promise.all(
-        changes.map((row) =>
+        changes.map((r) =>
           api.markAttendance({
-            employeeId: row.emp.id,
+            employeeId: r.row.employee_id as string,
             date,
-            status: row.status as string,
+            status: r.status as string,
+            placementId: r.row.placement_id,
+            ...(Number(r.hours) > 0 ? { hoursWorked: Number(r.hours) } : {}),
           }),
         ),
       );
-      toast.success(`Attendance saved for ${changes.length} employee(s) on ${formatDisplayDate(date)}`);
+      toast.success(`Attendance saved for ${changes.length} placement(s) on ${formatDisplayDate(date)}`);
       setDrafts({});
+      setHourDrafts({});
       await Promise.all([
+        refetchRoster(),
         queryClient.invalidateQueries({ queryKey: ['attendance', 'hr', date] }),
         queryClient.invalidateQueries({ queryKey: ['attendance', 'hr', 'stats', date] }),
       ]);
@@ -204,7 +257,7 @@ export default function HrAttendancePage() {
   if (empError) {
     return (
       <div className="page-padding max-w-[1600px] mx-auto py-24 text-center">
-        <p className="text-red-400 text-sm">Failed to load employees. Please try again.</p>
+        <p className="text-red-400 text-sm">Could not load the day&apos;s roster. Please try again.</p>
       </div>
     );
   }
@@ -261,25 +314,6 @@ export default function HrAttendancePage() {
         </div>
       </div>
 
-      {attError && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 flex items-center justify-between gap-3">
-          <p className="text-sm text-red-300">
-            Could not load saved attendance for this date. You can still mark attendance below.
-          </p>
-          <button
-            type="button"
-            onClick={() => refetchAttendance()}
-            className="shrink-0 rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-500/20"
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      {attLoading && (
-        <p className="text-xs text-secondary-foreground">Loading attendance records…</p>
-      )}
-
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[
           { label: 'Present', value: stats?.Present ?? 0, tone: 'text-green-400', bg: 'bg-green-500/10' },
@@ -302,14 +336,14 @@ export default function HrAttendancePage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-secondary-foreground">
-          {employees.length} active employees · {markedCount} marked for this date
+          {rows.length} placements to mark · {markedCount} marked for this date
           {dirtyCount > 0 ? ` · ${dirtyCount} unsaved` : ''}
         </p>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={markAllPresent}
-            disabled={employees.length === 0}
+            disabled={rows.length === 0}
             className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 transition-colors disabled:opacity-50"
           >
             Mark all Present
@@ -317,7 +351,7 @@ export default function HrAttendancePage() {
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving || employees.length === 0 || dirtyCount === 0}
+            disabled={saving || rows.length === 0 || dirtyCount === 0}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {saving ? 'Saving…' : `Save attendance${dirtyCount ? ` (${dirtyCount})` : ''}`}
@@ -325,17 +359,19 @@ export default function HrAttendancePage() {
         </div>
       </div>
 
-      {employees.length === 0 ? (
+      {rows.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-background/40 p-12 text-center">
           <Users className="mx-auto h-10 w-10 text-secondary-foreground/40 mb-3" />
           <p className="text-secondary-foreground text-sm mb-4">
-            No active employees found. Onboard a deployed candidate first, then mark attendance.
+            Nobody is placed with a client right now, so there is no day to mark.
+            Attendance is marked against a placement — it decides which client&apos;s invoice
+            carries the day.
           </p>
           <Link
-            href="/hr/onboarding"
+            href="/rm/placements"
             className="inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
           >
-            Onboard Employee
+            Go to Placements
           </Link>
         </div>
       ) : (
@@ -344,13 +380,13 @@ export default function HrAttendancePage() {
             <thead>
               <tr className="border-b border-white/10">
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-secondary-foreground">
-                  Employee ID
+                  Staff
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-secondary-foreground">
-                  Name
+                  Works at
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-secondary-foreground">
-                  Category
+                  Paid
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-secondary-foreground">
                   Saved
@@ -358,15 +394,32 @@ export default function HrAttendancePage() {
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-secondary-foreground">
                   Mark for {formatDisplayDate(date)}
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-secondary-foreground">
+                  Hours
+                </th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ emp, savedStatus, status, isDirty, unmarked }) => (
-                <tr key={emp.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                  <td className="px-4 py-3 text-secondary-foreground">{emp.employeeId ?? '—'}</td>
-                  <td className="px-4 py-3 font-medium text-white">{emp.fullName ?? '—'}</td>
-                  <td className="px-4 py-3 text-secondary-foreground">
-                    {emp.category?.name ?? emp.department ?? '—'}
+              {rows.map(({ row, savedStatus, status, hours, isDirty, unmarked }) => (
+                <tr key={row.placement_id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-white">{row.staff_name ?? '—'}</p>
+                    <p className="text-[11px] text-secondary-foreground font-mono">{row.staff_code ?? ''}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="text-white">{row.client_name ?? '—'}</p>
+                    <p className="text-[11px] text-secondary-foreground font-mono">{row.unit_code ?? ''}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    {row.placement_type === 'TEMPORARY' ? (
+                      <span className="inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-400">
+                        ₹{row.hourly_rate ?? 0}/hr
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase text-secondary-foreground">
+                        {row.shift_hours ?? 8}h shift
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {savedStatus ? (
@@ -382,7 +435,7 @@ export default function HrAttendancePage() {
                     <div className="flex items-center gap-2">
                       <select
                         value={status}
-                        onChange={(e) => handleStatusChange(emp.id, e.target.value as StatusValue)}
+                        onChange={(e) => handleStatusChange(row.placement_id, e.target.value as StatusValue)}
                         className={`rounded-lg border bg-background px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50 ${
                           isDirty
                             ? 'border-primary/50'
@@ -399,6 +452,31 @@ export default function HrAttendancePage() {
                         ))}
                       </select>
                       {status ? <StatusIcon status={status} /> : null}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {/* An hourly day is billed on its hours, so it has to be
+                        asked for. A permanent day defaults to its shift. */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        max="24"
+                        step="0.5"
+                        value={hours}
+                        onChange={(e) => handleHoursChange(row.placement_id, e.target.value)}
+                        placeholder={row.placement_type === 'TEMPORARY' ? 'required' : String(row.shift_hours ?? 8)}
+                        className={`w-20 rounded-lg border bg-background px-2 py-1.5 text-sm text-white tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                          row.placement_type === 'TEMPORARY' && status === 'Present' && !(Number(hours) > 0)
+                            ? 'border-amber-500/50'
+                            : 'border-white/10'
+                        }`}
+                      />
+                      {row.placement_type === 'TEMPORARY' && Number(hours) > 0 && row.hourly_rate ? (
+                        <span className="text-[11px] text-amber-400 tabular-nums whitespace-nowrap">
+                          = ₹{(Number(hours) * row.hourly_rate).toLocaleString('en-IN')}
+                        </span>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
