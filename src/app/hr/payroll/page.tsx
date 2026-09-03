@@ -17,7 +17,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api/client';
-import { Loader2, FileText, RefreshCw, AlertCircle, Download, Receipt } from 'lucide-react';
+import { Loader2, FileText, RefreshCw, AlertCircle, Download, Receipt, Eye } from 'lucide-react';
 
 const MONTHS = ['January','February','March','April','May','June',
                 'July','August','September','October','November','December'];
@@ -58,6 +58,8 @@ export default function HrSalarySlipsPage() {
   const [month, setMonth] = useState(prev.getMonth() + 1);
   const [year, setYear] = useState(prev.getFullYear());
   const [rows, setRows] = useState<Slip[]>([]);
+  const [preview, setPreview] = useState<{ slip: Slip; url: string } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,19 +89,102 @@ export default function HrSalarySlipsPage() {
     { gross: 0, deductions: 0, net: 0 },
   );
 
+  /**
+   * The blob came back and was thrown away — nothing was ever handed to the
+   * browser, so the button looked broken while the server was doing its job
+   * perfectly. Both actions go through here now.
+   */
+  const fetchSlip = async (r: Slip) => {
+    const blob = await api.downloadEmployeePayslip(r.employeeId as string, r.ref);
+    return URL.createObjectURL(blob);
+  };
+
   const download = async (r: Slip) => {
     if (!r.employeeId) return;
+    setBusy(r.ref);
     try {
-      await api.downloadEmployeePayslip(r.employeeId, r.ref);
+      const url = await fetchSlip(r);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `payslip-${r.employeeCode ?? r.employeeId}-${month}-${year}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (e) {
       setError((e as Error)?.message || 'Could not download that payslip.');
+    } finally {
+      setBusy(null);
     }
+  };
+
+  /** Read it before saving it — the same PDF, shown in place. */
+  const openPreview = async (r: Slip) => {
+    if (!r.employeeId) return;
+    setBusy(r.ref);
+    try {
+      setPreview({ slip: r, url: await fetchSlip(r) });
+    } catch (e) {
+      setError((e as Error)?.message || 'Could not open that payslip.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const closePreview = () => {
+    // The blob stays in memory until it is let go.
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
   };
 
   const years = Array.from({ length: 4 }, (_, i) => now.getFullYear() - i);
 
   return (
     <div className="page-padding space-y-6">
+      {/* The payslip itself, read before it is saved. Same PDF the download
+          gives, so what is on screen and what reaches the staff member cannot
+          drift apart. */}
+      {preview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={closePreview}
+        >
+          <div
+            className="flex h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-5 py-3">
+              <div>
+                <p className="font-semibold text-foreground">{preview.slip.staffName ?? 'Payslip'}</p>
+                <p className="text-xs text-secondary-foreground">
+                  {preview.slip.employeeCode} · {MONTHS[month - 1]} {year} ·{' '}
+                  {preview.slip.presentDays} days · net {fmtRs(preview.slip.netSalary)}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => download(preview.slip)}
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-secondary-foreground hover:bg-muted"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Save PDF
+                </button>
+                <button
+                  onClick={closePreview}
+                  className="rounded-lg px-2 py-1 text-xl leading-none text-secondary-foreground hover:text-foreground"
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <iframe
+              src={preview.url}
+              title={`Payslip for ${preview.slip.staffName ?? preview.slip.employeeCode}`}
+              className="grow bg-white"
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Salary Slips</h1>
@@ -229,15 +314,27 @@ export default function HrSalarySlipsPage() {
                         <span className="text-[10px] font-medium text-amber-500">not billed</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => download(r)}
-                        disabled={!r.employeeId}
-                        className="rounded-lg border border-border p-1.5 text-secondary-foreground hover:bg-muted disabled:opacity-40"
-                        title="Download payslip PDF"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                      </button>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => openPreview(r)}
+                          disabled={!r.employeeId || busy === r.ref}
+                          className="rounded-lg border border-border p-1.5 text-secondary-foreground hover:bg-muted disabled:opacity-40"
+                          title="Read the payslip"
+                        >
+                          {busy === r.ref
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <Eye className="h-3.5 w-3.5" />}
+                        </button>
+                        <button
+                          onClick={() => download(r)}
+                          disabled={!r.employeeId || busy === r.ref}
+                          className="rounded-lg border border-border p-1.5 text-secondary-foreground hover:bg-muted disabled:opacity-40"
+                          title="Save the payslip PDF"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
