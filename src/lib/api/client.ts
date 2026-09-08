@@ -532,6 +532,8 @@ export interface ApiClient {
     }>;
   }): Promise<any>;
   getFinanceCustomer(id: string): Promise<any>;
+  /** One customer, one month: their staff, days worked, and every invoice. */
+  getFinanceCustomerOverview(id: string, month: number, year: number): Promise<any>;
   getCustomerBranches(id: string): Promise<any>;
   addCustomerBranch(id: string, body: {
     unit_code: string;
@@ -1102,6 +1104,8 @@ export const api: ApiClient = {
     }>;
   }) => apiClient.post('/finance/customers', body),
   getFinanceCustomer: (id: string) => apiClient.get(`/finance/customers/${id}`),
+  getFinanceCustomerOverview: (id: string, month: number, year: number) =>
+    apiClient.get(`/finance/customers/${id}/overview`, { params: { month, year } }),
   getCustomerBranches: (id: string) => apiClient.get(`/finance/customers/${id}/branches`),
   addCustomerBranch: (id: string, body: any) => apiClient.post(`/finance/customers/${id}/branches`, body),
   listAllCustomerBranches: () => apiClient.get('/finance/customers/branches/all'),

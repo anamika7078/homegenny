@@ -2,10 +2,11 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
+import { CustomerDetailDialog } from './components/customer-detail-dialog';
 import {
   Loader2, Plus, Search, Users, X, CheckCircle2,
-  Building2, CreditCard, FileText, Hash, RefreshCw,
-  ChevronRight, Shield, MapPin, Layers, Phone, Mail,
+  Building2, CreditCard, FileText, RefreshCw,
+  ChevronRight, Shield, MapPin, Phone, Mail,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -549,181 +550,6 @@ function CreateCustomerDrawer({ open, onClose, onCreated }: CreateDrawerProps) {
   );
 }
 
-// ── Customer Detail Drawer ───────────────────────────────────────────────────
-function CustomerDetailDrawer({
-  customer,
-  onClose,
-  onBillGenerated,
-  onPanVerified,
-}: {
-  customer: FinanceCustomer | null;
-  onClose: () => void;
-  onBillGenerated: (id: string, billNo: string) => void;
-  onPanVerified: (id: string, result: NonNullable<FinanceCustomer['metadata']>['pan_verification']) => void;
-}) {
-  const [generatingBill, setGeneratingBill] = useState(false);
-  const [lastBill, setLastBill] = useState<string | null>(null);
-  const [verifyingPan, setVerifyingPan] = useState(false);
-  const [panError, setPanError] = useState('');
-
-  if (!customer) return null;
-
-  const panVerification = customer.metadata?.pan_verification;
-
-  async function handleVerifyPan() {
-    if (!customer) return;
-    setVerifyingPan(true);
-    setPanError('');
-    try {
-      const res = await api.verifyFinanceCustomerPan(customer.id);
-      const result = (res as any).data ?? res;
-      onPanVerified(customer.id, { ...result, verified_at: new Date().toISOString() });
-    } catch (err: any) {
-      setPanError(err?.response?.data?.message ?? 'PAN verification failed');
-    } finally {
-      setVerifyingPan(false);
-    }
-  }
-
-  async function handleGenerateBill() {
-    if (!customer) return;
-    setGeneratingBill(true);
-    try {
-      const res = await api.generateFinanceCustomerBillNumber(customer.id);
-      const data = (res as any).data ?? res;
-      setLastBill(data.bill_number);
-      onBillGenerated(customer.id, data.bill_number);
-    } catch {
-      // ignore
-    } finally {
-      setGeneratingBill(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative ml-auto h-full w-full max-w-[500px] bg-[#0b1120] border-l border-white/8 flex flex-col shadow-2xl overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-white/8">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/15 flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-indigo-400" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-white">{customer.customer_name}</p>
-              <p className="text-xs text-slate-500 font-mono">PAN: {customer.pan_card}</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/8 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-5">
-          {/* Customer Master Details */}
-          <div className="rounded-2xl border border-white/8 bg-[#131c2e] p-5 space-y-3">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">
-              Customer Master Details
-            </p>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500"><Layers className="w-3 h-3" /></span>
-              <span className="text-slate-400 min-w-[70px]">Unit Code:</span>
-              <span className="font-mono font-bold text-indigo-300 px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20">
-                {customer.unit_code}
-              </span>
-            </div>
-            <InfoRow icon={<Hash className="w-3 h-3" />} label="PAN Card" value={customer.pan_card} />
-            {panVerification ? (
-              <div className="flex items-center gap-2 text-xs pl-5">
-                {panVerification.verified ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase text-emerald-400 bg-emerald-400/10 border-emerald-400/20">
-                    <CheckCircle2 className="w-3 h-3" /> PAN Verified
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase text-red-400 bg-red-400/10 border-red-400/20">
-                    Verification Failed
-                  </span>
-                )}
-                <span className="text-slate-500">
-                  {new Date(panVerification.verified_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                  {panVerification.name_on_pan ? ` · ${panVerification.name_on_pan}` : ''}
-                </span>
-              </div>
-            ) : (
-              <div className="pl-5">
-                <button
-                  onClick={handleVerifyPan}
-                  disabled={verifyingPan}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-[11px] font-semibold text-indigo-300 hover:bg-indigo-500/20 disabled:opacity-60 transition-colors"
-                >
-                  {verifyingPan ? <Loader2 className="w-3 h-3 animate-spin" /> : <Shield className="w-3 h-3" />}
-                  {verifyingPan ? 'Verifying…' : 'Verify PAN'}
-                </button>
-                {panError && <p className="text-[11px] text-red-400 mt-1">{panError}</p>}
-              </div>
-            )}
-            {customer.gstn && (
-              <InfoRow icon={<Shield className="w-3 h-3" />} label="GSTN" value={customer.gstn} />
-            )}
-            <div className="flex items-start gap-2 text-xs">
-              <span className="text-slate-500 mt-0.5"><MapPin className="w-3 h-3" /></span>
-              <span className="text-slate-400 min-w-[70px]">Address:</span>
-              <span className="text-white">{customer.address}</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500"><Hash className="w-3 h-3" /></span>
-              <span className="text-slate-400 min-w-[70px]">Status:</span>
-              <StatusBadge status={customer.status} />
-            </div>
-          </div>
-
-          {/* Bill Number Generator */}
-          <div className="rounded-2xl border border-white/8 bg-[#131c2e] p-5 space-y-3">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-              Bill Number Generator
-            </p>
-            <div>
-              <p className="text-xs text-slate-400 mb-1">Current prefix</p>
-              <p className="text-sm font-mono text-white">{customer.bill_no_prefix}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-400 mb-1">Current sequence</p>
-              <p className="text-sm font-mono text-white">
-                {previewBillNo(customer.bill_seq)}
-              </p>
-            </div>
-            {lastBill && (
-              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
-                <p className="text-[10px] text-slate-400 mb-0.5">Last generated</p>
-                <p className="text-base font-mono font-bold text-emerald-400">{lastBill}</p>
-              </div>
-            )}
-            <button
-              onClick={handleGenerateBill}
-              disabled={generatingBill}
-              className="w-full mt-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2"
-            >
-              {generatingBill
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <FileText className="w-4 h-4" />}
-              {generatingBill ? 'Generating…' : 'Generate Next Bill No.'}
-            </button>
-          </div>
-
-          <p className="text-[10px] text-slate-600 text-center">
-            Created {new Date(customer.created_at).toLocaleDateString('en-IN', {
-              day: '2-digit', month: 'short', year: 'numeric',
-            })}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function FinanceCustomersPage() {
@@ -930,12 +756,17 @@ export default function FinanceCustomersPage() {
         onClose={() => setCreateOpen(false)}
         onCreated={handleCreated}
       />
-      <CustomerDetailDrawer
-        customer={selected}
-        onClose={() => setSelected(null)}
-        onBillGenerated={handleBillGenerated}
-        onPanVerified={handlePanVerified}
-      />
+      {/* The drawer this replaced showed the billing fields and nothing else —
+          not who worked there, not whether they turned up, not what was
+          billed. Its two actions came across with it. */}
+      {selected && (
+        <CustomerDetailDialog
+          customerId={selected.id}
+          onClose={() => setSelected(null)}
+          onBillGenerated={handleBillGenerated}
+          onPanVerified={handlePanVerified}
+        />
+      )}
     </div>
   );
 }
@@ -958,13 +789,3 @@ function StatCard({ label, value, icon, color }: { label: string; value: string;
   );
 }
 
-// ── Info Row helper ───────────────────────────────────────────────────────────
-function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="text-slate-500">{icon}</span>
-      <span className="text-slate-400 min-w-[70px]">{label}:</span>
-      <span className="text-white font-mono">{value}</span>
-    </div>
-  );
-}

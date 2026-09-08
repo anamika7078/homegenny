@@ -8,6 +8,7 @@ import { Users, Plus, FileText, LogOut, DollarSign } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { unwrapItems } from '@/lib/hr/utils';
+import { EmployeeDetailDialog } from './components/employee-detail-dialog';
 
 function todayIso() {
   const d = new Date();
@@ -24,6 +25,7 @@ export default function HrEmployeesPage() {
   const employees = unwrapItems(data);
 
   const [exitModal, setExitModal] = useState<any | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [exitForm, setExitForm] = useState({
     channel: 'ONLINE' as 'ONLINE' | 'OFFLINE',
     reason: '',
@@ -247,9 +249,15 @@ export default function HrEmployeesPage() {
                   <tr key={emp.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                     <td className="px-4 py-3 text-secondary-foreground">{emp.employeeId ?? '—'}</td>
                     <td className="px-4 py-3 font-medium text-white">
-                      <Link href={`/hr/employees/${emp.id}`} className="hover:text-primary">
+                      {/* Opens the detail dialog rather than navigating away —
+                          the row's own buttons stay clickable beside it. */}
+                      <button
+                        type="button"
+                        onClick={() => setDetailId(emp.id)}
+                        className="text-left underline-offset-2 hover:text-primary hover:underline"
+                      >
                         {emp.fullName ?? '—'}
-                      </Link>
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-secondary-foreground">{emp.mobile ?? '—'}</td>
                     <td className="px-4 py-3 text-secondary-foreground">
@@ -312,6 +320,10 @@ export default function HrEmployeesPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {detailId && (
+        <EmployeeDetailDialog employeeId={detailId} onClose={() => setDetailId(null)} />
       )}
     </div>
   );
