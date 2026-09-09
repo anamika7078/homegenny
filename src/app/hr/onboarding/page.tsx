@@ -9,12 +9,30 @@ import { Spinner } from '@/components/ui/loading';
 import { unwrapItems } from '@/lib/hr/utils';
 import { SERIES_LABELS } from '@/lib/rm/constants';
 import { UserCheck, AlertTriangle, Search } from 'lucide-react';
+import { DocumentUploadStep } from './components/document-upload-step';
 import toast from 'react-hot-toast';
 
 function todayIso() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+/**
+ * What the series already decides.
+ *
+ * The series is chosen at intake and drives the whole pipeline — the trial
+ * length, the verification tracks, the number of video prompts. Asking HR to
+ * pick a category again at the end invites a different answer to the same
+ * question. Keyed by the StaffSeries enum the API returns, not the DR/SC/UC
+ * short codes the mobile app shows; that mismatch has caused silent bugs here
+ * before.
+ */
+const DERIVED_BY_SERIES: Record<string, { category: string; designation: string; department: string }> = {
+  MAID:           { category: 'Maid',      designation: 'Maid',           department: 'Domestic Services' },
+  UNSKILLED_CARE: { category: 'Helper',    designation: 'Care Helper',    department: 'Care Services' },
+  SKILLED_CARE:   { category: 'Caretaker', designation: 'Caretaker',      department: 'Care Services' },
+  DRIVER:         { category: 'Driver',    designation: 'Driver',         department: 'Driving' },
+};
 
 const EMPTY_FORM = {
   department: '',
@@ -43,6 +61,8 @@ export default function HrOnboardingPage() {
   const [selected, setSelected] = useState<any | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  /** Set once the employee row exists — the dialog then shows the upload step. */
+  const [onboarded, setOnboarded] = useState<{ id: string; name: string; code?: string } | null>(null);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['employees', 'pending-onboarding'],
@@ -65,7 +85,25 @@ export default function HrOnboardingPage() {
     : candidates;
 
   const open = (candidate: any) => {
-    setForm({ ...EMPTY_FORM, categoryId: categories[0]?.id ?? '' });
+    // Everything the pipeline already knows is filled in. HR was retyping
+    // facts the system had — and the category defaulted to whatever sorted
+    // first (Caretaker), so a maid was onboarded as a caretaker unless
+    // somebody noticed and changed it.
+    const derived = DERIVED_BY_SERIES[candidate?.series] ?? null;
+    const category =
+      categories.find(
+        (c: any) => derived && String(c.name).toLowerCase() === derived.category.toLowerCase(),
+      ) ?? null;
+
+    setForm({
+      ...EMPTY_FORM,
+      categoryId: category?.id ?? '',
+      designation: derived?.designation ?? '',
+      department: derived?.department ?? '',
+      // The RM who has carried this candidate since S2 is the reporting
+      // manager, and the list already hands us their name.
+      reportingManager: candidate?.assignedRm?.fullName ?? '',
+    });
     setSelected(candidate);
   };
 
@@ -99,10 +137,18 @@ export default function HrOnboardingPage() {
       toast.success(`${selected.fullName} onboarded as ${employee?.employeeId ?? 'employee'}`);
       warnings.forEach((w) => toast(w, { icon: '⚠️', duration: 6000 }));
 
-      setSelected(null);
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       refetch();
-      if (employee?.id) router.push(`/hr/employees/${employee.id}`);
+
+      // Straight into the papers, in the same dialog. Sending HR to another
+      // screen here is how people end up onboarded with nothing on file — and
+      // documents cannot be attached before this record exists, which is why
+      // it could not be one step.
+      if (employee?.id) {
+        setOnboarded({ id: employee.id, name: selected.fullName, code: employee.employeeId });
+      } else {
+        setSelected(null);
+      }
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Onboarding failed';
       toast.error(Array.isArray(msg) ? msg.join(', ') : msg);
@@ -134,24 +180,58 @@ export default function HrOnboardingPage() {
           <div className="bg-[#0f172a] border border-white/10 rounded-2xl w-full max-w-2xl p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="font-bold text-white text-lg">Onboard to HR</h3>
+                <h3 className="font-bold text-white text-lg">
+                  {onboarded ? 'Step 2 of 2 — documents' : 'Onboard to HR'}
+                </h3>
                 <p className="text-sm text-secondary-foreground">
                   {selected.fullName} · {selected.staffCode} ·{' '}
                   {SERIES_LABELS[selected.series as keyof typeof SERIES_LABELS] ?? selected.series}
                 </p>
               </div>
               <button
-                onClick={() => setSelected(null)}
+                onClick={() => { setSelected(null); setOnboarded(null); }}
                 className="text-slate-400 hover:text-white text-xl"
               >
                 &times;
               </button>
             </div>
 
-            <p className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-secondary-foreground">
-              Name, mobile, date of birth and address come across from the pipeline record. Only the
-              employment details below are needed — the candidate keeps their existing login.
-            </p>
+            {onboarded ? (
+              <DocumentUploadStep
+                employeeId={onboarded.id}
+                employeeName={onboarded.name}
+                employeeCode={onboarded.code}
+                onDone={() => {
+                  const id = onboarded.id;
+                  setOnboarded(null);
+                  setSelected(null);
+                  router.push(`/hr/employees/${id}`);
+                }}
+              />
+            ) : (
+            <>
+
+            {/* Say what is already known, so nobody retypes it or wonders
+                where it went. */}
+            <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-xs text-secondary-foreground">
+                Name, mobile, date of birth and address come across from the pipeline record, and
+                the candidate keeps their existing login.
+              </p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-secondary-foreground">
+                {selected.mobile && <span>📞 {selected.mobile}</span>}
+                {selected.email && <span>✉ {selected.email}</span>}
+                {selected.branch?.name && <span>🏢 {selected.branch.name}</span>}
+                {selected.assignedRm?.fullName && <span>RM · {selected.assignedRm.fullName}</span>}
+              </div>
+              {DERIVED_BY_SERIES[selected.series] && (
+                <p className="text-[11px] text-emerald-400/90">
+                  Category, designation and department filled in from the{' '}
+                  {SERIES_LABELS[selected.series as keyof typeof SERIES_LABELS] ?? selected.series}{' '}
+                  series — change them only if this placement is genuinely different.
+                </p>
+              )}
+            </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               {[
@@ -277,6 +357,8 @@ export default function HrOnboardingPage() {
                 {saving ? 'Onboarding…' : 'Create Employee Record'}
               </button>
             </div>
+            </>
+            )}
           </div>
         </div>
       )}

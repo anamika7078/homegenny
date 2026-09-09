@@ -261,6 +261,8 @@ export interface ApiClient {
   generateEmployeePayroll(employeeId: string, month: number, year: number): Promise<any>;
   getEmployeePayrolls(): Promise<any>;
   uploadDocument(employeeId: string, formData: FormData): Promise<any>;
+  /** Which documents this employee still owes, by their category. */
+  getDocumentChecklist(employeeId: string): Promise<any>;
   getEmployeeDocuments(employeeId: string): Promise<any>;
   markDocumentUnavailable(employeeId: string, body: { type: string; remark: string }): Promise<any>;
   completeEmployeeOnboarding(employeeId: string, body?: { remark?: string }): Promise<any>;
@@ -708,6 +710,8 @@ export const api: ApiClient = {
   generateEmployeePayroll: (employeeId: string, month: number, year: number) =>
     apiClient.post(`/attendance/${employeeId}/generate-payroll`, { month, year }),
   getEmployeePayrolls: () => apiClient.get(`/attendance/payrolls/all`),
+  getDocumentChecklist: (employeeId: string) =>
+    apiClient.get(`/documents/employee/${employeeId}/checklist`),
   uploadDocument: (employeeId: string, formData: FormData) =>
     apiClient.post(`/documents/${employeeId}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
