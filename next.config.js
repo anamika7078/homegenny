@@ -5,6 +5,10 @@ const nextConfig = {
   // In Docker build:             --build-arg NEXT_PUBLIC_API_URL=https://api.homegenny.com/api/v1
   // Environment: block in docker-compose does NOT work for NEXT_PUBLIC vars
 
+  // Emits .next/standalone — a self-contained server.js with only the
+  // node_modules it needs. The Dockerfile's production stage copies it.
+  output: 'standalone',
+
   experimental: {
     serverActions: {
       allowedOrigins: ['localhost:3000'],
