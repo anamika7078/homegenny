@@ -1,25 +1,31 @@
 import type { Metadata } from 'next';
-import { Syne, Figtree, DM_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import { QueryProvider } from '@/components/providers/query-provider';
 import { Toaster } from '@/components/ui/toaster';
 
-const syne = Syne({ 
-  subsets: ['latin'], 
+// Self-hosted (latin subset from Google Fonts, SIL OFL). next/font/google
+// downloads fonts during `next build`, and the server's docker build cannot
+// reach fonts.googleapis.com, so the production build hung retrying there.
+const syne = localFont({
+  src: [{ path: './fonts/Syne-Variable.woff2', weight: '400 800', style: 'normal' }],
   variable: '--font-syne',
-  weight: ['400', '500', '600', '700', '800']
+  display: 'swap',
 });
 
-const figtree = Figtree({ 
-  subsets: ['latin'], 
+const figtree = localFont({
+  src: [{ path: './fonts/Figtree-Variable.woff2', weight: '300 900', style: 'normal' }],
   variable: '--font-figtree',
-  weight: ['300', '400', '500', '600', '700', '800', '900']
+  display: 'swap',
 });
 
-const dmMono = DM_Mono({ 
-  subsets: ['latin'], 
+const dmMono = localFont({
+  src: [
+    { path: './fonts/DMMono-Regular.woff2', weight: '400', style: 'normal' },
+    { path: './fonts/DMMono-Medium.woff2', weight: '500', style: 'normal' },
+  ],
   variable: '--font-dm-mono',
-  weight: ['400', '500']
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
