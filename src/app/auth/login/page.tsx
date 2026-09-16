@@ -158,17 +158,19 @@ export default function LoginPage() {
         </div>
 
         {/*
-          The password is never printed here. This page is public, and it used
-          to read "Password for all: HomeGenny@2024" above the Admin, Finance
-          and HR numbers — anyone who opened the site could sign in as any of
-          them. Which number is which role is still useful to the team, so it
-          shows only where NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS=true is set, and not
-          by default. NODE_ENV cannot gate it: the dev server runs `next dev`.
+          Demo accounts, numbers AND password. This page is public, so anyone
+          who opens the site can sign in as any of these roles while the flag
+          is on — it exists for the demo build and is off by default. Turn it
+          off (drop NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS from the build args and
+          rebuild) before real client data lives here. NODE_ENV cannot gate
+          it: the dev server used to run `next dev`.
         */}
         {process.env['NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS'] === 'true' && (
           <div className="text-center text-xs text-slate-500 mt-6 space-y-1">
-            <p>9800000002 Relationship Manager (RM) · 9800000003 Admin</p>
-            <p>9800000004 Finance · 9800000005 Trainer · 9800000008 HR</p>
+            <p className="font-medium text-slate-400">Demo accounts — password for all: hg</p>
+            <p>9800000001 BM · 9800000002 Relationship Manager (RM) · 9800000003 Admin</p>
+            <p>9800000004 Finance · 9800000005 Trainer · 9800000006 Assessor</p>
+            <p>9800000007 Support · 9800000008 HR</p>
           </div>
         )}
       </div>
