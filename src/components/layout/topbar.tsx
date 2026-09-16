@@ -37,14 +37,16 @@ export function Topbar() {
 
   const dateLine = useMemo(() => format(new Date(), 'EEEE, d MMMM yyyy'), []);
 
-  const handleLogout = useCallback(async () => {
+  const handleLogout = useCallback(() => {
     if (loggingOut) return;
     setLoggingOut(true);
-    try {
-      await api.logout();
-    } catch {
-      // clear session even if API fails
-    }
+    // The server call goes out in the background and the UI does not wait for
+    // it. Signing out used to sit on this request for seconds: an expired
+    // access token made it 401, which triggered a token refresh, which the
+    // server answered with a bcrypt comparison, and only then did the logout
+    // run. api.logout() already carries the token it needs, and this is a
+    // client-side navigation, so the request survives the redirect.
+    void api.logout();
     disconnectSocket();
     logout();
     router.replace('/auth/login');

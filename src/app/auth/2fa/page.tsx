@@ -9,6 +9,7 @@ import { useAuthStore } from '@/lib/store/auth.store';
 import { getDashboardPath } from '@/lib/rbac/permissions';
 import type { UserRole } from '@/lib/types';
 import toast from 'react-hot-toast';
+import { getPendingLogin, clearPendingLogin } from '@/lib/auth/pending-login';
 
 /* ─── Types ─────────────────────────────────────────────────────────────────── */
 type Mode = 'verify' | 'setup';          // 'setup' = first-time Admin QR enrollment
@@ -60,8 +61,7 @@ export default function TwoFactorPage() {
 
   /* Sync with backend — avoid stale QR from sessionStorage after setup is complete */
   useEffect(() => {
-    const phone    = sessionStorage.getItem('hg_2fa_phone') ?? '';
-    const password = sessionStorage.getItem('hg_2fa_password') ?? '';
+    const { phone, password } = getPendingLogin() ?? { phone: '', password: '' };
     if (!phone || !password) {
       if (sessionStorage.getItem('hg_totp_otpauth')) clearSetupSession();
       return;
@@ -102,8 +102,7 @@ export default function TwoFactorPage() {
   };
 
   const regenerateQr = async () => {
-    const phone    = sessionStorage.getItem('hg_2fa_phone') ?? '';
-    const password = sessionStorage.getItem('hg_2fa_password') ?? '';
+    const { phone, password } = getPendingLogin() ?? { phone: '', password: '' };
     if (!phone || !password) {
       router.push('/auth/login');
       return;
@@ -132,8 +131,7 @@ export default function TwoFactorPage() {
       toast.error('Enter a valid 6-digit code');
       return;
     }
-    const phone    = sessionStorage.getItem('hg_2fa_phone') ?? '';
-    const password = sessionStorage.getItem('hg_2fa_password') ?? '';
+    const { phone, password } = getPendingLogin() ?? { phone: '', password: '' };
     if (!phone || !password) {
       router.push('/auth/login');
       return;
@@ -174,8 +172,7 @@ export default function TwoFactorPage() {
       setAuth(user, body.access_token, body.refresh_token ?? '');
 
       // Clean up session storage
-      sessionStorage.removeItem('hg_2fa_phone');
-      sessionStorage.removeItem('hg_2fa_password');
+      clearPendingLogin();
       sessionStorage.removeItem('hg_totp_otpauth');
       sessionStorage.removeItem('hg_totp_secret');
 

@@ -18,6 +18,17 @@ export function getSocket(): Socket {
       auth: { token: tokenStore.getAccess() },
       transports: ['websocket', 'polling'],
     });
+
+    // An expired token makes the server drop the connection, and socket.io
+    // stays down after a server-side disconnect. Reconnect with the current
+    // token instead of silently losing every alert from then on.
+    socket.on('disconnect', (reason) => {
+      if (reason !== 'io server disconnect') return;
+      const current = tokenStore.getAccess();
+      if (!current || !socket) return;
+      socket.auth = { token: current };
+      socket.connect();
+    });
   }
   const token = tokenStore.getAccess();
   if (token) socket.auth = { token };

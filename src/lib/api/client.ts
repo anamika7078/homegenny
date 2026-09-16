@@ -90,7 +90,47 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 });
 
 // ── Response interceptor: unwrap + auto-refresh + readable errors ─────────
-let isRefreshing = false;
+
+/**
+ * The one refresh in flight, shared by every request that hits a 401.
+ *
+ * A dashboard fires several requests at once, so when the access token expires
+ * they all come back 401 together. The previous version let the first one
+ * refresh and sent every other one straight to `tokenStore.clear()` plus a
+ * redirect to the login page — so a perfectly recoverable token expiry signed
+ * the user out, roughly every fifteen minutes, mid-task. Now the first 401
+ * starts a refresh and the rest await that same promise and retry with the new
+ * token. (The Flutter app has always done it this way; this brings the web
+ * client in line with it.)
+ */
+let refreshInFlight: Promise<string> | null = null;
+
+function refreshAccessToken(): Promise<string> {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    const refreshToken = tokenStore.getRefresh();
+    const userId = tokenStore.getUserId();
+    if (!refreshToken || !userId) throw new Error('No refresh token');
+    const res = await axios.post(`${BASE_URL}/auth/refresh`, {
+      userId,
+      refresh_token: refreshToken,
+    });
+    const newToken: string =
+      (res.data as any)?.data?.access_token || (res.data as any)?.access_token;
+    if (!newToken) throw new Error('No token in refresh response');
+    tokenStore.setAccess(newToken);
+    return newToken;
+  })().finally(() => {
+    // Cleared on the next tick so callers that are still chaining off this
+    // promise resolve against it rather than starting a second refresh.
+    setTimeout(() => {
+      refreshInFlight = null;
+    }, 0);
+  });
+
+  return refreshInFlight;
+}
 apiClient.interceptors.response.use(
   (response) => {
     const body = response.data;
@@ -102,36 +142,24 @@ apiClient.interceptors.response.use(
   async (error) => {
     const original = error.config;
 
-    const isAuthRoute = original?.url?.includes('/auth/login') || original?.url?.includes('/auth/refresh');
+    const isAuthRoute =
+      original?.url?.includes('/auth/login') ||
+      original?.url?.includes('/auth/refresh') ||
+      original?.url?.includes('/auth/logout');
     if (error.response?.status === 401 && !original._retry && !isAuthRoute) {
-      if (isRefreshing) {
-        tokenStore.clear();
-        if (typeof window !== 'undefined') window.location.href = '/auth/login';
-        return Promise.reject(error);
-      }
       original._retry = true;
-      isRefreshing = true;
       try {
-        const refreshToken = tokenStore.getRefresh();
-        const userId = tokenStore.getUserId();
-        if (!refreshToken || !userId) throw new Error('No refresh token');
-        const res = await axios.post(`${BASE_URL}/auth/refresh`, {
-          userId, refresh_token: refreshToken,
-        });
-        // FIX 3: handle both wrapped and unwrapped refresh response
-        const newToken: string =
-          (res.data as any)?.data?.access_token ||
-          (res.data as any)?.access_token;
-        if (!newToken) throw new Error('No token in refresh response');
-        tokenStore.setAccess(newToken);
+        // Joins the refresh already running, or starts one. Every 401 from the
+        // same expiry ends up waiting on a single /auth/refresh call.
+        const newToken = await refreshAccessToken();
+        original.headers = original.headers ?? {};
         original.headers.Authorization = `Bearer ${newToken}`;
         return apiClient(original);
       } catch {
+        // The refresh itself failed — the session really is over.
         tokenStore.clear();
         if (typeof window !== 'undefined') window.location.href = '/auth/login';
         return Promise.reject(error);
-      } finally {
-        isRefreshing = false;
       }
     }
 
@@ -631,7 +659,22 @@ export const api: ApiClient = {
     apiClient.post('/auth/login', { phone, password, totp }, { timeout: 35_000 }),
   reset2faSetup: (phone: string, password: string) =>
     apiClient.post('/auth/2fa/reset-setup', { phone, password }, { timeout: 35_000 }),
-  logout: () => apiClient.post('/auth/logout').catch(() => { }),
+  // Sent outside apiClient on purpose. The bearer token is read and attached
+  // here, synchronously, so the caller is free to clear local storage and
+  // navigate away the moment this returns — it does not have to await the
+  // round trip. Going around the interceptors also means a 401 here can't
+  // trigger the refresh-and-retry path: a logout that 401s is a session that
+  // is already gone, and the old flow paid for a token refresh (seconds of
+  // bcrypt on the server) just to log out with it.
+  logout: () => {
+    const token = tokenStore.getAccess();
+    return axios
+      .post(`${BASE_URL}/auth/logout`, null, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        timeout: 8_000,
+      })
+      .catch(() => { });
+  },
   me: () => apiClient.get('/auth/me'),
 
   listStaff: (params?: Record<string, unknown>) =>

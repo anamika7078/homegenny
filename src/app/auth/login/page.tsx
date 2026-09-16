@@ -10,6 +10,7 @@ import { Spinner } from '@/components/ui/loading';
 import { Modal } from '@/components/ui/modal';
 import toast from 'react-hot-toast';
 import { getDashboardPath } from '@/lib/rbac/permissions';
+import { setPendingLogin } from '@/lib/auth/pending-login';
 import type { UserRole } from '@/lib/types';
 
 type LoginDialog = 'invalid_credentials' | 'other_system' | null;
@@ -36,8 +37,8 @@ export default function LoginPage() {
 
       // First-time Admin: backend provisioned a TOTP secret — show QR wizard
       if (payload?.requires_totp_setup) {
-        sessionStorage.setItem('hg_2fa_phone', identifier.trim());
-        sessionStorage.setItem('hg_2fa_password', password);
+        // Held in memory for the 2FA step, never written to disk.
+        setPendingLogin(identifier.trim(), password);
         sessionStorage.setItem('hg_totp_otpauth', payload.otpauth_url ?? '');
         sessionStorage.setItem('hg_totp_secret', payload.totp_secret ?? '');
         router.push('/auth/2fa');
@@ -46,8 +47,8 @@ export default function LoginPage() {
 
       if (payload?.requires_2fa) {
         sessionStorage.setItem('hg_2fa_user_id', payload.user_id);
-        sessionStorage.setItem('hg_2fa_phone', identifier.trim());
-        sessionStorage.setItem('hg_2fa_password', password);
+        // Held in memory for the 2FA step, never written to disk.
+        setPendingLogin(identifier.trim(), password);
         router.push('/auth/2fa');
         return;
       }
