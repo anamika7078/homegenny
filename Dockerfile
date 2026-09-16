@@ -11,8 +11,13 @@ COPY . .
 # Render host in src/lib/api/client.ts, so refuse to build without it.
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_APP_NAME=HomeGenny
+# Demo build only: prints the seeded demo accounts on the public login page.
+# An ARG that is not declared here is silently ignored, so the compose build
+# arg alone does nothing — both lines are needed.
+ARG NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME
+ENV NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS=$NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN test -n "$NEXT_PUBLIC_API_URL" || { echo "NEXT_PUBLIC_API_URL build arg is required"; exit 1; }
 # The repo has no public/ yet; the production stage copies it.
