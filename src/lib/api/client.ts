@@ -315,6 +315,15 @@ export interface ApiClient {
   getRmTerminal(): Promise<any>;
   getRmIncidents(status?: string): Promise<any>;
   createRmIncident(body: Record<string, unknown>): Promise<any>;
+  // Incident workflow (/v1/incidents) — the status machine behind the list.
+  getIncidents(status?: string): Promise<any>;
+  getIncident(id: string): Promise<any>;
+  acknowledgeIncident(id: string): Promise<any>;
+  escalateIncident(id: string): Promise<any>;
+  resolveIncident(id: string, resolution: string): Promise<any>;
+  closeIncident(id: string): Promise<any>;
+  commentOnIncident(id: string, body: string): Promise<any>;
+  setIncidentLegalHold(id: string, hold: boolean): Promise<any>;
   getRmShifts(status?: string): Promise<any>;
   reviewRmShift(id: string, body: { action: string; notes?: string }): Promise<any>;
   getRmLocations(): Promise<any>;
@@ -786,6 +795,19 @@ export const api: ApiClient = {
   getRmIncidents: (status?: string) =>
     apiClient.get('/rm/incidents', { params: status ? { status } : {} }),
   createRmIncident: (body) => apiClient.post('/rm/incidents', body),
+
+  getIncidents: (status?: string) =>
+    apiClient.get('/incidents', { params: status ? { status } : {} }),
+  getIncident: (id: string) => apiClient.get(`/incidents/${id}`),
+  acknowledgeIncident: (id: string) => apiClient.post(`/incidents/${id}/acknowledge`),
+  escalateIncident: (id: string) => apiClient.post(`/incidents/${id}/escalate`),
+  resolveIncident: (id: string, resolution: string) =>
+    apiClient.post(`/incidents/${id}/resolve`, { resolution }),
+  closeIncident: (id: string) => apiClient.post(`/incidents/${id}/close`),
+  commentOnIncident: (id: string, body: string) =>
+    apiClient.post(`/incidents/${id}/comment`, { body }),
+  setIncidentLegalHold: (id: string, hold: boolean) =>
+    apiClient.post(`/incidents/${id}/legal-hold`, { hold }),
   getRmShifts: (status?: string) =>
     apiClient.get('/rm/shifts', { params: status ? { status } : {} }),
   reviewRmShift: (id, body) => apiClient.patch(`/rm/shifts/${id}/review`, body),
