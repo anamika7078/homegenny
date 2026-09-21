@@ -2,11 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { FileText, CheckCircle2, Download } from 'lucide-react';
+import { FileText, CheckCircle2, Download, PauseCircle } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { HoldModal, canHold } from './hold-modal';
+import { STAGE_LABELS } from '@/lib/rm/constants';
+import type { StaffApplicant } from '@/lib/types';
 import {
   useStaffAgreements,
   useCreateAgreement,
@@ -35,6 +38,7 @@ const inputCls =
 
 export function AgreementHub() {
   const { id } = useParams<{ id: string }>();
+  const qc = useQueryClient();
 
   const { data: staff } = useQuery({
     queryKey: ['staff', id],
@@ -42,6 +46,12 @@ export function AgreementHub() {
     enabled: !!id,
   });
   const s = (staff as { data?: Record<string, string> })?.data ?? (staff as Record<string, string> | undefined);
+  // Same DTO shape the kanban board uses (toStaffDto), just loosely typed
+  // above for this file's own convenience — safe to hand to HoldModal as-is.
+  const staffForHold = s as unknown as StaffApplicant | undefined;
+  const openHolds = staffForHold?.open_holds ?? [];
+  const currentStageHold = openHolds.find((h) => h.stage === staffForHold?.pipeline_stage);
+  const [holdOpen, setHoldOpen] = useState(false);
 
   const { data, isLoading } = useStaffAgreements(id);
   const rows = (Array.isArray(data) ? data : (data as { data?: unknown[] })?.data ?? []) as AgreementRecord[];
@@ -71,9 +81,27 @@ export function AgreementHub() {
         title={s?.full_name ? `Agreements — ${s.full_name}` : 'Agreements'}
         description={s?.staff_code ? `${s.staff_code} · S4 · EOR e-sign` : 'S4 · EOR e-sign'}
         actions={
-          <Link href={`/rm/staff/${id}`}>
-            <Button variant="outline">Back to Staff</Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            {staffForHold && canHold(staffForHold.pipeline_stage) && (
+              <Button
+                variant="outline"
+                onClick={() => setHoldOpen(true)}
+                className={
+                  currentStageHold
+                    ? currentStageHold.kind === 'COMPLETE'
+                      ? 'border-sky-500/40 text-sky-400'
+                      : 'border-amber-500/40 text-amber-400'
+                    : undefined
+                }
+              >
+                <PauseCircle className="mr-1.5 h-3.5 w-3.5" />
+                {currentStageHold ? (currentStageHold.kind === 'COMPLETE' ? 'Complete' : 'On Hold') : 'Hold / Complete'}
+              </Button>
+            )}
+            <Link href={`/rm/staff/${id}`}>
+              <Button variant="outline">Back to Staff</Button>
+            </Link>
+          </div>
         }
       />
 
@@ -171,7 +199,29 @@ export function AgreementHub() {
           {advance.isPending ? 'Advancing…' : 'Advance to Deployment'}
         </Button>
       </div>
-      {advance.isError && <p className="text-xs text-red-400">{advance.error.message}</p>}
+      {advance.isError && (
+        <div className="space-y-1.5">
+          <p className="text-xs text-red-400">{advance.error.message}</p>
+          {staffForHold && canHold(staffForHold.pipeline_stage) && !currentStageHold && (
+            <p className="text-xs text-muted-foreground">
+              Not resolved yet? Put {STAGE_LABELS[staffForHold.pipeline_stage]} on hold to let the staff move to
+              Deployment anyway — held work still has to be finished and the stage released before this staff can
+              be placed with a client. If the work actually already happened outside the system, mark it complete
+              instead — that doesn&apos;t block placement.
+            </p>
+          )}
+        </div>
+      )}
+
+      {holdOpen && staffForHold && (
+        <HoldModal
+          staff={staffForHold}
+          onClose={() => {
+            setHoldOpen(false);
+            qc.invalidateQueries({ queryKey: ['staff', id] });
+          }}
+        />
+      )}
 
       <p className="text-xs text-muted-foreground/70">
         Scope of Work and Client Indemnity are set up per-placement once a client is assigned — see the Deployments

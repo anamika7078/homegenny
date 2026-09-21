@@ -37,12 +37,58 @@ export function useRmAdvanceStage() {
       to_stage: string;
       reason_code?: string;
       payload?: Record<string, unknown>;
+      terminal_outcome?: string;
     }) => api.advanceRmPipeline(input.staffId, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rm-kanban'] });
       qc.invalidateQueries({ queryKey: ['rm-dashboard'] });
       qc.invalidateQueries({ queryKey: ['staff'] });
     },
+  });
+}
+
+function useInvalidateHolds() {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: ['rm-kanban'] });
+    qc.invalidateQueries({ queryKey: ['rm-holds'] });
+  };
+}
+
+/** Puts a stage on hold — the staff may still advance past it. */
+export function usePlaceHold() {
+  const invalidate = useInvalidateHolds();
+  return useMutation({
+    mutationFn: (input: { staffId: string; reason: string; stage?: string; notes?: string }) =>
+      api.placeRmHold(input.staffId, { reason: input.reason, stage: input.stage, notes: input.notes }),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Marks a stage complete — for a staff whose work there already happened
+ * outside the system. Permanent, not re-checked, and unlike a hold it does
+ * not block placement.
+ */
+export function useMarkComplete() {
+  const invalidate = useInvalidateHolds();
+  return useMutation({
+    mutationFn: (input: { staffId: string; reason: string; stage?: string; notes?: string }) =>
+      api.markRmComplete(input.staffId, { reason: input.reason, stage: input.stage, notes: input.notes }),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Releases a HOLD (400s, with what's missing, if the staff moved past the
+ * held stage and its gate still fails) or reverts a COMPLETE (always
+ * succeeds — there's no gate result to re-check, just the RM's word).
+ */
+export function useReleaseHold() {
+  const invalidate = useInvalidateHolds();
+  return useMutation({
+    mutationFn: (input: { holdId: string; notes?: string }) => api.releaseRmHold(input.holdId, input.notes),
+    onSuccess: invalidate,
   });
 }
 

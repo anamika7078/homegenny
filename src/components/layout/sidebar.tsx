@@ -91,6 +91,7 @@ const RM_NAV: NavSection[] = [
     items: [
       { href: '/rm/trials', label: 'Trial Placements', icon: Clock },
       { href: '/rm/placements', label: 'Active Placements', icon: MapPin },
+      { href: '/rm/holds', label: 'Stages on Hold', icon: PauseCircle },
       { href: '/rm/deferred', label: 'Deferred Cases', icon: PauseCircle },
       { href: '/rm/upgrades', label: 'Upgrade Tracker', icon: TrendingUp },
     ],
@@ -122,7 +123,7 @@ const BM_NAV: NavSection[] = [
     section: 'Operations',
     items: [
       { href: '/alarms', label: 'Issues & Alarms', icon: Bell },
-      { href: '/staff/pipeline', label: 'Pipeline Kanban', icon: GitBranch },
+      { href: '/rm/pipeline', label: 'Pipeline Kanban', icon: GitBranch },
       { href: '/staff/intake', label: 'S1 Intake', icon: UserPlus },
       { href: '/video-cert', label: 'Video Cert', icon: Video },
       { href: '/agreements', label: 'Agreements', icon: FileText },

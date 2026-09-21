@@ -21,6 +21,16 @@ export interface StaffApplicant {
   restricted_list_flag: boolean; video_cert_id?: string;
   assigned_rm_id?: string; metadata: Record<string, any>;
   created_at: string; updated_at: string;
+  /** Stages on hold — present on kanban rows. */
+  open_holds?: StageHold[];
+}
+
+/** A stage whose work is pending while the staff moves on. Not a stage or a status. */
+export interface StageHold {
+  id: string; stage: PipelineStage;
+  /** HOLD = work still pending, temporary, blocks placement. COMPLETE = done outside the system, permanent, doesn't. */
+  kind: 'HOLD' | 'COMPLETE'; reason: string;
+  notes?: string | null; held_at: string;
 }
 
 export interface Placement {

@@ -335,11 +335,15 @@ export interface ApiClient {
   getRmKanban(params?: { search?: string; series?: string }): Promise<any>;
   advanceRmPipeline(
     staffId: string,
-    body: { to_stage: string; reason_code?: string; payload?: Record<string, unknown> },
+    body: { to_stage: string; reason_code?: string; payload?: Record<string, unknown>; terminal_outcome?: string },
   ): Promise<any>;
   getRmTrials(): Promise<any>;
   getRmDeferred(): Promise<any>;
-  resumeRmDeferred(staffId: string, to_stage: string): Promise<any>;
+  resumeRmDeferred(staffId: string, to_stage?: string): Promise<any>;
+  placeRmHold(staffId: string, body: { reason: string; stage?: string; notes?: string }): Promise<any>;
+  markRmComplete(staffId: string, body: { reason: string; stage?: string; notes?: string }): Promise<any>;
+  releaseRmHold(holdId: string, notes?: string): Promise<any>;
+  getRmHolds(): Promise<any>;
   getRmTerminal(): Promise<any>;
   getRmIncidents(status?: string): Promise<any>;
   createRmIncident(body: Record<string, unknown>): Promise<any>;
@@ -832,8 +836,12 @@ export const api: ApiClient = {
     apiClient.post(`/rm/pipeline/${staffId}/advance`, body),
   getRmTrials: () => apiClient.get('/rm/trials'),
   getRmDeferred: () => apiClient.get('/rm/deferred'),
+  placeRmHold: (staffId, body) => apiClient.post(`/rm/pipeline/${staffId}/hold`, body),
+  markRmComplete: (staffId, body) => apiClient.post(`/rm/pipeline/${staffId}/complete`, body),
+  releaseRmHold: (holdId, notes) => apiClient.post(`/rm/holds/${holdId}/release`, notes ? { notes } : {}),
+  getRmHolds: () => apiClient.get('/rm/holds'),
   resumeRmDeferred: (staffId, to_stage) =>
-    apiClient.post(`/rm/deferred/${staffId}/resume`, { to_stage }),
+    apiClient.post(`/rm/deferred/${staffId}/resume`, to_stage ? { to_stage } : {}),
   getRmTerminal: () => apiClient.get('/rm/terminal'),
   getRmIncidents: (status?: string) =>
     apiClient.get('/rm/incidents', { params: status ? { status } : {} }),

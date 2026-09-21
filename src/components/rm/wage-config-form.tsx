@@ -65,7 +65,7 @@ export const DEFAULT_WAGE_CONFIG: WageConfig = {
   gst_pct: '18',
 };
 
-interface WageBreakup {
+export interface WageBreakup {
   netSalary: number;
   managementFee: number;
   grossEarnings: number;
@@ -78,7 +78,7 @@ interface WageBreakup {
   totalGstAmount: number;
 }
 
-function toPayload(c: WageConfig) {
+export function toPayload(c: WageConfig) {
   return {
     basic_wage: Number(c.basic_wage) || 0,
     da: Number(c.da) || 0,
@@ -132,12 +132,17 @@ function ToggleRow({ label, checked, onChange }: { label: string; checked: boole
   );
 }
 
+export type WageConfigPayload = ReturnType<typeof toPayload>;
+
 /** Debounced wage config form — computes a live breakdown via POST /placements/calculate-wage
- *  and reports the resulting staff_salary/management_fee back to the parent. */
+ *  and reports it back to the parent, with the inputs that produced it. Send `config` as
+ *  `wage_config` and let the backend derive salary and fee — don't send the computed pair. */
 export function WageConfigForm({
   onResult,
 }: {
-  onResult: (result: { staffSalary: number; managementFee: number; breakup: WageBreakup } | null) => void;
+  onResult: (
+    result: { staffSalary: number; managementFee: number; breakup: WageBreakup; config: WageConfigPayload } | null,
+  ) => void;
 }) {
   const [config, setConfig] = useState<WageConfig>(DEFAULT_WAGE_CONFIG);
   const calc = useMutation({
@@ -151,7 +156,12 @@ export function WageConfigForm({
       calc.mutate(config, {
         onSuccess: (res) => {
           const breakup = res as WageBreakup;
-          onResult({ staffSalary: breakup.netSalary, managementFee: breakup.managementFee, breakup });
+          onResult({
+            staffSalary: breakup.netSalary,
+            managementFee: breakup.managementFee,
+            breakup,
+            config: toPayload(config),
+          });
         },
         onError: () => onResult(null),
       });

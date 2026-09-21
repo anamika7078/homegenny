@@ -72,5 +72,52 @@ export const FSM_NEXT: Partial<Record<PipelineStage, PipelineStage[]>> = {
   S3_TRAIN: ['S4_AGREEMENTS', 'DEFERRED', 'TERMINAL'],
   S4_AGREEMENTS: ['S5_DEPLOY', 'TERMINAL'],
   S5_DEPLOY: ['TERMINAL'],
-  DEFERRED: ['S2_VERIFY', 'S3_TRAIN', 'TERMINAL'],
+  // The backend refuses a resume past the stage the staff was deferred from.
+  DEFERRED: ['S2_VERIFY', 'S2_5_ASSESS', 'S3_TRAIN', 'TERMINAL'],
 };
+
+/** Backend TerminalOutcome enum — required when moving a staff to TERMINAL. */
+export const TERMINAL_OUTCOMES: { value: string; label: string }[] = [
+  { value: 'ENROLLED', label: 'Enrolled' },
+  { value: 'CONDITIONAL', label: 'Conditional' },
+  { value: 'DENIED', label: 'Denied' },
+  { value: 'ABANDONED', label: 'Abandoned' },
+  { value: 'LATE_EXIT', label: 'Late exit' },
+  { value: 'DEFERRED', label: 'Deferred (closed)' },
+];
+
+/** Backend HOLD_REASONS (pipeline-fsm.service.ts) — required when putting a stage on hold. */
+export const HOLD_REASONS: { value: string; label: string }[] = [
+  { value: 'PV_PENDING', label: 'Police verification pending' },
+  { value: 'DOCUMENT_PENDING', label: 'Document pending' },
+  { value: 'MEDICAL_PENDING', label: 'Medical pending' },
+  { value: 'ASSESSMENT_PENDING', label: 'Assessment pending' },
+  { value: 'TRAINING_PENDING', label: 'Training pending' },
+  { value: 'AGREEMENT_PENDING', label: 'Agreement pending' },
+  { value: 'CLIENT_PENDING', label: 'Client pending' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+/** Backend COMPLETE_REASONS (pipeline-fsm.service.ts) — required when marking a stage complete. */
+export const COMPLETE_REASONS: { value: string; label: string }[] = [
+  { value: 'ALREADY_VERIFIED_EXTERNALLY', label: 'Already verified externally' },
+  { value: 'MIGRATED_STAFF', label: 'Migrated staff record' },
+  { value: 'RM_CONFIRMED_MANUALLY', label: 'RM confirmed manually' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+export const overrideReasonLabel = (kind: 'HOLD' | 'COMPLETE', v: string) =>
+  (kind === 'COMPLETE' ? COMPLETE_REASONS : HOLD_REASONS).find((r) => r.value === v)?.label ?? v;
+
+/** @deprecated use overrideReasonLabel — kept for call sites that only ever show HOLD reasons. */
+export const holdReasonLabel = (v: string) => HOLD_REASONS.find((r) => r.value === v)?.label ?? v;
+
+/** Backend DeferredReason enum — required when moving a staff to DEFERRED. */
+export const DEFERRED_REASONS: { value: string; label: string }[] = [
+  { value: 'PV_PENDING', label: 'Police verification pending' },
+  { value: 'DRIVER_RETEST', label: 'Driving retest' },
+  { value: 'MEDICAL_RETEST', label: 'Medical retest' },
+  { value: 'TRAINING_GAP', label: 'Training gap' },
+  { value: 'AGREEMENT_REVIEW', label: 'Agreement review' },
+  { value: 'PERSONAL_PAUSE', label: 'Personal pause' },
+];

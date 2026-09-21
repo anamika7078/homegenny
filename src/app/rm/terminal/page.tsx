@@ -15,7 +15,7 @@ export default function RmTerminalPage() {
       renderItem={(s) => (
         <Link
           key={String(s.id)}
-          href={`/staff/${s.id}`}
+          href={`/rm/staff/${s.id}`}
           className="glass-card block rounded-lg p-4 hover:border-primary/30"
         >
           <p className="font-semibold">{String(s.staff_code)}</p>
