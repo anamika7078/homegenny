@@ -29,6 +29,28 @@ export function useRmKanban(params?: { search?: string; series?: string }) {
   });
 }
 
+/** Staff who self-registered from the app: S1 already done, no RM yet. */
+export function useUnassignedStaff() {
+  return useQuery({
+    queryKey: ['rm-unassigned-staff'],
+    queryFn: () => api.listUnassignedStaff(),
+    refetchInterval: 30_000,
+  });
+}
+
+/** First to claim wins — see the 409 message for what to show on a race loss. */
+export function useClaimStaff() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (staffId: string) => api.claimStaff(staffId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rm-unassigned-staff'] });
+      qc.invalidateQueries({ queryKey: ['rm-kanban'] });
+      qc.invalidateQueries({ queryKey: ['rm-dashboard'] });
+    },
+  });
+}
+
 export function useRmAdvanceStage() {
   const qc = useQueryClient();
   return useMutation({

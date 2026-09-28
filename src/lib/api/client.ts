@@ -372,6 +372,9 @@ export interface ApiClient {
   getRmUpgrades(): Promise<any>;
   rmIntake(body: Record<string, unknown>): Promise<any>;
   listRmUsers(): Promise<any>;
+  /** Staff who self-registered from the app and have no RM yet. */
+  listUnassignedStaff(): Promise<any>;
+  claimStaff(staffId: string): Promise<any>;
 
   // Verification (S2)
   getVerificationStatus(staffId: string): Promise<any>;
@@ -872,6 +875,8 @@ export const api: ApiClient = {
   getRmUpgrades: () => apiClient.get('/rm/upgrades'),
   rmIntake: (body) => apiClient.post('/rm/intake', body),
   listRmUsers: () => apiClient.get('/rm/users'),
+  listUnassignedStaff: () => apiClient.get('/rm/unassigned-staff'),
+  claimStaff: (staffId) => apiClient.post(`/rm/unassigned-staff/${staffId}/claim`),
 
   // Verification (S2)
   getVerificationStatus: (staffId) => apiClient.get(`/verification/${staffId}`),

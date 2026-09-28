@@ -8,6 +8,7 @@ import {
   GitBranch,
   Users,
   UserPlus,
+  UserCheck,
   ClipboardCheck,
   Car,
   GraduationCap,
@@ -43,6 +44,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     items: [
       { href: '/rm/pipeline', label: 'Kanban Board', icon: GitBranch },
       { href: '/rm/intake', label: 'S1 Intake', icon: UserPlus },
+      { href: '/rm/leads', label: 'New Leads', icon: UserCheck },
       { href: '/rm/staff', label: 'Staff List', icon: Users },
       { href: '/rm/deferred', label: 'Deferred', icon: PauseCircle },
       { href: '/rm/terminal', label: 'Terminal', icon: XCircle },
