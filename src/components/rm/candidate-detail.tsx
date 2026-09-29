@@ -152,6 +152,8 @@ export function CandidateDetail({ backHref, backLabel }: CandidateDetailProps) {
         </div>
       </div>
 
+      {currentStageIdx >= PIPELINE_STAGES.indexOf('S3_TRAIN') && <TrainingQuizSummary staffId={id} />}
+
       <div className="glass-card rounded-xl p-4">
         <h3 className="mb-4 font-semibold">Timeline</h3>
         <ul className="space-y-3">
@@ -172,6 +174,50 @@ export function CandidateDetail({ backHref, backLabel }: CandidateDetailProps) {
           ))}
         </ul>
       </div>
+    </div>
+  );
+}
+
+const QUIZ_STATE: Record<string, { label: string; cls: string }> = {
+  LOCKED: { label: 'Not open yet', cls: 'text-muted-foreground' },
+  AVAILABLE: { label: 'Not attempted', cls: 'text-muted-foreground' },
+  SCHEDULED: { label: 'Rescheduled', cls: 'text-amber-400' },
+  IN_PROGRESS: { label: 'In progress', cls: 'text-sky-400' },
+  UNDER_REVIEW: { label: 'Trainer checking', cls: 'text-violet-300' },
+  PASSED: { label: 'Passed', cls: 'text-emerald-400' },
+  FAILED: { label: 'Failed — awaiting reschedule', cls: 'text-red-400' },
+};
+
+/** Read-only: lets the RM see quiz results before marking S3 complete. */
+function TrainingQuizSummary({ staffId }: { staffId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['staff-quiz-summary', staffId],
+    queryFn: () => api.getStaffQuizSummary(staffId),
+  });
+  const quizzes = (data as any[] | undefined) ?? [];
+  if (isLoading || quizzes.length === 0) return null;
+
+  return (
+    <div className="glass-card rounded-xl p-4">
+      <h3 className="mb-3 font-semibold">Training Quizzes</h3>
+      <ul className="divide-y divide-white/5">
+        {quizzes.map((q) => {
+          const st = QUIZ_STATE[q.state] ?? { label: q.state, cls: 'text-muted-foreground' };
+          const tries = q.attempts?.length ?? 0;
+          return (
+            <li key={q.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <div className="min-w-0">
+                <p className="font-medium truncate">{q.title}</p>
+                <p className="text-xs text-muted-foreground">{q.batchCode} · Pass {q.passMarks}/{q.totalPoints} · {tries} attempt{tries !== 1 ? 's' : ''}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className={`text-xs font-semibold ${st.cls}`}>{st.label}</p>
+                {q.lastResult && <p className="text-xs text-muted-foreground">Last: {q.lastResult.score}/{q.lastResult.maxScore}</p>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

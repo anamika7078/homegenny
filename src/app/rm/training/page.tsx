@@ -10,15 +10,22 @@ type BatchStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED';
 
 interface Enrollment {
   id: string; staffId: string; staffCode: string; fullName: string;
-  series: string; attendance: number[];
+  series: string;
 }
 interface Batch {
   id: string; batchCode: string; series: Series; trainerName: string;
-  classroom: string; startDate: string; status: BatchStatus;
-  scenarioCode: string; curriculumDays: number; enrollments: Enrollment[];
+  classroom: string; startDate: string; endDate: string; quizDate: string | null;
+  status: BatchStatus; scenarioCode: string; createdAt?: string;
+  enrollments: Enrollment[];
 }
 
-const DAYS: Record<Series, number> = { DR: 5, SC: 7, UC: 5, M3X: 3 };
+/** Hours left in the 24h window a batch accepts new trainees for (backend-enforced; this only previews it). */
+function enrollmentHoursLeft(createdAt?: string): number | null {
+  if (!createdAt) return null;
+  const ageHours = (Date.now() - new Date(createdAt).getTime()) / (60 * 60 * 1000);
+  return Math.max(0, Math.ceil(24 - ageHours));
+}
+
 const SERIES_CLR: Record<string, string> = {
   DR: 'bg-amber-500/10 border-amber-500/20 text-amber-400',
   SC: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
@@ -31,93 +38,26 @@ const STATUS_CLR: Record<BatchStatus, string> = {
   COMPLETED: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
 };
 
-function DayCell({ present, loading, onClick }: { present: boolean | null; loading: boolean; onClick: () => void }) {
+function TraineeList({ batch }: { batch: Batch }) {
+  if (batch.enrollments.length === 0) {
+    return <p className="py-4 text-center text-xs text-muted-foreground">No trainees enrolled yet</p>;
+  }
   return (
-    <button
-      onClick={onClick}
-      disabled={loading}
-      className={`w-7 h-7 mx-auto rounded-lg flex items-center justify-center font-bold text-xs transition-all disabled:opacity-50 ${
-        present === true  ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' :
-        present === false ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' :
-        'bg-white/5 text-muted-foreground hover:bg-white/10'
-      }`}
-    >
-      {loading ? <RefreshCw className="w-3 h-3 animate-spin" /> : present === true ? '✓' : present === false ? '✗' : '·'}
-    </button>
-  );
-}
-
-function AttendanceGrid({ batch, onAttendanceChange }: {
-  batch: Batch;
-  onAttendanceChange: (batchId: string, staffId: string, day: number, attended: boolean) => Promise<void>;
-}) {
-  const [loadingCell, setLoadingCell] = useState<string | null>(null);
-  const days = batch.curriculumDays || DAYS[batch.series] || 5;
-
-  const toggle = async (staffId: string, day: number, currentlyPresent: boolean) => {
-    const key = `${staffId}-${day}`;
-    setLoadingCell(key);
-    try {
-      await onAttendanceChange(batch.id, staffId, day, !currentlyPresent);
-    } finally {
-      setLoadingCell(null);
-    }
-  };
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead>
-          <tr>
-            <th className="text-left py-2 pr-4 text-muted-foreground font-semibold">Staff</th>
-            {Array.from({ length: days }, (_, i) => (
-              <th key={i} className="text-center py-2 px-1 text-muted-foreground font-semibold w-9">D{i + 1}</th>
-            ))}
-            <th className="text-center py-2 px-2 text-muted-foreground font-semibold">Att%</th>
-          </tr>
-        </thead>
-        <tbody>
-          {batch.enrollments.map(t => {
-            const att: number[] = t.attendance ?? [];
-            const pct = days > 0 ? Math.round((att.length / days) * 100) : 0;
-            return (
-              <tr key={t.staffId} className="border-t border-white/5">
-                <td className="py-2 pr-4">
-                  <p className="font-semibold text-foreground">{t.fullName}</p>
-                  <p className="text-muted-foreground font-mono">{t.staffCode}</p>
-                </td>
-                {Array.from({ length: days }, (_, i) => {
-                  const day = i + 1;
-                  const present = att.includes(day) ? true : (batch.status === 'COMPLETED' ? false : null);
-                  const key = `${t.staffId}-${day}`;
-                  return (
-                    <td key={day} className="py-2 px-1">
-                      <DayCell
-                        present={present}
-                        loading={loadingCell === key}
-                        onClick={() => toggle(t.staffId, day, present === true)}
-                      />
-                    </td>
-                  );
-                })}
-                <td className="text-center py-2 px-2">
-                  <span className={`font-bold ${pct >= 80 ? 'text-emerald-400' : pct >= 60 ? 'text-amber-400' : 'text-red-400'}`}>{pct}%</span>
-                </td>
-              </tr>
-            );
-          })}
-          {batch.enrollments.length === 0 && (
-            <tr><td colSpan={days + 2} className="py-4 text-center text-muted-foreground text-xs">No trainees enrolled yet</td></tr>
-          )}
-        </tbody>
-      </table>
+    <div className="space-y-1.5">
+      {batch.enrollments.map(t => (
+        <div key={t.staffId} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-white/3 text-xs">
+          <div>
+            <p className="font-semibold text-foreground">{t.fullName}</p>
+            <p className="text-muted-foreground font-mono">{t.staffCode}</p>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
 
-function BatchCard({ batch, onAttendanceChange, onStatusChange }: {
+function BatchCard({ batch, onStatusChange }: {
   batch: Batch;
-  onAttendanceChange: (batchId: string, staffId: string, day: number, attended: boolean) => Promise<void>;
   onStatusChange: (batchId: string, status: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(batch.status === 'ACTIVE');
@@ -143,8 +83,13 @@ function BatchCard({ batch, onAttendanceChange, onStatusChange }: {
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
             <span className="flex items-center gap-1"><Users className="w-3 h-3" />{batch.enrollments.length} trainees</span>
-            <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{new Date(batch.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-            <span>{batch.curriculumDays}-day curriculum</span>
+            <span className="flex items-center gap-1">
+              <Calendar className="w-3 h-3" />
+              {new Date(batch.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              {' – '}
+              {batch.endDate ? new Date(batch.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+            </span>
+            {batch.quizDate && <span>Quiz: {new Date(batch.quizDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>}
           </div>
         </div>
         <span className={`text-[10px] font-bold uppercase tracking-wide border rounded-full px-2.5 py-0.5 ${STATUS_CLR[batch.status] ?? STATUS_CLR.UPCOMING}`}>
@@ -162,7 +107,7 @@ function BatchCard({ batch, onAttendanceChange, onStatusChange }: {
                 {batch.classroom && <span>Room: <strong className="text-foreground">{batch.classroom}</strong></span>}
               </div>
 
-              <AttendanceGrid batch={batch} onAttendanceChange={onAttendanceChange} />
+              <TraineeList batch={batch} />
 
               <div className="flex gap-2 flex-wrap">
                 {batch.status !== 'COMPLETED' && (
@@ -188,7 +133,7 @@ function BatchCard({ batch, onAttendanceChange, onStatusChange }: {
 }
 
 function NewBatchModal({ onClose, onCreate }: { onClose: () => void; onCreate: (body: Record<string, unknown>) => Promise<void> }) {
-  const [form, setForm] = useState({ series: 'DR', trainer_id: '', trainer_name: '', classroom: '', start_date: '' });
+  const [form, setForm] = useState({ series: 'DR', trainer_id: '', trainer_name: '', classroom: '', start_date: '', end_date: '', quiz_date: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [employees, setEmployees] = useState<any[]>([]);
@@ -207,9 +152,11 @@ function NewBatchModal({ onClose, onCreate }: { onClose: () => void; onCreate: (
 
   const submit = async () => {
     if (!form.start_date) { setError('Start date is required'); return; }
+    if (!form.end_date) { setError('End date is required'); return; }
+    if (form.end_date < form.start_date) { setError('End date can\'t be before start date'); return; }
     setLoading(true); setError('');
     try {
-      await onCreate(form);
+      await onCreate({ ...form, quiz_date: form.quiz_date || undefined });
       onClose();
     } catch (e: any) {
       setError(e.message ?? 'Failed to create batch');
@@ -268,6 +215,8 @@ function NewBatchModal({ onClose, onCreate }: { onClose: () => void; onCreate: (
           {[
             { key: 'classroom', label: 'Classroom / Location', type: 'text' },
             { key: 'start_date', label: 'Start Date *', type: 'date' },
+            { key: 'end_date', label: 'End Date *', type: 'date' },
+            { key: 'quiz_date', label: 'Quiz Date (optional)', type: 'date' },
           ].map(f => (
             <div key={f.key}>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">{f.label}</label>
@@ -322,23 +271,6 @@ export default function TrainingPage() {
     await load();
   };
 
-  const handleAttendance = async (batchId: string, staffId: string, day: number, attended: boolean) => {
-    await api.markBatchAttendance(batchId, { staff_id: staffId, day_number: day, attended });
-    setBatches(prev => prev.map(b => {
-      if (b.id !== batchId) return b;
-      return {
-        ...b,
-        enrollments: b.enrollments.map(e => {
-          if (e.staffId !== staffId) return e;
-          const att = attended
-            ? [...new Set([...e.attendance, day])].sort((a, b) => a - b)
-            : e.attendance.filter(d => d !== day);
-          return { ...e, attendance: att };
-        }),
-      };
-    }));
-  };
-
   const handleStatusChange = async (batchId: string, status: string) => {
     await api.updateBatchStatus(batchId, status);
     setBatches(prev => prev.map(b => b.id === batchId ? { ...b, status: status as BatchStatus } : b));
@@ -350,7 +282,7 @@ export default function TrainingPage() {
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Training Module</h1>
-          <p className="text-sm text-muted-foreground mt-1">S3 · Batch management · Live attendance tracking</p>
+          <p className="text-sm text-muted-foreground mt-1">S3 · Batch management</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} disabled={loading} className="p-2.5 rounded-xl border border-white/15 bg-white/5 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
@@ -387,19 +319,6 @@ export default function TrainingPage() {
         ))}
       </div>
 
-      {/* Curriculum reference */}
-      <div className="p-4 rounded-xl border border-white/8 bg-white/3">
-        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Series Curriculum</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {(['DR', 'SC', 'UC', 'M3X'] as Series[]).map(s => (
-            <div key={s} className={`p-3 rounded-lg border ${SERIES_CLR[s]}`}>
-              <p className="font-bold text-lg">{DAYS[s]} days</p>
-              <p className="text-xs font-semibold">{s === 'M3X' ? 'Maid' : s === 'UC' ? 'Unskilled Carer' : s === 'SC' ? 'Skilled Carer' : 'Driver'}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Batch cards */}
       {loading ? (
         <div className="space-y-3">
@@ -416,7 +335,7 @@ export default function TrainingPage() {
       ) : (
         <div className="space-y-3">
           {batches.map(b => (
-            <BatchCard key={b.id} batch={b} onAttendanceChange={handleAttendance} onStatusChange={handleStatusChange} />
+            <BatchCard key={b.id} batch={b} onStatusChange={handleStatusChange} />
           ))}
         </div>
       )}

@@ -183,6 +183,12 @@ apiClient.interceptors.response.use(
 
 // ── Typed API calls ───────────────────────────────────────────────────────
 
+export interface TrainingQuizBody {
+  title: string;
+  pass_marks?: number | null;
+  questions: { question_text: string; type?: 'MCQ' | 'TEXT'; options?: string[]; correct_option?: number; points?: number }[];
+}
+
 /** Explicit interface prevents TypeScript from bleeding AxiosInstance's
  *  raw `.post`/`.get` methods into the inferred type of `api`. */
 export interface ApiClient {
@@ -494,7 +500,28 @@ export interface ApiClient {
   createTrainingBatch(body: Record<string, unknown>): Promise<any>;
   deleteTrainingBatch(batchId: string): Promise<any>;
   enrollInBatch(batchId: string, staffId: string): Promise<any>;
-  markBatchAttendance(batchId: string, body: { staff_id: string; day_number: number; attended: boolean }): Promise<any>;
+  updateBatchSchedule(batchId: string, body: { end_date?: string; quiz_date?: string }): Promise<any>;
+
+  // Study material
+  listTrainingMaterials(batchId: string): Promise<any>;
+  createTrainingNote(body: { batch_id: string; title: string; body: string }): Promise<any>;
+  uploadTrainingPdf(formData: FormData): Promise<any>;
+  getTrainingVideoUploadUrl(body: { batch_id: string; filename: string }): Promise<any>;
+  uploadTrainingVideoLocal(formData: FormData): Promise<any>;
+  createTrainingVideoMaterial(body: { batch_id: string; title: string; storage_key: string }): Promise<any>;
+  deleteTrainingMaterial(id: string): Promise<any>;
+
+  // Quizzes
+  listTrainingQuizzes(batchId: string): Promise<any>;
+  getTrainingQuiz(id: string): Promise<any>;
+  createTrainingQuiz(body: { batch_id: string } & TrainingQuizBody): Promise<any>;
+  updateTrainingQuiz(id: string, body: TrainingQuizBody): Promise<any>;
+  deleteTrainingQuiz(id: string): Promise<any>;
+  listQuizSubmissions(params: { batch_id?: string; quiz_id?: string; state?: string }): Promise<any>;
+  getQuizAttempt(attemptId: string): Promise<any>;
+  reviewQuizAttempt(attemptId: string, body: { marks: { question_id: string; correct: boolean }[] }): Promise<any>;
+  rescheduleQuiz(quizId: string, body: { staff_id: string; available_at: string; note?: string }): Promise<any>;
+  getStaffQuizSummary(staffId: string): Promise<any>;
   updateBatchStatus(batchId: string, status: string): Promise<any>;
 
   // Trainer Role Module
@@ -1093,9 +1120,32 @@ export const api: ApiClient = {
   createTrainingBatch: (body: Record<string, unknown>) => apiClient.post('/training/batches', body),
   deleteTrainingBatch: (batchId: string) => apiClient.delete(`/training/batches/${batchId}`),
   enrollInBatch: (batchId: string, staffId: string) => apiClient.post(`/training/batches/${batchId}/enroll`, { staff_id: staffId }),
-  markBatchAttendance: (batchId: string, body: { staff_id: string; day_number: number; attended: boolean }) =>
-    apiClient.patch(`/training/batches/${batchId}/attendance`, body),
+  updateBatchSchedule: (batchId: string, body: { end_date?: string; quiz_date?: string }) =>
+    apiClient.patch(`/training/batches/${batchId}/schedule`, body),
   updateBatchStatus: (batchId: string, status: string) => apiClient.patch(`/training/batches/${batchId}/status`, { status }),
+
+  // Study material
+  listTrainingMaterials: (batchId: string) => apiClient.get('/training/materials', { params: { batch_id: batchId } }),
+  createTrainingNote: (body) => apiClient.post('/training/materials', { ...body, type: 'NOTE' }),
+  uploadTrainingPdf: (formData: FormData) =>
+    apiClient.post('/training/materials/pdf', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  getTrainingVideoUploadUrl: (body) => apiClient.post('/training/materials/video/upload-url', body),
+  uploadTrainingVideoLocal: (formData: FormData) =>
+    apiClient.post('/training/materials/local-upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  createTrainingVideoMaterial: (body) => apiClient.post('/training/materials', { ...body, type: 'VIDEO' }),
+  deleteTrainingMaterial: (id: string) => apiClient.delete(`/training/materials/${id}`),
+
+  // Quizzes
+  listTrainingQuizzes: (batchId: string) => apiClient.get('/training/quizzes', { params: { batch_id: batchId } }),
+  getTrainingQuiz: (id: string) => apiClient.get(`/training/quizzes/${id}`),
+  createTrainingQuiz: (body) => apiClient.post('/training/quizzes', body),
+  updateTrainingQuiz: (id: string, body) => apiClient.patch(`/training/quizzes/${id}`, body),
+  deleteTrainingQuiz: (id: string) => apiClient.delete(`/training/quizzes/${id}`),
+  listQuizSubmissions: (params) => apiClient.get('/training/quizzes/submissions', { params }),
+  getQuizAttempt: (attemptId: string) => apiClient.get(`/training/quizzes/attempts/${attemptId}`),
+  reviewQuizAttempt: (attemptId: string, body) => apiClient.post(`/training/quizzes/attempts/${attemptId}/review`, body),
+  rescheduleQuiz: (quizId: string, body) => apiClient.post(`/training/quizzes/${quizId}/reschedule`, body),
+  getStaffQuizSummary: (staffId: string) => apiClient.get(`/training/quizzes/staff/${staffId}/summary`),
 
   // Trainer Role Module
   getTrainerDashboard: () => apiClient.get('/trainer/dashboard'),

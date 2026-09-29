@@ -36,10 +36,10 @@ export default function TrainerDashboardPage() {
         metrics={[
           { label: 'Active Trainees', value: metrics?.activeTrainees ?? '-' },
           { label: 'Sessions Today', value: metrics?.sessionsToday ?? '-', tone: 'in_progress' },
-          { label: 'Attendance Pending', value: metrics?.attendancePending ?? '-', tone: 'pending' },
+          { label: 'Quiz Review Pending', value: metrics?.quizPendingReview ?? '-', tone: 'pending', sub: 'Assessments tab' },
           { label: 'Video Certs Review', value: metrics?.videoCertsPending ?? '-', sub: 'Awaiting approval' },
-          { label: 'Avg Score (S3)', value: metrics?.avgScore ? `${metrics.avgScore}%` : '-', sub: 'This week' },
-          { label: 'Retries', value: metrics?.retries ?? '-', tone: 'escalated' },
+          { label: 'Avg Quiz Score', value: metrics?.avgScore ? `${metrics.avgScore}%` : '-', sub: 'Graded attempts' },
+          { label: 'Quiz Reschedules', value: metrics?.retries ?? '-', tone: 'escalated', sub: 'This week' },
         ]}
       />
     </div>

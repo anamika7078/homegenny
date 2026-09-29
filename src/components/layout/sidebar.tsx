@@ -150,7 +150,6 @@ const TRAINER_NAV: NavSection[] = [
     section: 'Training Operations',
     items: [
       { href: '/trainer/batches', label: 'Batch Management', icon: Users },
-      { href: '/trainer/attendance', label: 'Attendance Tracker', icon: ClipboardCheck },
       { href: '/trainer/assessment', label: 'Assessments', icon: FileText },
       { href: '/trainer/video-cert', label: 'Video Certs', icon: Video },
     ],

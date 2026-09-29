@@ -1,13 +1,15 @@
 'use client';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   GraduationCap, Users, Calendar, ChevronDown,
   RefreshCw, AlertTriangle, Check, X, Search,
-  Plus, User, Building2, Phone, MapPin, ChevronRight,
-  Loader2, Briefcase, BadgeCheck, ArrowRight,
+  Plus, ChevronRight,
+  Loader2, BadgeCheck, ArrowRight, BookOpen,
 } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { useAuthStore } from '@/lib/store/auth.store';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type Series = 'DR' | 'SC' | 'UC' | 'M3X' | 'MAID';
@@ -16,19 +18,26 @@ type BatchStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED';
 interface Enrollment {
   id: string; staffId: string; staffCode: string; fullName: string;
   mobile?: string; department?: string; designation?: string;
-  attendance: number[];
 }
 interface Batch {
   id: string; batchCode: string; series: Series; trainerName: string;
-  classroom: string; startDate: string; status: BatchStatus;
+  classroom: string; startDate: string; endDate: string; quizDate: string | null;
+  status: BatchStatus; createdAt?: string;
   enrollments: Enrollment[];
 }
 
-// Was DropdownEmployee sourced from GET /employees (internal HR staff). That
-// can never actually be enrolled — batch_enrollments.staff_id FKs to
-// staff_applicants, not employees, so every enroll attempt against an HR
-// employee id 500s. Trainees are real S1-S5 pipeline candidates, so this now
-// sources from GET /staff?stage=S3_TRAIN instead (StaffApplicant, not Employee).
+/** Hours left in the 24h window a batch accepts new trainees for (backend-enforced; this only previews it). */
+function enrollmentHoursLeft(createdAt?: string): number | null {
+  if (!createdAt) return null;
+  const ageHours = (Date.now() - new Date(createdAt).getTime()) / (60 * 60 * 1000);
+  return Math.max(0, Math.ceil(24 - ageHours));
+}
+
+// Was sourced from GET /employees (internal HR staff). That can never
+// actually be enrolled — batch_enrollments.staff_id FKs to staff_applicants,
+// not employees, so every enroll attempt against an HR employee id 500s.
+// Trainees are real S1-S5 pipeline candidates, so this now sources from
+// GET /staff?stage=S3_TRAIN instead (StaffApplicant, not Employee).
 interface DropdownTrainee {
   id: string;
   staffCode: string;
@@ -38,21 +47,7 @@ interface DropdownTrainee {
   branchId?: string;
 }
 
-// This one stays sourced from GET /employees/list — it's for picking which
-// HR employee is assigned as the batch's trainer (training_batches.trainer_id
-// really does FK to employees), not for enrolling a trainee.
-interface DropdownEmployee {
-  id: string;
-  employeeId: string;
-  fullName: string;
-  mobile?: string;
-  department?: string;
-  designation?: string;
-  branchId?: string;
-}
-
 // ── Constants ──────────────────────────────────────────────────────────────
-const DAYS: Record<string, number> = { DR: 5, SC: 7, UC: 5, M3X: 3, MAID: 3 };
 const SERIES_CLR: Record<string, string> = {
   DR:   'bg-amber-500/10 border-amber-500/20 text-amber-400',
   SC:   'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
@@ -76,25 +71,6 @@ const SERIES_OPTIONS: { value: Series; label: string }[] = [
 function getInitials(name?: string) {
   if (!name) return '?';
   return name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
-}
-
-// ── Attendance Cell ────────────────────────────────────────────────────────
-function AttendanceCell({ present, loading, onClick }: {
-  present: boolean | null; loading: boolean; onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={loading}
-      className={`w-7 h-7 mx-auto rounded-lg flex items-center justify-center font-bold text-xs transition-all disabled:opacity-50 ${
-        present === true  ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' :
-        present === false ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' :
-        'bg-white/5 text-muted-foreground hover:bg-white/10'
-      }`}
-    >
-      {loading ? <RefreshCw className="w-3 h-3 animate-spin" /> : present === true ? '✓' : present === false ? '✗' : '·'}
-    </button>
-  );
 }
 
 // ── Enroll Trainee Modal ──────────────────────────────────────────────────
@@ -273,18 +249,23 @@ function EnrollTraineeModal({ batch, onClose, onEnrolled }: {
 }
 
 // ── Batch Card ─────────────────────────────────────────────────────────────
-function BatchCard({ batch, onAttendanceChange, onStatusChange, onDelete, onTraineeAdded }: {
+function BatchCard({ batch, onScheduleChange, onStatusChange, onDelete, onTraineeAdded }: {
   batch: Batch;
-  onAttendanceChange: (batchId: string, staffId: string, day: number, attended: boolean) => Promise<void>;
+  onScheduleChange: (batchId: string, body: { end_date?: string; quiz_date?: string }) => Promise<void>;
   onStatusChange: (batchId: string, status: string) => Promise<void>;
   onDelete: (batchId: string) => Promise<void>;
   onTraineeAdded: (batchId: string, trainee: DropdownTrainee) => void;
 }) {
   const [open, setOpen] = useState(batch.status === 'ACTIVE');
   const [statusLoading, setStatusLoading] = useState(false);
-  const [loadingCell, setLoadingCell] = useState<string | null>(null);
   const [showEnrollModal, setShowEnrollModal] = useState(false);
-  const days = DAYS[batch.series] ?? 5;
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [endDateDraft, setEndDateDraft] = useState(batch.endDate?.slice(0, 10) ?? '');
+  const [quizDateDraft, setQuizDateDraft] = useState(batch.quizDate?.slice(0, 10) ?? '');
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+  const hoursLeft = enrollmentHoursLeft(batch.createdAt);
+  const router = useRouter();
 
   const advanceStatus = async () => {
     const next = batch.status === 'UPCOMING' ? 'ACTIVE' : 'COMPLETED';
@@ -292,11 +273,16 @@ function BatchCard({ batch, onAttendanceChange, onStatusChange, onDelete, onTrai
     try { await onStatusChange(batch.id, next); } finally { setStatusLoading(false); }
   };
 
-  const toggle = async (staffId: string, day: number, present: boolean | null) => {
-    const key = `${staffId}-${day}`;
-    setLoadingCell(key);
-    try { await onAttendanceChange(batch.id, staffId, day, present !== true); }
-    finally { setLoadingCell(null); }
+  const saveSchedule = async () => {
+    setScheduleSaving(true); setScheduleError('');
+    try {
+      await onScheduleChange(batch.id, { end_date: endDateDraft, quiz_date: quizDateDraft || undefined });
+      setEditingSchedule(false);
+    } catch (e: any) {
+      setScheduleError(e?.response?.data?.message ?? e.message ?? 'Failed to update schedule');
+    } finally {
+      setScheduleSaving(false);
+    }
   };
 
   return (
@@ -312,9 +298,19 @@ function BatchCard({ batch, onAttendanceChange, onStatusChange, onDelete, onTrai
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
             <span className="flex items-center gap-1"><Users className="w-3 h-3" />{batch.enrollments.length} trainees</span>
-            <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{new Date(batch.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            <span className="flex items-center gap-1">
+              <Calendar className="w-3 h-3" />
+              {new Date(batch.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              {' – '}
+              {batch.endDate ? new Date(batch.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+            </span>
             {batch.trainerName && <span>Trainer: {batch.trainerName}</span>}
             {batch.classroom && <span>Room: {batch.classroom}</span>}
+            {hoursLeft !== null && (
+              <span className={hoursLeft > 0 ? 'text-emerald-400' : 'text-muted-foreground/60'}>
+                {hoursLeft > 0 ? `Enrollment open · ${hoursLeft}h left` : 'Enrollment closed'}
+              </span>
+            )}
           </div>
         </div>
         <span className={`text-[10px] font-bold uppercase tracking-wide border rounded-full px-2.5 py-0.5 ${STATUS_CLR[batch.status] ?? STATUS_CLR.UPCOMING}`}>
@@ -331,52 +327,73 @@ function BatchCard({ batch, onAttendanceChange, onStatusChange, onDelete, onTrai
             className="overflow-hidden border-t border-white/6"
           >
             <div className="px-5 py-4 space-y-4">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr>
-                      <th className="text-left py-2 pr-4 text-muted-foreground font-semibold">Trainee</th>
-                      {Array.from({ length: days }, (_, i) => (
-                        <th key={i} className="text-center py-2 px-1 text-muted-foreground font-semibold w-9">D{i + 1}</th>
-                      ))}
-                      <th className="text-center py-2 px-2 text-muted-foreground font-semibold">Att%</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {batch.enrollments.map(t => {
-                      const att: number[] = t.attendance ?? [];
-                      const pct = days > 0 ? Math.round((att.length / days) * 100) : 0;
-                      return (
-                        <tr key={t.staffId} className="border-t border-white/5">
-                          <td className="py-2 pr-4">
-                            <p className="font-semibold text-foreground">{t.fullName}</p>
-                            <p className="text-muted-foreground font-mono">{t.staffCode}</p>
-                          </td>
-                          {Array.from({ length: days }, (_, i) => {
-                            const day = i + 1;
-                            const present = att.includes(day) ? true : (batch.status === 'COMPLETED' ? false : null);
-                            const key = `${t.staffId}-${day}`;
-                            return (
-                              <td key={day} className="py-2 px-1">
-                                <AttendanceCell
-                                  present={present}
-                                  loading={loadingCell === key}
-                                  onClick={() => toggle(t.staffId, day, present)}
-                                />
-                              </td>
-                            );
-                          })}
-                          <td className="text-center py-2 px-2">
-                            <span className={`font-bold ${pct >= 80 ? 'text-emerald-400' : pct >= 60 ? 'text-amber-400' : 'text-red-400'}`}>{pct}%</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {batch.enrollments.length === 0 && (
-                      <tr><td colSpan={days + 2} className="py-4 text-center text-muted-foreground">No trainees enrolled yet</td></tr>
-                    )}
-                  </tbody>
-                </table>
+              {/* Schedule — start/end/quiz dates, editable */}
+              <div className="rounded-lg border border-white/8 bg-white/3 p-3">
+                {!editingSchedule ? (
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-4 text-xs">
+                      <span className="text-muted-foreground">Quiz date: <span className="font-semibold text-foreground">{batch.quizDate ? new Date(batch.quizDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not set'}</span></span>
+                    </div>
+                    <button
+                      onClick={() => setEditingSchedule(true)}
+                      className="text-[11px] font-semibold text-[#FF5A1F] hover:underline"
+                    >
+                      Edit dates
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-muted-foreground">End Date</label>
+                        <input
+                          type="date" value={endDateDraft} onChange={e => setEndDateDraft(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-foreground focus:outline-none focus:border-[#FF5A1F]/50 [color-scheme:dark]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-muted-foreground">Quiz Date</label>
+                        <input
+                          type="date" value={quizDateDraft} onChange={e => setQuizDateDraft(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-foreground focus:outline-none focus:border-[#FF5A1F]/50 [color-scheme:dark]"
+                        />
+                      </div>
+                    </div>
+                    {scheduleError && <p className="text-[11px] text-red-400">{scheduleError}</p>}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={saveSchedule} disabled={scheduleSaving || !endDateDraft}
+                        className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold rounded-lg bg-[#FF5A1F] text-white hover:bg-[#e04d17] disabled:opacity-50"
+                      >
+                        {scheduleSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
+                      </button>
+                      <button
+                        onClick={() => { setEditingSchedule(false); setScheduleError(''); }}
+                        className="px-3 py-1.5 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Enrolled trainees */}
+              <div className="space-y-1.5">
+                {batch.enrollments.map(t => (
+                  <div key={t.staffId} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/3">
+                    <div className="w-7 h-7 rounded-lg bg-white/8 flex items-center justify-center text-[10px] font-bold text-foreground flex-shrink-0">
+                      {getInitials(t.fullName)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-foreground truncate">{t.fullName}</p>
+                      <p className="text-[11px] text-muted-foreground font-mono">{t.staffCode}</p>
+                    </div>
+                  </div>
+                ))}
+                {batch.enrollments.length === 0 && (
+                  <p className="py-4 text-center text-xs text-muted-foreground">No trainees enrolled yet</p>
+                )}
               </div>
 
               <div className="flex gap-2 flex-wrap items-center">
@@ -391,13 +408,21 @@ function BatchCard({ batch, onAttendanceChange, onStatusChange, onDelete, onTrai
                     </button>
                     <button
                       onClick={() => setShowEnrollModal(true)}
-                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition-colors"
+                      disabled={hoursLeft === 0}
+                      title={hoursLeft === 0 ? 'Enrollment window closed — create a new batch instead' : undefined}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Plus className="w-3.5 h-3.5" /> Add Trainee
                     </button>
                   </>
                 )}
-                
+                <button
+                  onClick={() => router.push(`/trainer/batches/${batch.id}`)}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/30 hover:bg-sky-500/20 transition-colors"
+                >
+                  <BookOpen className="w-3.5 h-3.5" /> Manage Material &amp; Quiz
+                </button>
+
                 <button
                   onClick={async () => {
                     if (confirm('Are you sure you want to delete this batch?')) {
@@ -428,47 +453,6 @@ function BatchCard({ batch, onAttendanceChange, onStatusChange, onDelete, onTrai
   );
 }
 
-// ── Employee Detail Card (inside modal) ─────────────────────────────────────
-function EmployeeDetailCard({ emp }: { emp: DropdownEmployee }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3"
-    >
-      {/* Avatar + Name */}
-      <div className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-xl bg-[#FF5A1F]/15 border border-[#FF5A1F]/25 flex items-center justify-center text-[#FF5A1F] font-bold text-sm flex-shrink-0">
-          {getInitials(emp.fullName)}
-        </div>
-        <div>
-          <p className="font-bold text-foreground text-sm">{emp.fullName}</p>
-          <p className="text-[11px] text-muted-foreground font-mono">Emp ID: {emp.employeeId}</p>
-        </div>
-        <span className="ml-auto text-[9px] font-bold uppercase border border-sky-500/30 bg-sky-500/10 text-sky-400 rounded-full px-2 py-0.5">
-          {emp.department || 'Staff'}
-        </span>
-      </div>
-
-      {/* Info Grid */}
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        {emp.mobile && (
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Phone className="w-3 h-3 flex-shrink-0" />
-            <span className="truncate">{emp.mobile}</span>
-          </div>
-        )}
-        {emp.designation && (
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Briefcase className="w-3 h-3 flex-shrink-0" />
-            <span className="truncate">{emp.designation}</span>
-          </div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
 // ── Add Batch Modal ─────────────────────────────────────────────────────────
 function AddBatchModal({ onClose, onCreated }: {
   onClose: () => void;
@@ -481,53 +465,19 @@ function AddBatchModal({ onClose, onCreated }: {
   // Hardcoded series to 'DR' as it is required by backend but hidden from UI
   const series: Series = 'DR';
   const [startDate, setStartDate]   = useState('');
+  const [endDate, setEndDate]       = useState('');
+  const [quizDate, setQuizDate]     = useState('');
   const [classroom, setClassroom]   = useState('');
 
-  // Employee lookup for Trainer
-  const [empSearch, setEmpSearch]     = useState('');
-  const [unitIdSearch, setUnitIdSearch] = useState('');
-  const [employees, setEmployees]     = useState<DropdownEmployee[]>([]);
-  const [empLoading, setEmpLoading]   = useState(false);
-  const [empError, setEmpError]       = useState('');
-  const [selectedEmp, setSelectedEmp] = useState<DropdownEmployee | null>(null);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  // The trainer creating this batch IS the trainer — there's no one else to
+  // pick. This used to be a searchable "Assign Trainer" step against the HR
+  // employee list, which meant the trainer had to find and select themselves
+  // before they could create their own batch.
+  const currentUser = useAuthStore((s) => s.user);
 
   // Submission
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
-
-  // ── Load employees from HR module ──────────────────────────────────────
-  useEffect(() => {
-    setEmpLoading(true);
-    setEmpError('');
-    api.listEmployeesForDropdown()
-      .then((res: any[]) => {
-        setEmployees(res ?? []);
-      })
-      .catch((err: Error) => setEmpError(err.message ?? 'Failed to load employees'))
-      .finally(() => setEmpLoading(false));
-  }, []);
-
-  // ── Close dropdown on outside click ───────────────────────────────────
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  // ── Filtered employees for dropdown ───────────────────────────────────
-  const filtered = employees.filter(emp => {
-    const nameMatch = !empSearch || (emp.fullName ?? '').toLowerCase().includes(empSearch.toLowerCase());
-    const codeMatch = !unitIdSearch || 
-      (emp.employeeId ?? '').toLowerCase().includes(unitIdSearch.toLowerCase()) ||
-      (emp.branchId ?? '').toLowerCase().includes(unitIdSearch.toLowerCase());
-    return nameMatch && codeMatch;
-  });
 
   // ── Submit create batch ────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -537,8 +487,11 @@ function AddBatchModal({ onClose, onCreated }: {
       const result: any = await api.createTrainingBatch({
         series,
         start_date: startDate || new Date().toISOString().split('T')[0],
+        end_date: endDate,
+        quiz_date: quizDate || undefined,
         classroom: classroom || null,
-        ...(selectedEmp ? { trainer_id: selectedEmp.id, trainer_name: selectedEmp.fullName } : {}),
+        trainer_id: currentUser?.id,
+        trainer_name: currentUser?.full_name,
       });
 
       const batchData = result?.batch ?? result?.data ?? result;
@@ -553,7 +506,7 @@ function AddBatchModal({ onClose, onCreated }: {
     }
   };
 
-  const canProceed = series && startDate;
+  const canProceed = series && startDate && endDate && endDate >= startDate;
 
   return (
     <AnimatePresence>
@@ -580,7 +533,7 @@ function AddBatchModal({ onClose, onCreated }: {
               <div>
                 <h2 className="font-bold text-sm text-foreground">Create New Batch</h2>
                 <p className="text-[11px] text-muted-foreground">
-                  {step === 'form' ? 'Fill batch details & assign trainer' : 'Review before confirming'}
+                  {step === 'form' ? 'Fill in batch details' : 'Review before confirming'}
                 </p>
               </div>
             </div>
@@ -591,20 +544,20 @@ function AddBatchModal({ onClose, onCreated }: {
 
           {/* Step indicator */}
           <div className="flex items-center gap-0 px-6 pt-4">
-            {['Batch Details', 'Assign Trainer', 'Confirm'].map((label, i) => (
+            {['Batch Details', 'Confirm'].map((label, i) => (
               <div key={label} className="flex items-center flex-1">
                 <div className={`flex items-center gap-1.5 ${
-                  (step === 'form' && i <= 1) || (step === 'confirm' && i <= 2)
+                  (step === 'form' && i <= 0) || (step === 'confirm' && i <= 1)
                     ? 'text-[#FF5A1F]' : 'text-muted-foreground'
                 }`}>
                   <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${
-                    (step === 'form' && i <= 1) || (step === 'confirm' && i <= 2)
+                    (step === 'form' && i <= 0) || (step === 'confirm' && i <= 1)
                       ? 'bg-[#FF5A1F]/15 border-[#FF5A1F]/30 text-[#FF5A1F]'
                       : 'border-white/15 text-muted-foreground'
                   }`}>{i + 1}</div>
                   <span className="text-[10px] font-semibold hidden sm:block">{label}</span>
                 </div>
-                {i < 2 && <ChevronRight className="w-3 h-3 text-white/20 mx-1 flex-shrink-0" />}
+                {i < 1 && <ChevronRight className="w-3 h-3 text-white/20 mx-1 flex-shrink-0" />}
               </div>
             ))}
           </div>
@@ -614,110 +567,43 @@ function AddBatchModal({ onClose, onCreated }: {
 
             {step === 'form' && (
               <>
-                {/* ── Employee Picker (Trainer) ───────────────────────── */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#FF5A1F]">Assign Trainer (HR Employees)</p>
-                    {selectedEmp && (
-                      <button onClick={() => setSelectedEmp(null)} className="text-[10px] text-muted-foreground hover:text-foreground underline">
-                        Clear
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Dual search: Emp ID + Name */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                      <input
-                        type="text"
-                        value={unitIdSearch}
-                        onChange={e => { setUnitIdSearch(e.target.value); setDropdownOpen(true); }}
-                        onFocus={() => setDropdownOpen(true)}
-                        placeholder="Emp ID"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#FF5A1F]/50"
-                      />
-                    </div>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                      <input
-                        type="text"
-                        value={empSearch}
-                        onChange={e => { setEmpSearch(e.target.value); setDropdownOpen(true); }}
-                        onFocus={() => setDropdownOpen(true)}
-                        placeholder="Employee Name"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#FF5A1F]/50"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Dropdown results */}
-                  {dropdownOpen && (
-                    <div ref={dropdownRef} className="relative">
-                      <div className="absolute top-0 left-0 right-0 z-10 bg-[#0f1117] border border-white/12 rounded-xl shadow-2xl max-h-48 overflow-y-auto">
-                        {empLoading ? (
-                          <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground text-xs">
-                            <Loader2 className="w-4 h-4 animate-spin" /> Loading employees…
-                          </div>
-                        ) : empError ? (
-                          <div className="flex items-center gap-2 p-4 text-red-400 text-xs">
-                            <AlertTriangle className="w-4 h-4" /> {empError}
-                          </div>
-                        ) : filtered.length === 0 ? (
-                          <div className="py-6 text-center text-muted-foreground text-xs">No employees found</div>
-                        ) : (
-                          filtered.slice(0, 50).map(emp => (
-                            <button
-                              key={emp.id}
-                              onClick={() => {
-                                setSelectedEmp(emp);
-                                setEmpSearch(emp.fullName);
-                                setUnitIdSearch(emp.employeeId);
-                                setDropdownOpen(false);
-                              }}
-                              className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/6 transition-colors border-b border-white/5 last:border-0 ${
-                                selectedEmp?.id === emp.id ? 'bg-[#FF5A1F]/8' : ''
-                              }`}
-                            >
-                              <div className="w-7 h-7 rounded-lg bg-white/8 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                                {getInitials(emp.fullName)}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-semibold text-foreground truncate">{emp.fullName}</p>
-                                <p className="text-[10px] text-muted-foreground font-mono">ID: {emp.employeeId}</p>
-                              </div>
-                              <span className={`text-[8px] font-bold uppercase border border-white/10 text-muted-foreground rounded-full px-1.5 py-0.5 flex-shrink-0`}>
-                                {emp.department || 'HR'}
-                              </span>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                      {/* Spacer so the absolute dropdown doesn't overlap content below */}
-                      <div className="h-48" />
-                    </div>
-                  )}
-
-                  {/* Selected Employee Detail Card */}
-                  {selectedEmp && !dropdownOpen && (
-                    <EmployeeDetailCard emp={selectedEmp} />
-                  )}
-                </div>
-
-                {/* Divider */}
-                <div className="border-t border-white/8" />
-
                 {/* ── Batch Details ─────────────────────────── */}
                 <div className="space-y-3">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-[#FF5A1F]">Batch Details</p>
+                  <p className="text-xs text-muted-foreground">
+                    Trainer: <span className="font-semibold text-foreground">{currentUser?.full_name ?? 'You'}</span>
+                  </p>
 
-                  {/* Start Date */}
+                  {/* Start / End Date */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-muted-foreground">Start Date *</label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={e => setStartDate(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-[#FF5A1F]/50 [color-scheme:dark]"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-muted-foreground">End Date *</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        min={startDate || undefined}
+                        onChange={e => setEndDate(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-[#FF5A1F]/50 [color-scheme:dark]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quiz Date */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground">Start Date *</label>
+                    <label className="text-xs font-semibold text-muted-foreground">Quiz Date (optional)</label>
                     <input
                       type="date"
-                      value={startDate}
-                      onChange={e => setStartDate(e.target.value)}
+                      value={quizDate}
+                      onChange={e => setQuizDate(e.target.value)}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-[#FF5A1F]/50 [color-scheme:dark]"
                     />
                   </div>
@@ -744,7 +630,10 @@ function AddBatchModal({ onClose, onCreated }: {
                 {/* Summary */}
                 <div className="rounded-xl border border-white/10 bg-white/3 divide-y divide-white/6">
                   {[
+                    { label: 'Trainer', value: currentUser?.full_name ?? 'You' },
                     { label: 'Start Date', value: startDate ? new Date(startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '—' },
+                    { label: 'End Date', value: endDate ? new Date(endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '—' },
+                    { label: 'Quiz Date', value: quizDate ? new Date(quizDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Not set yet' },
                     { label: 'Classroom', value: classroom || 'Not specified' },
                   ].map(row => (
                     <div key={row.label} className="flex items-center justify-between px-4 py-3">
@@ -753,18 +642,6 @@ function AddBatchModal({ onClose, onCreated }: {
                     </div>
                   ))}
                 </div>
-
-                {/* Trainer */}
-                {selectedEmp ? (
-                  <>
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Assigned Trainer</p>
-                    <EmployeeDetailCard emp={selectedEmp} />
-                  </>
-                ) : (
-                  <div className="rounded-xl border border-white/8 bg-white/3 px-4 py-3 text-xs text-muted-foreground">
-                    No trainer assigned — you can assign one later.
-                  </div>
-                )}
 
                 {submitError && (
                   <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
@@ -831,21 +708,11 @@ export default function TrainerBatchesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleAttendance = async (batchId: string, staffId: string, day: number, attended: boolean) => {
-    await api.markBatchAttendance(batchId, { staff_id: staffId, day_number: day, attended });
-    setBatches(prev => prev.map(b => {
-      if (b.id !== batchId) return b;
-      return {
-        ...b,
-        enrollments: b.enrollments.map(e => {
-          if (e.staffId !== staffId) return e;
-          const att = attended
-            ? [...new Set([...e.attendance, day])].sort((a, b) => a - b)
-            : e.attendance.filter(d => d !== day);
-          return { ...e, attendance: att };
-        }),
-      };
-    }));
+  const handleScheduleChange = async (batchId: string, body: { end_date?: string; quiz_date?: string }) => {
+    await api.updateBatchSchedule(batchId, body);
+    setBatches(prev => prev.map(b => b.id === batchId
+      ? { ...b, endDate: body.end_date ?? b.endDate, quizDate: body.quiz_date ?? b.quizDate }
+      : b));
   };
 
   const handleStatusChange = async (batchId: string, status: string) => {
@@ -875,7 +742,6 @@ export default function TrainerBatchesPage() {
         staffCode: trainee.staffCode,
         fullName: trainee.fullName,
         mobile: trainee.mobile,
-        attendance: [],
       };
       return { ...b, enrollments: [...b.enrollments, newEnrollment] };
     }));
@@ -899,7 +765,7 @@ export default function TrainerBatchesPage() {
         <div className="flex items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Batch Management</h1>
-            <p className="text-sm text-muted-foreground mt-1">Your assigned training batches · Live attendance</p>
+            <p className="text-sm text-muted-foreground mt-1">Your assigned training batches</p>
           </div>
           <div className="flex items-center gap-2">
             {/* Add Batch Button */}
@@ -977,7 +843,7 @@ export default function TrainerBatchesPage() {
         ) : (
           <div className="space-y-3">
             {filtered.map(b => (
-              <BatchCard key={b.id} batch={b} onAttendanceChange={handleAttendance} onStatusChange={handleStatusChange} onDelete={handleDelete} onTraineeAdded={handleTraineeAdded} />
+              <BatchCard key={b.id} batch={b} onScheduleChange={handleScheduleChange} onStatusChange={handleStatusChange} onDelete={handleDelete} onTraineeAdded={handleTraineeAdded} />
             ))}
           </div>
         )}
