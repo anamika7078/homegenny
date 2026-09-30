@@ -299,6 +299,8 @@ export interface ApiClient {
   getDocumentChecklist(employeeId: string): Promise<any>;
   getEmployeeDocuments(employeeId: string): Promise<any>;
   markDocumentUnavailable(employeeId: string, body: { type: string; remark: string }): Promise<any>;
+  verifyDocument(documentId: string): Promise<any>;
+  rejectDocument(documentId: string, remark: string): Promise<any>;
   completeEmployeeOnboarding(employeeId: string, body?: { remark?: string }): Promise<any>;
   getHrNotifications(): Promise<any>;
   markHrNotificationRead(id: string): Promise<any>;
@@ -806,6 +808,9 @@ export const api: ApiClient = {
     apiClient.get(`/documents/employee/${employeeId}`),
   markDocumentUnavailable: (employeeId: string, body: { type: string; remark: string }) =>
     apiClient.post(`/documents/${employeeId}/unavailable`, body),
+  verifyDocument: (documentId: string) => apiClient.post(`/documents/${documentId}/verify`, {}),
+  rejectDocument: (documentId: string, remark: string) =>
+    apiClient.post(`/documents/${documentId}/reject`, { remark }),
   completeEmployeeOnboarding: (employeeId: string, body?: { remark?: string }) =>
     apiClient.post(`/documents/${employeeId}/complete-onboarding`, body ?? {}),
   getHrNotifications: () => apiClient.get('/notifications/in-app'),

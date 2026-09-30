@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api, BASE_URL, tokenStore } from '@/lib/api/client';
 import { Spinner } from '@/components/ui/loading';
-import { FileText, ArrowLeft, AlertTriangle, Eye, Download, CheckCircle2 } from 'lucide-react';
+import { FileText, ArrowLeft, AlertTriangle, Eye, Download, CheckCircle2, Check, X } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,10 @@ import {
 } from '@/lib/hr/utils';
 
 const BASE_DOC_KEYS = ['aadhaar', 'pan', 'photo', 'police_verification'] as const;
+
+/** Staff-app uploads wait in this state until HR verifies or rejects them. */
+const PENDING_VERIFICATION = 'Pending Verification';
+const REJECTED = 'Rejected';
 
 async function openDocument(docId: string, mode: 'preview' | 'download', filename?: string) {
   const token = tokenStore.getAccess();
@@ -108,6 +112,7 @@ export default function EmployeeDocumentsPage({ params }: { params: { id: string
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [remarkPrefillDone, setRemarkPrefillDone] = useState(false);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   const isDriver = employee?.category?.name === 'Driver';
   const docRows = [...BASE_DOC_KEYS, ...(isDriver ? (['driving_license'] as const) : [])];
@@ -287,6 +292,104 @@ export default function EmployeeDocumentsPage({ params }: { params: { id: string
       (employee.emergencyContact as any).onboardingCompletedAt,
   );
 
+  const shownKeys = new Set<string>(docRows);
+  const extraDocs = documents.filter((d: any) => !shownKeys.has(DOC_TYPE_FROM_API[d.type]));
+  const pendingCount = documents.filter((d: any) => d.status === PENDING_VERIFICATION).length;
+
+  const review = async (doc: any, action: 'verify' | 'reject') => {
+    let remark = '';
+    if (action === 'reject') {
+      remark = window.prompt(`Why is this ${doc.type} being rejected? The staff member sees this in the app.`) ?? '';
+      if (!remark.trim()) return;
+    }
+    setReviewingId(doc.id);
+    try {
+      if (action === 'verify') await api.verifyDocument(doc.id);
+      else await api.rejectDocument(doc.id, remark.trim());
+      toast.success(action === 'verify' ? `${doc.type} verified` : `${doc.type} rejected — staff can re-upload`);
+      refetchDocs();
+    } catch (error: any) {
+      const m = error?.response?.data?.message;
+      toast.error((typeof m === 'string' ? m : m?.message) || error?.message || 'Could not update the document');
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
+  const renderDocRow = (rowKey: string, docName: string, doc: any) => {
+    const unavailableDoc = doc && isUnavailableDoc(doc);
+    const pending = doc?.status === PENDING_VERIFICATION;
+    const rejected = doc?.status === REJECTED;
+    const tone = !doc || rejected ? 'red' : unavailableDoc || pending ? 'amber' : 'green';
+    const toneCls = {
+      red: { bg: 'bg-red-500/10', text: 'text-red-400' },
+      amber: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
+      green: { bg: 'bg-green-500/20', text: 'text-green-400' },
+    }[tone];
+    const statusText = !doc
+      ? 'Not uploaded yet'
+      : unavailableDoc
+        ? `Not available — ${getUnavailableRemark(doc) || 'no remark'}`
+        : pending
+          ? 'Pending verification — uploaded by the staff member from the app'
+          : rejected
+            ? `Rejected — ${doc.metadata?.rejection?.remark ?? 'no reason given'}. Waiting for the staff member to re-upload.`
+            : doc.status ?? 'Uploaded';
+
+    return (
+      <div
+        key={rowKey}
+        className={`flex items-center justify-between gap-3 rounded-xl border p-4 ${
+          pending ? 'border-amber-500/30 bg-amber-500/5' : 'border-white/5 bg-white/5'
+        }`}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`rounded-lg p-2 shrink-0 ${toneCls.bg}`}>
+            {tone === 'green' ? (
+              <FileText className={`h-4 w-4 ${toneCls.text}`} />
+            ) : (
+              <AlertTriangle className={`h-4 w-4 ${toneCls.text}`} />
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white">{docName}</p>
+            <p className={`text-xs ${toneCls.text}`}>{statusText}</p>
+          </div>
+        </div>
+        {doc && !unavailableDoc && (
+          <div className="flex flex-wrap justify-end gap-2 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-secondary-foreground hover:text-white"
+              onClick={() => openDocument(doc.id, 'preview').catch(() => toast.error('Preview failed'))}
+            >
+              <Eye className="mr-1.5 h-3.5 w-3.5" /> View
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-secondary-foreground hover:text-white"
+              onClick={() => openDocument(doc.id, 'download', doc.type).catch(() => toast.error('Download failed'))}
+            >
+              <Download className="mr-1.5 h-3.5 w-3.5" /> Download
+            </Button>
+            {pending && (
+              <>
+                <Button size="sm" variant="success" className="h-8" disabled={reviewingId === doc.id} onClick={() => review(doc, 'verify')}>
+                  <Check className="mr-1.5 h-3.5 w-3.5" /> Verify
+                </Button>
+                <Button size="sm" variant="danger" className="h-8" disabled={reviewingId === doc.id} onClick={() => review(doc, 'reject')}>
+                  <X className="mr-1.5 h-3.5 w-3.5" /> Reject
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderUnavailableToggle = (key: string) => {
     const existing = docsByUiKey[key];
     const alreadyUploaded = existing && !isUnavailableDoc(existing);
@@ -342,73 +445,25 @@ export default function EmployeeDocumentsPage({ params }: { params: { id: string
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-background/40 p-6 backdrop-blur-xl">
-        <h2 className="text-lg font-semibold text-white mb-4">Uploaded Documents</h2>
-        <div className="space-y-3">
-          {docRows.map((docKey) => {
-            const doc = docsByUiKey[docKey];
-            const unavailableDoc = doc && isUnavailableDoc(doc);
-            const docName = DOC_LABELS[docKey] ?? docKey;
-
-            return (
-              <div
-                key={docKey}
-                className="flex items-center justify-between rounded-xl border border-white/5 bg-white/5 p-4"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className={`rounded-lg p-2 shrink-0 ${
-                      unavailableDoc ? 'bg-amber-500/20' : doc ? 'bg-green-500/20' : 'bg-red-500/10'
-                    }`}
-                  >
-                    {unavailableDoc ? (
-                      <AlertTriangle className="h-4 w-4 text-amber-400" />
-                    ) : doc ? (
-                      <FileText className="h-4 w-4 text-green-400" />
-                    ) : (
-                      <AlertTriangle className="h-4 w-4 text-red-400" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-white">{docName}</p>
-                    <p
-                      className={`text-xs ${
-                        unavailableDoc ? 'text-amber-400' : doc ? 'text-green-400' : 'text-red-400'
-                      }`}
-                    >
-                      {unavailableDoc
-                        ? `Not available — ${getUnavailableRemark(doc) || 'no remark'}`
-                        : doc
-                          ? doc.status ?? 'Uploaded'
-                          : 'Not uploaded yet'}
-                    </p>
-                  </div>
-                </div>
-                {doc && !unavailableDoc && (
-                  <div className="flex gap-2 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-secondary-foreground hover:text-white"
-                      onClick={() => openDocument(doc.id, 'preview').catch(() => toast.error('Preview failed'))}
-                    >
-                      <Eye className="mr-1.5 h-3.5 w-3.5" /> View
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-secondary-foreground hover:text-white"
-                      onClick={() =>
-                        openDocument(doc.id, 'download', doc.type).catch(() => toast.error('Download failed'))
-                      }
-                    >
-                      <Download className="mr-1.5 h-3.5 w-3.5" /> Download
-                    </Button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h2 className="text-lg font-semibold text-white">Uploaded Documents</h2>
+          {pendingCount > 0 && (
+            <span className="text-xs font-semibold rounded-full px-2.5 py-1 bg-amber-500/15 text-amber-400 border border-amber-500/30">
+              {pendingCount} uploaded by staff — verify
+            </span>
+          )}
         </div>
+        <div className="space-y-3">
+          {docRows.map((docKey) => renderDocRow(docKey, DOC_LABELS[docKey] ?? docKey, docsByUiKey[docKey]))}
+        </div>
+        {extraDocs.length > 0 && (
+          <>
+            <h3 className="text-sm font-semibold text-secondary-foreground mt-6 mb-3">Other documents</h3>
+            <div className="space-y-3">
+              {extraDocs.map((doc: any) => renderDocRow(doc.id, doc.type, doc))}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-background/40 p-6 backdrop-blur-xl">
