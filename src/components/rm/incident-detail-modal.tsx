@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { AlertTriangle, Lock, MessageSquare, ShieldAlert } from 'lucide-react';
-import { api } from '@/lib/api/client';
+import { api, BASE_URL, tokenStore } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/store/auth.store';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,58 @@ const inputCls =
   'w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#FF5A1F]/50';
 
 type Incident = Record<string, any>;
+
+/**
+ * Complaint photos are private: each URL needs the caller's token, so they
+ * are fetched as blobs rather than put straight into <img src>.
+ */
+function ComplaintPhotos({ photos }: { photos: { index: number; url: string }[] }) {
+  const [srcs, setSrcs] = useState<(string | null)[]>([]);
+  const [failed, setFailed] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const created: string[] = [];
+    const token = tokenStore.getAccess();
+    Promise.all(
+      photos.map(async (p) => {
+        const res = await fetch(`${BASE_URL}${p.url}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        if (!res.ok) return null;
+        const url = URL.createObjectURL(await res.blob());
+        created.push(url);
+        return url;
+      }),
+    ).then((urls) => {
+      if (cancelled) return;
+      setSrcs(urls);
+      setFailed(urls.filter((u) => !u).length);
+    });
+    return () => {
+      cancelled = true;
+      created.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [photos]);
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-semibold text-muted-foreground">Photos from the client ({photos.length})</p>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+        {photos.map((p, i) =>
+          srcs[i] ? (
+            <a key={p.index} href={srcs[i]!} target="_blank" rel="noopener noreferrer"
+               className="block aspect-square overflow-hidden rounded-lg border border-white/10 bg-white/5">
+              {/* eslint-disable-next-line @next/next/no-img-element -- blob URL, not optimisable */}
+              <img src={srcs[i]!} alt={`Complaint photo ${i + 1}`} className="h-full w-full object-cover" />
+            </a>
+          ) : (
+            <div key={p.index} className="aspect-square animate-pulse rounded-lg border border-white/10 bg-white/5" />
+          ),
+        )}
+      </div>
+      {failed > 0 && <p className="text-xs text-amber-400">{failed} photo(s) could not be loaded.</p>}
+    </div>
+  );
+}
 
 /**
  * The incident workflow, which until now existed only on the server.
@@ -152,6 +204,10 @@ export function IncidentDetailModal({
 
           {incident.description && (
             <p className="whitespace-pre-wrap text-sm text-muted-foreground">{incident.description}</p>
+          )}
+
+          {Array.isArray(incident.photos) && incident.photos.length > 0 && (
+            <ComplaintPhotos photos={incident.photos} />
           )}
 
           {Array.isArray(incident.evidenceUrls) && incident.evidenceUrls.length > 0 && (
