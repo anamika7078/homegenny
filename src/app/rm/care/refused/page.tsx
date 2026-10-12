@@ -23,7 +23,7 @@ interface Refused {
 }
 
 /**
- * A staff member said "ye mera kaam nahi" to a client's instruction. The RM
+ * A staff member said "not part of my job" to a client's instruction. The RM
  * reads the scope of work and decides: UPHELD (the staff was right) or
  * OVERTURNED (it is part of the job). Both sides are told.
  */
