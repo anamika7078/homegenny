@@ -1,7 +1,7 @@
 export type UserRole =
   | 'STAFF' | 'CLIENT' | 'RM' | 'BM' | 'FINANCE' | 'ADMIN'
   | 'TRAINER' | 'ASSESSOR' | 'SUPPORT' | 'HR';
-export type Series = 'MAID' | 'SC' | 'UC' | 'DR';
+export type Series = 'MAID' | 'SC' | 'UC' | 'DR' | 'CK';
 export type PipelineStage =
   | 'S1_INTAKE' | 'S2_VERIFY' | 'S2_5_ASSESS' | 'S3_TRAIN'
   | 'S4_AGREEMENTS' | 'S5_DEPLOY' | 'DEFERRED' | 'TERMINAL';

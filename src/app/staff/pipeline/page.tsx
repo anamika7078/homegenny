@@ -38,7 +38,10 @@ const SERIES_CONFIG: Record<string, { label: string; color: string; bg: string }
   SKILLED_CARE: { label: 'SC', color: 'text-[#00C9A7]', bg: 'bg-[#00C9A7]/10' },
   UNSKILLED_CARE: { label: 'UC', color: 'text-[#8B5CF6]', bg: 'bg-[#8B5CF6]/10' },
   MAID: { label: 'MAID', color: 'text-[#FF5A1F]', bg: 'bg-[#FF5A1F]/10' },
+  COOK: { label: 'CK', color: 'text-[#F97316]', bg: 'bg-[#F97316]/10' },
 };
+// The staff list sends the short code (UC/SC/DR/CK), not the DB enum.
+const SHORT_TO_DB: Record<string, string> = { DR: 'DRIVER', SC: 'SKILLED_CARE', UC: 'UNSKILLED_CARE', CK: 'COOK', M3X: 'MAID' };
 
 export default function StaffPipelinePage() {
   const [search, setSearch] = useState('');
@@ -192,7 +195,8 @@ export default function StaffPipelinePage() {
                       ) : (
                         stageStaff.map((applicant) => {
                           const status = getStatusBadge(applicant);
-                          const series = SERIES_CONFIG[applicant.series] || SERIES_CONFIG.DRIVER;
+                          const series = SERIES_CONFIG[applicant.series] ?? SERIES_CONFIG[SHORT_TO_DB[applicant.series]]
+                            ?? { label: String(applicant.series ?? '—'), color: 'text-slate-400', bg: 'bg-slate-500/10' };
                           const isUpdating = updateStageMutation.isPending && updateStageMutation.variables?.id === applicant.id;
                           
                           return (

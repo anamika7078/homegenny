@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 import { useRouter } from 'next/navigation';
+import { useSeriesCatalog } from '@/lib/series';
 
 const schema = z.object({
   full_name: z.string().min(2, 'Name required'),
@@ -20,7 +21,8 @@ const schema = z.object({
   aadhaar_number: z.string().length(12, 'Aadhaar must be 12 digits'),
   address: z.string().min(5, 'Address required'),
   hometown: z.string().optional(),
-  series: z.enum(['MAID', 'SKILLED_CARE', 'UNSKILLED_CARE', 'DRIVER']),
+  // The backend refuses a paused series (MAID/DRIVER) with a clear message.
+  series: z.enum(['UNSKILLED_CARE', 'SKILLED_CARE', 'COOK', 'MAID', 'DRIVER']),
   language_tier: z.enum(['T1', 'T2', 'T3', 'T4']).optional(),
   referral_source: z.string().optional(),
   deposit_amount: z.coerce.number().min(0).optional(),
@@ -49,6 +51,7 @@ export function IntakeForm({
   const qc = useQueryClient();
   const [restrictedWarning, setRestrictedWarning] = useState<string | null>(null);
   const needsRmPicker = user?.role !== 'RM';
+  const { active: activeSeries } = useSeriesCatalog();
 
   const { data: rmUsersRaw, isLoading: rmUsersLoading } = useQuery({
     queryKey: ['rm-users'],
@@ -68,7 +71,7 @@ export function IntakeForm({
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      series: 'MAID',
+      series: 'UNSKILLED_CARE',
       language_tier: 'T2',
       deposit_collected: false,
     },
@@ -162,10 +165,9 @@ export function IntakeForm({
                 placeholder="Select series"
                 className="h-10 border-white/10 bg-card text-sm"
               >
-                <SelectMenuItem value="MAID">M3X — Maid</SelectMenuItem>
-                <SelectMenuItem value="UNSKILLED_CARE">UC — Unskilled Caretaker</SelectMenuItem>
-                <SelectMenuItem value="SKILLED_CARE">SC — Skilled Caretaker</SelectMenuItem>
-                <SelectMenuItem value="DRIVER">DR — Driver</SelectMenuItem>
+                {activeSeries.map((s) => (
+                  <SelectMenuItem key={s.value} value={s.value}>{s.short} — {s.label}</SelectMenuItem>
+                ))}
               </SelectMenu>
             )}
           />

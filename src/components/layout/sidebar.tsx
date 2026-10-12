@@ -30,6 +30,8 @@ import {
   LogOut,
   Scale,
   Calculator,
+  Inbox,
+  HeartPulse,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -89,6 +91,8 @@ const RM_NAV: NavSection[] = [
   {
     section: 'Placements',
     items: [
+      { href: '/rm/requests', label: 'Staff Requests', icon: Inbox },
+      { href: '/rm/care', label: 'Daily Care', icon: HeartPulse },
       { href: '/rm/trials', label: 'Trial Placements', icon: Clock },
       { href: '/rm/placements', label: 'Active Placements', icon: MapPin },
       { href: '/rm/holds', label: 'Stages on Hold', icon: PauseCircle },

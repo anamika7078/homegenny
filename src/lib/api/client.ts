@@ -380,6 +380,32 @@ export interface ApiClient {
   getRmUpgrades(): Promise<any>;
   rmIntake(body: Record<string, unknown>): Promise<any>;
   listRmUsers(): Promise<any>;
+  getSeriesMeta(): Promise<any>;
+  // Staff requests (Phase B)
+  listStaffRequests(params?: Record<string, unknown>): Promise<any>;
+  getStaffRequest(id: string): Promise<any>;
+  createStaffRequest(body: Record<string, unknown>): Promise<any>;
+  getStaffRequestCandidates(id: string): Promise<any>;
+  shortlistStaffRequest(id: string, body: { staff_ids: string[]; rm_note?: string }): Promise<any>;
+  withdrawStaffRequestCandidate(id: string, staffId: string): Promise<any>;
+  selectStaffRequestCandidate(id: string, body: { staff_id: string; note?: string }): Promise<any>;
+  assignStaffRequest(id: string, rmId: string): Promise<any>;
+  attachStaffRequestClient(id: string, clientId: string): Promise<any>;
+  linkStaffRequestPlacement(id: string, placementId: string): Promise<any>;
+  cancelStaffRequest(id: string, reason: string): Promise<any>;
+  // Daily care (Phases C–E)
+  getCareCompliance(): Promise<any>;
+  getCarePlan(placementId: string): Promise<any>;
+  getCareDay(placementId: string, date?: string): Promise<any>;
+  getCareHistory(placementId: string, params?: { from?: string; to?: string }): Promise<any>;
+  getPlacementFoodProfile(placementId: string): Promise<any>;
+  getPlacementMenu(placementId: string, week?: string): Promise<any>;
+  getPlacementMeals(placementId: string, params?: { from?: string; to?: string }): Promise<any>;
+  getPlacementInstructions(placementId: string, status?: string): Promise<any>;
+  getRefusedInstructions(): Promise<any>;
+  decideInstruction(id: string, body: { decision: 'UPHELD' | 'OVERTURNED'; note: string }): Promise<any>;
+  downloadCareReport(placementId: string, month?: string): Promise<Blob>;
+  getCareFile(id: string): Promise<Blob>;
   /** Staff who self-registered from the app and have no RM yet. */
   listUnassignedStaff(): Promise<any>;
   claimStaff(staffId: string): Promise<any>;
@@ -907,6 +933,31 @@ export const api: ApiClient = {
   getRmUpgrades: () => apiClient.get('/rm/upgrades'),
   rmIntake: (body) => apiClient.post('/rm/intake', body),
   listRmUsers: () => apiClient.get('/rm/users'),
+  getSeriesMeta: () => apiClient.get('/meta/series'),
+  listStaffRequests: (params) => apiClient.get('/rm/staff-requests', { params }),
+  getStaffRequest: (id) => apiClient.get(`/rm/staff-requests/${id}`),
+  createStaffRequest: (body) => apiClient.post('/rm/staff-requests', body),
+  getStaffRequestCandidates: (id) => apiClient.get(`/rm/staff-requests/${id}/candidates`),
+  shortlistStaffRequest: (id, body) => apiClient.post(`/rm/staff-requests/${id}/shortlist`, body),
+  withdrawStaffRequestCandidate: (id, staffId) => apiClient.delete(`/rm/staff-requests/${id}/shortlist/${staffId}`),
+  selectStaffRequestCandidate: (id, body) => apiClient.post(`/rm/staff-requests/${id}/select`, body),
+  assignStaffRequest: (id, rmId) => apiClient.patch(`/rm/staff-requests/${id}/assign`, { rm_id: rmId }),
+  attachStaffRequestClient: (id, clientId) => apiClient.patch(`/rm/staff-requests/${id}/client`, { client_id: clientId }),
+  linkStaffRequestPlacement: (id, placementId) => apiClient.post(`/rm/staff-requests/${id}/link-placement`, { placement_id: placementId }),
+  cancelStaffRequest: (id, reason) => apiClient.post(`/rm/staff-requests/${id}/cancel`, { reason }),
+  getCareCompliance: () => apiClient.get('/rm/care/compliance'),
+  getCarePlan: (pid) => apiClient.get(`/care/placements/${pid}/plan`),
+  getCareDay: (pid, date) => apiClient.get(`/care/placements/${pid}/day`, { params: date ? { date } : {} }),
+  getCareHistory: (pid, params) => apiClient.get(`/care/placements/${pid}/history`, { params }),
+  getPlacementFoodProfile: (pid) => apiClient.get(`/care/placements/${pid}/food-profile`),
+  getPlacementMenu: (pid, week) => apiClient.get(`/care/placements/${pid}/menu`, { params: week ? { week } : {} }),
+  getPlacementMeals: (pid, params) => apiClient.get(`/care/placements/${pid}/meals`, { params }),
+  getPlacementInstructions: (pid, status) => apiClient.get(`/care/placements/${pid}/instructions`, { params: status ? { status } : {} }),
+  getRefusedInstructions: () => apiClient.get('/rm/care/instructions/refused'),
+  decideInstruction: (id, body) => apiClient.post(`/rm/care/instructions/${id}/decide`, body),
+  downloadCareReport: (pid, month) =>
+    apiClient.get(`/care/placements/${pid}/report`, { params: month ? { month } : {}, responseType: 'blob' }) as unknown as Promise<Blob>,
+  getCareFile: (id) => apiClient.get(`/care-files/${id}`, { responseType: 'blob' }) as unknown as Promise<Blob>,
   listUnassignedStaff: () => apiClient.get('/rm/unassigned-staff'),
   claimStaff: (staffId) => apiClient.post(`/rm/unassigned-staff/${staffId}/claim`),
 

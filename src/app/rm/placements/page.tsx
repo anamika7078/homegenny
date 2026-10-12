@@ -20,6 +20,7 @@ function NewPlacementModal({
   onCreate,
   creating,
   initialStaffId,
+  fromRequest,
   activePairs,
   activeByStaff,
 }: {
@@ -27,6 +28,8 @@ function NewPlacementModal({
   onCreate: (body: Record<string, unknown>) => Promise<void>;
   creating: boolean;
   initialStaffId?: string | null;
+  /** Opened from a staff request (/rm/requests/[id]): the client and terms come from it. */
+  fromRequest?: { id: string; requestNo: string; clientId: string; clientName: string; placementType: 'PERMANENT' | 'TEMPORARY' } | null;
   /** "staffId::clientId" for every TRIAL/CONFIRMED placement — one staff member
    *  may work at many clients, but not twice at the same one. */
   activePairs: Set<string>;
@@ -37,7 +40,9 @@ function NewPlacementModal({
   const [staffSearch, setStaffSearch] = useState('');
   const [clientSearch, setClientSearch] = useState('');
   const [selectedStaff, setSelectedStaff] = useState<any | null>(null);
-  const [selectedClient, setSelectedClient] = useState<any | null>(null);
+  const [selectedClient, setSelectedClient] = useState<any | null>(
+    fromRequest ? { id: fromRequest.clientId, customer_name: fromRequest.clientName } : null,
+  );
   // Trial (default) or Confirm Now — the latter skips the trial, and with it the
   // A2/A3-before-confirm check. See docs/MOBILE_BRIEF_PLACEMENT_S5_ONLY.md §2–3.
   const [confirmNow, setConfirmNow] = useState(false);
@@ -47,7 +52,7 @@ function NewPlacementModal({
   // How this placement is paid. PERMANENT holds the client's whole shift and is
   // billed monthly; TEMPORARY is billed on the hours actually worked there, and
   // the same staff member can carry a different rate at each client.
-  const [placementType, setPlacementType] = useState<'PERMANENT' | 'TEMPORARY'>('PERMANENT');
+  const [placementType, setPlacementType] = useState<'PERMANENT' | 'TEMPORARY'>(fromRequest?.placementType ?? 'PERMANENT');
   const [hourlyRate, setHourlyRate] = useState('');
   const [hourlyFee, setHourlyFee] = useState('');
 
@@ -115,6 +120,7 @@ function NewPlacementModal({
       staff_id: selectedStaff.id,
       client_id: selectedClient.id,
       placement_type: placementType,
+      ...(fromRequest ? { staff_request_id: fromRequest.id } : {}),
       ...(confirmNow ? { status: 'CONFIRMED' } : {}),
       ...(isHourly
         ? { hourly_rate: rateNum, hourly_fee: feePerHourNum }
@@ -131,6 +137,9 @@ function NewPlacementModal({
               <Plus className="h-5 w-5 text-[#FF5A1F]" /> New Placement
             </h2>
             <p className="text-xs text-[#8D9AB5] mt-0.5">Start on a trial and confirm once it goes well, or confirm straight away.</p>
+            {fromRequest && (
+              <p className="text-xs text-emerald-400 mt-1">Fills staff request {fromRequest.requestNo}</p>
+            )}
           </div>
           <button onClick={onClose} className="text-[#8D9AB5] hover:text-white text-xl w-8 h-8 flex items-center justify-center">×</button>
         </div>
@@ -362,14 +371,26 @@ export default function PlacementsPage() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const staffIdParam = searchParams.get('staffId');
+  // From a staff request: ?requestId=&requestNo=&clientId=&clientName=&type=
+  const requestIdParam = searchParams.get('requestId');
+  const fromRequest =
+    requestIdParam && searchParams.get('clientId')
+      ? {
+          id: requestIdParam,
+          requestNo: searchParams.get('requestNo') ?? '',
+          clientId: searchParams.get('clientId') as string,
+          clientName: searchParams.get('clientName') ?? 'Client',
+          placementType: (searchParams.get('type') === 'TEMPORARY' ? 'TEMPORARY' : 'PERMANENT') as 'PERMANENT' | 'TEMPORARY',
+        }
+      : null;
   const [showNewModal, setShowNewModal] = useState(false);
   const [exitingPlacement, setExitingPlacement] = useState<Placement | null>(null);
 
   // Deep-linked from a staff's Deployment CTA (see candidate-detail.tsx) — jump
   // straight into placement creation instead of making the RM re-open the modal.
   useEffect(() => {
-    if (staffIdParam) setShowNewModal(true);
-  }, [staffIdParam]);
+    if (staffIdParam || requestIdParam) setShowNewModal(true);
+  }, [staffIdParam, requestIdParam]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['placements'],
@@ -409,6 +430,7 @@ export default function PlacementsPage() {
       toast.success(body.status === 'CONFIRMED' ? 'Placement created — confirmed.' : 'Placement created — trial started.');
       setShowNewModal(false);
       invalidate();
+      if (body.staff_request_id) queryClient.invalidateQueries({ queryKey: ['staff-requests'] });
     },
     onError: (e: Error) => toast.error(e.message || 'Failed to create placement'),
   });
@@ -510,6 +532,7 @@ export default function PlacementsPage() {
           onCreate={(body) => createMutation.mutateAsync(body)}
           creating={createMutation.isPending}
           initialStaffId={staffIdParam}
+          fromRequest={fromRequest}
           activePairs={activePairs}
           activeByStaff={activeByStaff}
         />

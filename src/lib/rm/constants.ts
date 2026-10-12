@@ -38,10 +38,12 @@ export const SERIES_LABELS: Record<string, string> = {
   SKILLED_CARE: 'SC',
   UNSKILLED_CARE: 'UC',
   DRIVER: 'DR',
+  COOK: 'CK',
   M3X: 'M3X',
   SC: 'SC',
   UC: 'UC',
   DR: 'DR',
+  CK: 'CK',
 };
 
 export const SERIES_BADGE: Record<string, string> = {
@@ -49,6 +51,7 @@ export const SERIES_BADGE: Record<string, string> = {
   SKILLED_CARE: 'bg-teal-500/15 text-teal-400 border-teal-500/30',
   UNSKILLED_CARE: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
   DRIVER: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
+  COOK: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
 };
 
 export const TRAINING_DAYS: Record<Series, number> = {
@@ -56,6 +59,7 @@ export const TRAINING_DAYS: Record<Series, number> = {
   SC: 7,
   UC: 5,
   DR: 5,
+  CK: 5,
 };
 
 export const TRIAL_DAYS: Record<Series, number> = {
@@ -63,6 +67,7 @@ export const TRIAL_DAYS: Record<Series, number> = {
   SC: 14,
   UC: 7,
   DR: 7,
+  CK: 7,
 };
 
 export const FSM_NEXT: Partial<Record<PipelineStage, PipelineStage[]>> = {

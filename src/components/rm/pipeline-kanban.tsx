@@ -35,6 +35,7 @@ import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 import { cn } from '@/lib/utils/cn';
+import { useSeriesCatalog } from '@/lib/series';
 
 export function PipelineKanban() {
   const [search, setSearch] = useState('');
@@ -78,15 +79,21 @@ export function PipelineKanban() {
 
   const payload = (data as { data?: { columns?: Record<string, StaffApplicant[]> } })?.data ?? data;
   const columns = (payload as { columns?: Record<string, StaffApplicant[]> })?.columns ?? {};
-  const allStaff = PIPELINE_STAGES.flatMap((st) => columns[st] ?? []);
+  // The backend leaves out a switched-off stage (S2.5 while Driver is paused)
+  // unless someone is still in it, so show only the columns it sent.
+  const stages = (Object.keys(columns).length
+    ? PIPELINE_STAGES.filter((st) => st in columns)
+    : PIPELINE_STAGES) as PipelineStage[];
+  const nextStages = (from: PipelineStage) => (FSM_NEXT[from] ?? []).filter((st) => stages.includes(st));
+  const allStaff = stages.flatMap((st) => columns[st] ?? []);
   const holdTarget = holdTargetId ? allStaff.find((s) => s.id === holdTargetId) ?? null : null;
 
   useEffect(() => {
     // Keep activeStage valid if backend changes stage list order (defensive)
-    if (!PIPELINE_STAGES.includes(activeStage)) {
-      setActiveStage(PIPELINE_STAGES[0] as PipelineStage);
+    if (!stages.includes(activeStage)) {
+      setActiveStage(stages[0]);
     }
-  }, [activeStage]);
+  }, [activeStage, stages]);
 
   const onDragEnd = (event: DragEndEvent) => {
     setDragStaff(null);
@@ -95,7 +102,7 @@ export function PipelineKanban() {
     const staff = allStaff.find((s) => s.id === active.id);
     const targetStage = over.id as PipelineStage;
     if (!staff || staff.pipeline_stage === targetStage) return;
-    const allowed = FSM_NEXT[staff.pipeline_stage as PipelineStage] ?? [];
+    const allowed = nextStages(staff.pipeline_stage as PipelineStage);
     if (!allowed.includes(targetStage)) {
       toast.error(`Cannot move ${staff.staff_code} to ${STAGE_LABELS[targetStage]}`);
       return;
@@ -158,7 +165,7 @@ export function PipelineKanban() {
           {/* Mobile: show one stage at a time */}
           <div className="lg:hidden space-y-3">
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-              {PIPELINE_STAGES.map((stage) => {
+              {stages.map((stage) => {
                 const isActive = activeStage === stage;
                 const count = (columns[stage] ?? []).length;
                 return (
@@ -188,11 +195,11 @@ export function PipelineKanban() {
                 variant="outline"
                 className="h-9 rounded-full border-white/15 bg-transparent px-3 text-xs text-foreground hover:bg-white/5"
                 onClick={() => {
-                  const idx = PIPELINE_STAGES.indexOf(activeStage);
-                  const prev = PIPELINE_STAGES[Math.max(0, idx - 1)] as PipelineStage;
+                  const idx = stages.indexOf(activeStage);
+                  const prev = stages[Math.max(0, idx - 1)] as PipelineStage;
                   setActiveStage(prev);
                 }}
-                disabled={PIPELINE_STAGES.indexOf(activeStage) <= 0}
+                disabled={stages.indexOf(activeStage) <= 0}
               >
                 Prev
               </Button>
@@ -208,11 +215,11 @@ export function PipelineKanban() {
                 variant="outline"
                 className="h-9 rounded-full border-white/15 bg-transparent px-3 text-xs text-foreground hover:bg-white/5"
                 onClick={() => {
-                  const idx = PIPELINE_STAGES.indexOf(activeStage);
-                  const next = PIPELINE_STAGES[Math.min(PIPELINE_STAGES.length - 1, idx + 1)] as PipelineStage;
+                  const idx = stages.indexOf(activeStage);
+                  const next = stages[Math.min(stages.length - 1, idx + 1)] as PipelineStage;
                   setActiveStage(next);
                 }}
-                disabled={PIPELINE_STAGES.indexOf(activeStage) >= PIPELINE_STAGES.length - 1}
+                disabled={stages.indexOf(activeStage) >= stages.length - 1}
               >
                 Next
               </Button>
@@ -228,7 +235,7 @@ export function PipelineKanban() {
 
           {/* Desktop/tablet: keep horizontal multi-column */}
           <div className="hidden lg:flex gap-3 overflow-x-auto pb-4">
-            {PIPELINE_STAGES.map((stage) => (
+            {stages.map((stage) => (
               <KanbanColumn
                 key={stage}
                 stage={stage as PipelineStage}
@@ -262,7 +269,7 @@ export function PipelineKanban() {
             placeholder="Select target stage"
             className="bg-background border-white/10"
           >
-            {(FSM_NEXT[advanceTarget?.pipeline_stage as PipelineStage] ?? []).map((s) => (
+            {nextStages(advanceTarget?.pipeline_stage as PipelineStage).map((s) => (
               <SelectMenuItem key={s} value={s}>
                 {STAGE_LABELS[s]}
               </SelectMenuItem>
@@ -446,6 +453,7 @@ function KanbanFilters({
   series: string;
   setSeries: (v: string) => void;
 }) {
+  const { all: allSeries } = useSeriesCatalog();
   return (
     <div className="flex flex-wrap gap-3">
       <div className="relative min-w-[200px] flex-1">
@@ -463,10 +471,10 @@ function KanbanFilters({
         placeholder="All series"
         className="h-10 bg-card border-white/10 text-sm"
       >
-        <SelectMenuItem value="MAID">M3X</SelectMenuItem>
-        <SelectMenuItem value="SKILLED_CARE">SC</SelectMenuItem>
-        <SelectMenuItem value="UNSKILLED_CARE">UC</SelectMenuItem>
-        <SelectMenuItem value="DRIVER">DR</SelectMenuItem>
+        {/* Every series — staff in a paused one (MAID/DRIVER) still need finding. */}
+        {allSeries.map((s) => (
+          <SelectMenuItem key={s.value} value={s.value}>{s.short}{s.active ? '' : ' (paused)'}</SelectMenuItem>
+        ))}
       </SelectMenu>
     </div>
   );

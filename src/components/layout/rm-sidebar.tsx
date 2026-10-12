@@ -26,10 +26,13 @@ import {
   Settings,
   Shield,
   HelpCircle,
+  Inbox,
+  HeartPulse,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { useAuthStore } from '@/lib/store/auth.store';
+import { useSeriesCatalog } from '@/lib/series';
 
 type NavItem = {
   href: string;
@@ -62,6 +65,8 @@ const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: 'Deployment',
     items: [
+      { href: '/rm/requests', label: 'Staff Requests', icon: Inbox },
+      { href: '/rm/care', label: 'Daily Care', icon: HeartPulse },
       { href: '/rm/placements', label: 'Placements', icon: MapPin },
       { href: '/rm/trials', label: 'Trial Monitor', icon: Clock },
       { href: '/rm/shifts', label: 'Shift Logs', icon: Calendar },
@@ -102,6 +107,8 @@ interface RmSidebarProps {
 export function RmSidebar({ open = false, onClose }: RmSidebarProps) {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
+  // The Driver practical test is Stage 2.5, which runs only while the Driver series does.
+  const { stage25Enabled } = useSeriesCatalog();
 
   return (
     <aside
@@ -118,7 +125,11 @@ export function RmSidebar({ open = false, onClose }: RmSidebarProps) {
             <h4 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-600">
               {group.section}
             </h4>
-            <NavGroup items={group.items} pathname={pathname} onNavigate={onClose} />
+            <NavGroup
+              items={group.items.filter((i) => i.href !== '/rm/assessment' || stage25Enabled)}
+              pathname={pathname}
+              onNavigate={onClose}
+            />
           </div>
         ))}
       </nav>

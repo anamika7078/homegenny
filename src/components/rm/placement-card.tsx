@@ -54,6 +54,8 @@ const SERIES_CLR: Record<string, string> = {
   UC: 'bg-sky-500/10 border-sky-500/20 text-sky-400',
   UNSKILLED_CARE: 'bg-sky-500/10 border-sky-500/20 text-sky-400',
   MAID: 'bg-violet-500/10 border-violet-500/20 text-violet-400',
+  CK: 'bg-orange-500/10 border-orange-500/20 text-orange-400',
+  COOK: 'bg-orange-500/10 border-orange-500/20 text-orange-400',
 };
 
 // These codes feed the exit settlement (finance/settlement/exit-settlement.service.ts

@@ -24,8 +24,10 @@ import {
   XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useSeriesCatalog } from '@/lib/series';
 
 export default function AdminPipelinePage() {
+  const { stage25Enabled } = useSeriesCatalog();
   const [showFsmRules, setShowFsmRules] = useState(true);
 
   const { data: overviewData, isLoading, refetch, isFetching } = useQuery({
@@ -49,14 +51,17 @@ export default function AdminPipelinePage() {
     { label: 'Pending Video Certs', value: kpis.pending_video ?? 0, icon: Video, color: 'text-rose-400' },
   ];
 
+  // S2.5 is the Driver practical test — listed only while Driver is taken on.
   const fsmStages = [
-    { code: 'S1_INTAKE', label: '1. Intake & Profiling', desc: 'Candidate registration, basic details & document upload' },
-    { code: 'S2_VERIFY', label: '2. Background Verification', desc: 'Aadhaar, PAN, police check & address verification' },
-    { code: 'S2_5_ASSESS', label: '3. Skill Assessment', desc: 'Practical test, video certification & domain interview' },
-    { code: 'S3_TRAIN', label: '4. Academy Training', desc: 'Mandatory training batches, attendance & practical module' },
-    { code: 'S4_AGREEMENTS', label: '5. Legal Agreement', desc: 'Placement contract, salary structure & branch terms' },
-    { code: 'S5_DEPLOY', label: '6. Active Deployment', desc: 'Customer site deployment & active billing start' },
-  ];
+    { code: 'S1_INTAKE', label: 'Intake & Profiling', desc: 'Candidate registration, basic details & document upload' },
+    { code: 'S2_VERIFY', label: 'Background Verification', desc: 'Aadhaar, PAN, police check & address verification' },
+    ...(stage25Enabled
+      ? [{ code: 'S2_5_ASSESS', label: 'Skill Assessment', desc: 'Driver practical test' }]
+      : []),
+    { code: 'S3_TRAIN', label: 'Academy Training', desc: 'Mandatory training batches, attendance & practical module' },
+    { code: 'S4_AGREEMENTS', label: 'Legal Agreement', desc: 'Placement contract, salary structure & branch terms' },
+    { code: 'S5_DEPLOY', label: 'Active Deployment', desc: 'Customer site deployment & active billing start' },
+  ].map((st, i) => ({ ...st, label: `${i + 1}. ${st.label}` }));
 
   return (
     <div className="page-padding space-y-6 sm:space-y-8 min-h-screen text-[#E8EDF8]">
@@ -133,7 +138,7 @@ export default function AdminPipelinePage() {
                     Candidate passes BG verification, clears skill assessment & completes training batch successfully.
                   </p>
                   <div className="text-[11px] font-mono text-emerald-300 bg-emerald-950/60 p-2 rounded border border-emerald-800/40">
-                    Route: S1 ➔ S2 ➔ S2_5 ➔ S3 ➔ S4 ➔ S5_DEPLOY
+                    Route: S1 ➔ S2 ➔ {stage25Enabled ? 'S2_5 ➔ ' : ''}S3 ➔ S4 ➔ S5_DEPLOY
                   </div>
                 </div>
 

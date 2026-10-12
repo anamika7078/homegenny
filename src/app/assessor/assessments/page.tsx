@@ -5,6 +5,7 @@ import { api } from '@/lib/api/client';
 import { useRouter } from 'next/navigation';
 import { Car, Video, Clock, RotateCcw, ChevronRight, Loader2, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
+import { useSeriesCatalog } from '@/lib/series';
 
 const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   DRIVER: { label: 'Driver Test',     color: 'text-info',    icon: Car   },
@@ -19,6 +20,7 @@ const STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
 
 export default function AssessmentsQueue() {
   const router = useRouter();
+  const { stage25Enabled } = useSeriesCatalog();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['assessor-assessments'],
@@ -43,12 +45,13 @@ export default function AssessmentsQueue() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
+          {/* Driver test = Stage 2.5, which runs only while the Driver series does. */}
+          {stage25Enabled && <button
             onClick={() => router.push('/assessor/assessments/driver')}
             className="flex items-center gap-2 rounded-xl bg-info/10 border border-info/25 px-4 py-2 text-xs font-bold text-info hover:bg-info/20 transition-colors"
           >
             <Car className="h-3.5 w-3.5" /> Driver Test
-          </button>
+          </button>}
           <button
             onClick={() => router.push('/assessor/assessments/sc')}
             className="flex items-center gap-2 rounded-xl bg-violet/10 border border-violet/25 px-4 py-2 text-xs font-bold text-violet hover:bg-violet/20 transition-colors"

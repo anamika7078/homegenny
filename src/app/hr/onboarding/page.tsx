@@ -32,6 +32,7 @@ const DERIVED_BY_SERIES: Record<string, { category: string; designation: string;
   UNSKILLED_CARE: { category: 'Helper',    designation: 'Care Helper',    department: 'Care Services' },
   SKILLED_CARE:   { category: 'Caretaker', designation: 'Caretaker',      department: 'Care Services' },
   DRIVER:         { category: 'Driver',    designation: 'Driver',         department: 'Driving' },
+  COOK:           { category: 'Cook',      designation: 'Cook',           department: 'Kitchen Services' },
 };
 
 const EMPTY_FORM = {

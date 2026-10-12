@@ -8,16 +8,19 @@ import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api/client';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
+import { useSeriesCatalog } from '@/lib/series';
 
 const SERIES_COLORS: Record<string, string> = {
   DR: '#38BDF8', 
   SC: '#00C9A7', 
   UC: '#8B5CF6', 
   MAID: '#F0A500',
+  CK: '#F97316',
 };
 
 export default function StaffIntakePage() {
   const router = useRouter();
+  const { active: activeSeries } = useSeriesCatalog();
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -189,10 +192,10 @@ export default function StaffIntakePage() {
                     placeholder="Select"
                     className="border-border/50 bg-[#0f1523] py-2.5"
                   >
-                    <SelectMenuItem value="DR">DR - Driver</SelectMenuItem>
-                    <SelectMenuItem value="SC">SC - Skilled Caretaker</SelectMenuItem>
-                    <SelectMenuItem value="UC">UC - Unskilled Caretaker</SelectMenuItem>
-                    <SelectMenuItem value="MAID">MAID - Maid</SelectMenuItem>
+                    {/* value is the DB enum already, so the short-code mapping below leaves it alone */}
+                    {activeSeries.map((s) => (
+                      <SelectMenuItem key={s.value} value={s.value}>{s.short} - {s.label}</SelectMenuItem>
+                    ))}
                   </SelectMenu>
                 </div>
                 <div className="space-y-2">
@@ -259,15 +262,9 @@ export default function StaffIntakePage() {
               </CardHeader>
               <CardContent className="page-padding space-y-5">
                 <div className="flex items-start gap-4">
-                  <div className="w-8 shrink-0 text-xs font-bold" style={{ color: SERIES_COLORS['DR'] }}>DR</div>
-                  <div className="text-sm text-secondary-foreground leading-relaxed">
-                    Sarathi DL verify · eChallan check · PV · Practical test
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
                   <div className="w-8 shrink-0 text-xs font-bold" style={{ color: SERIES_COLORS['SC'] }}>SC</div>
                   <div className="text-sm text-secondary-foreground leading-relaxed">
-                    Aadhaar eKYC · S2.5 assessment · 7-day training · A4 Medical Addendum
+                    Aadhaar eKYC · Medical · PV · 7-day training · A4 Medical Addendum
                   </div>
                 </div>
                 <div className="flex items-start gap-4">
@@ -277,9 +274,9 @@ export default function StaffIntakePage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-4">
-                  <div className="w-8 shrink-0 text-xs font-bold" style={{ color: SERIES_COLORS['MAID'] }}>MAID</div>
+                  <div className="w-8 shrink-0 text-xs font-bold" style={{ color: SERIES_COLORS['CK'] }}>CK</div>
                   <div className="text-sm text-secondary-foreground leading-relaxed">
-                    Aadhaar eKYC · Background check · PV submission
+                    Aadhaar eKYC · Medical (food handling) · PV · 5-day training
                   </div>
                 </div>
               </CardContent>
@@ -319,6 +316,8 @@ export default function StaffIntakePage() {
                       const seriesKey = staff.series === 'DRIVER' ? 'DR'
                         : staff.series === 'SKILLED_CARE' ? 'SC'
                         : staff.series === 'UNSKILLED_CARE' ? 'UC'
+                        : staff.series === 'COOK' || staff.series === 'CK' ? 'CK'
+                        : staff.series === 'SC' || staff.series === 'UC' || staff.series === 'DR' ? staff.series
                         : 'MAID';
                       const color = SERIES_COLORS[seriesKey] ?? '#94a3b8';
                       const initials = (staff.full_name ?? '?')

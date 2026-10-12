@@ -7,6 +7,7 @@ import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 import { usePlaceHold, useMarkComplete, useReleaseHold } from '@/lib/rm/hooks';
+import { useSeriesCatalog } from '@/lib/series';
 import { HOLD_REASONS, COMPLETE_REASONS, PIPELINE_STAGES, STAGE_LABELS, overrideReasonLabel } from '@/lib/rm/constants';
 import type { PipelineStage, StaffApplicant } from '@/lib/types';
 import { fToNow } from '@/lib/utils/format';
@@ -30,7 +31,11 @@ export function HoldModal({ staff, onClose }: { staff: StaffApplicant; onClose: 
   const reached = WORKING_STAGES.slice(0, WORKING_STAGES.indexOf(staff.pipeline_stage) + 1);
   const openOverrides = staff.open_holds ?? [];
   const overriddenStages = new Set(openOverrides.map((h) => h.stage));
-  const available = reached.filter((s) => !overriddenStages.has(s));
+  const { stage25Enabled } = useSeriesCatalog();
+  // S2.5 only counts while it runs, or for a staff member still sitting in it — the backend refuses the rest.
+  const available = reached.filter(
+    (s) => !overriddenStages.has(s) && (s !== 'S2_5_ASSESS' || stage25Enabled || staff.pipeline_stage === 'S2_5_ASSESS'),
+  );
 
   const [kind, setKind] = useState<'HOLD' | 'COMPLETE'>('HOLD');
   const [stage, setStage] = useState<PipelineStage | ''>(
