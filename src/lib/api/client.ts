@@ -408,6 +408,7 @@ export interface ApiClient {
   getCareFile(id: string): Promise<Blob>;
   // Check-in map
   getCheckins(params?: { date?: string; branch_id?: string }): Promise<any>;
+  searchDishes(params?: { q?: string; meal?: string; limit?: number }): Promise<any>;
   setClientHomeLocation(clientId: string, body: { lat: number; lng: number }): Promise<any>;
   /** Staff who self-registered from the app and have no RM yet. */
   listUnassignedStaff(): Promise<any>;
@@ -962,6 +963,7 @@ export const api: ApiClient = {
     apiClient.get(`/care/placements/${pid}/report`, { params: month ? { month } : {}, responseType: 'blob' }) as unknown as Promise<Blob>,
   getCareFile: (id) => apiClient.get(`/care-files/${id}`, { responseType: 'blob' }) as unknown as Promise<Blob>,
   getCheckins: (params) => apiClient.get('/rm/checkins', { params }),
+  searchDishes: (params) => apiClient.get('/care/dishes', { params }),
   setClientHomeLocation: (clientId, body) => apiClient.patch(`/rm/clients/${clientId}/home-location`, body),
   listUnassignedStaff: () => apiClient.get('/rm/unassigned-staff'),
   claimStaff: (staffId) => apiClient.post(`/rm/unassigned-staff/${staffId}/claim`),

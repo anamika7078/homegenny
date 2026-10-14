@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Search, X } from 'lucide-react';
+import { Plus, Search, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { RmPageHeader } from '@/components/rm/rm-page-header';
 import { Button } from '@/components/ui/button';
@@ -50,6 +50,71 @@ function Chips({ options, value, onChange }: { options: string[]; value: string[
 
 const splitList = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
 
+/** One-time visit lengths (minutes) and how many dishes each covers — same as the server. */
+const DURATIONS = [
+  { min: 60, label: '1 hour' },
+  { min: 90, label: '1.5 hours' },
+  { min: 120, label: '2 hours' },
+  { min: 180, label: '3 hours' },
+];
+const dishCap = (min: number) => (min <= 60 ? 3 : min <= 90 ? 4 : min <= 120 ? 5 : 7);
+const mealForTime = (t: string) => {
+  const h = Number(t.slice(0, 2));
+  return h < 11 ? 'BREAKFAST' : h < 16 ? 'LUNCH' : h < 19 ? 'SNACKS' : 'DINNER';
+};
+
+type PickedDish = { id?: string; name: string; diet?: string };
+type MedRow = { name: string; dose: string; time: string };
+
+/** Search the dish list; a name that isn't on it can be added as typed. */
+function DishPicker({ value, onChange, max }: { value: PickedDish[]; onChange: (v: PickedDish[]) => void; max: number }) {
+  const [q, setQ] = useState('');
+  const { data, isFetching } = useQuery({
+    queryKey: ['dish-search', q],
+    queryFn: () => api.searchDishes({ q: q || undefined, limit: 12 }),
+    enabled: q.trim().length >= 2,
+  });
+  const items: { id: string; name: string; diet: string }[] = data?.items ?? [];
+  const full = value.length >= max;
+  const add = (d: PickedDish) => {
+    if (full || value.some((v) => v.name.toLowerCase() === d.name.toLowerCase())) return;
+    onChange([...value, d]);
+    setQ('');
+  };
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {value.map((d) => (
+          <span key={d.name} className="inline-flex items-center gap-1 rounded-full border border-[#FF6B00]/40 bg-[#FF6B00]/10 px-3 py-1 text-xs text-[#FF8A3D]">
+            {d.name}
+            <button type="button" onClick={() => onChange(value.filter((v) => v.name !== d.name))}><X className="h-3 w-3" /></button>
+          </span>
+        ))}
+        {!value.length && <span className="text-xs text-muted-foreground">No dishes yet.</span>}
+      </div>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input className="pl-9" value={q} disabled={full} onChange={(e) => setQ(e.target.value)} placeholder={full ? `Up to ${max} dishes for this visit` : 'Search dishes, e.g. dal, paneer…'} />
+      </div>
+      {q.trim().length >= 2 && !full && (
+        <div className="max-h-44 divide-y divide-white/5 overflow-y-auto rounded-lg border border-white/10">
+          {isFetching && <p className="px-3 py-2 text-xs text-muted-foreground">Searching…</p>}
+          {items.map((d) => (
+            <button key={d.id} type="button" onClick={() => add({ id: d.id, name: d.name, diet: d.diet })} className="flex w-full justify-between px-3 py-2 text-left text-xs hover:bg-white/5">
+              {d.name} <span className="text-muted-foreground">{titleCase(d.diet)}</span>
+            </button>
+          ))}
+          {!isFetching && !items.some((d) => d.name.toLowerCase() === q.trim().toLowerCase()) && (
+            <button type="button" onClick={() => add({ name: q.trim() })} className="flex w-full items-center gap-1 px-3 py-2 text-left text-xs text-[#FF8A3D] hover:bg-white/5">
+              <Plus className="h-3 w-3" /> Add &quot;{q.trim()}&quot;
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** An RM raising a request for a client already on the books, or for a lead with no account yet. */
 export default function NewStaffRequestPage() {
   const router = useRouter();
@@ -62,6 +127,15 @@ export default function NewStaffRequestPage() {
   const [lead, setLead] = useState({ name: '', phone: '', city: '' });
 
   const [series, setSeries] = useState('UNSKILLED_CARE');
+  const [visitType, setVisitType] = useState<'REGULAR' | 'ONE_TIME'>('REGULAR');
+  const [durationMin, setDurationMin] = useState(120);
+  // What goes to the staff app once someone is placed
+  const [dishes, setDishes] = useState<PickedDish[]>([]);
+  const [menuNote, setMenuNote] = useState('');
+  const [meds, setMeds] = useState<MedRow[]>([]);
+  const [dos, setDos] = useState('');
+  const [donts, setDonts] = useState('');
+  const [dietNotes, setDietNotes] = useState('');
   const [placementType, setPlacementType] = useState<'PERMANENT' | 'TEMPORARY'>('PERMANENT');
   const [shiftHours, setShiftHours] = useState('8');
   const [startDate, setStartDate] = useState('');
@@ -88,6 +162,8 @@ export default function NewStaffRequestPage() {
 
   const isCook = series === 'COOK';
   const isUc = series === 'UNSKILLED_CARE';
+  const oneTime = visitType === 'ONE_TIME';
+  const cap = dishCap(durationMin);
 
   const { data: clients, isFetching: clientsLoading } = useQuery({
     queryKey: ['finance-customers-picker', clientSearch],
@@ -113,15 +189,39 @@ export default function NewStaffRequestPage() {
             medical_needs: isUc ? [] : medicalNeeds,
             night_care: nightCare,
           };
+      const menu = isCook && dishes.length
+        ? oneTime
+          ? {
+              dish_ids: dishes.filter((d) => d.id).map((d) => d.id),
+              dishes: dishes.filter((d) => !d.id).map((d) => ({ name: d.name })),
+              meal_time: startTime,
+              special_instruction: menuNote.trim() || undefined,
+            }
+          : undefined
+        : undefined;
+      const validMeds = meds.filter((m) => m.name.trim() && m.dose.trim());
+      const careNeeds = !isCook && (validMeds.length || dos.trim() || donts.trim() || dietNotes.trim())
+        ? {
+            patient: { age: Number(patientAge) || undefined },
+            medications: isUc ? [] : validMeds.map((m) => ({ name: m.name.trim(), dose: m.dose.trim(), times: [m.time || '09:00'] })),
+            dos: dos.trim() || undefined,
+            donts: donts.trim() || undefined,
+            diet_notes: dietNotes.trim() || undefined,
+          }
+        : undefined;
       return api.createStaffRequest({
         ...(forLead
           ? { lead_name: lead.name, lead_phone: lead.phone, lead_city: lead.city || undefined }
           : { client_id: client?.id }),
         series,
-        placement_type: placementType,
-        shift_hours: Number(shiftHours) || 8,
-        start_date: startDate || undefined,
-        start_time: startDate && startTime ? startTime : undefined,
+        visit_type: visitType,
+        ...(oneTime
+          ? { duration_min: durationMin }
+          : { placement_type: placementType, shift_hours: Number(shiftHours) || 8 }),
+        start_date: startDate,
+        start_time: startTime,
+        ...(menu ? { menu } : {}),
+        ...(careNeeds ? { care_needs: careNeeds } : {}),
         language: language || undefined,
         gender_pref: genderPref,
         headcount: Number(headcount) || 1,
@@ -138,7 +238,11 @@ export default function NewStaffRequestPage() {
   });
 
   const whoReady = (forLead ? lead.name.trim() && lead.phone.trim() : !!client) && address.trim().length >= 5;
-  const needsReady = isCook ? dietType && Number(familySize) > 0 && meals.length : Number(patientAge) > 0 && mobility;
+  const whenReady = !!startDate && !!startTime;
+  const needsReady =
+    (isCook ? dietType && Number(familySize) > 0 && meals.length : Number(patientAge) > 0 && mobility) &&
+    // A one-time cook visit is booked for its dishes.
+    (!isCook || !oneTime || (dishes.length > 0 && dishes.length <= cap));
 
   return (
     <div className="page-padding max-w-3xl mx-auto space-y-6">
@@ -206,7 +310,24 @@ export default function NewStaffRequestPage() {
 
       {/* What */}
       <section className="glass-card space-y-4 rounded-xl p-5">
-        <h2 className="text-sm font-bold">What they need</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-bold">What they need</h2>
+          <div className="flex rounded-lg border border-white/10 p-0.5 text-xs">
+            {[
+              { k: 'REGULAR' as const, l: 'Regular staff' },
+              { k: 'ONE_TIME' as const, l: 'One-time visit' },
+            ].map((o) => (
+              <button
+                key={o.k}
+                type="button"
+                onClick={() => setVisitType(o.k)}
+                className={cn('rounded-md px-3 py-1.5', visitType === o.k ? 'bg-white/10 text-foreground' : 'text-muted-foreground')}
+              >
+                {o.l}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Series *">
             <SelectMenu value={series} onValueChange={setSeries} className="h-10 border-white/10 bg-card text-sm">
@@ -215,16 +336,26 @@ export default function NewStaffRequestPage() {
               ))}
             </SelectMenu>
           </Field>
-          <Field label="Type">
-            <SelectMenu value={placementType} onValueChange={(v) => setPlacementType(v as 'PERMANENT' | 'TEMPORARY')} className="h-10 border-white/10 bg-card text-sm">
-              <SelectMenuItem value="PERMANENT">Permanent (monthly)</SelectMenuItem>
-              <SelectMenuItem value="TEMPORARY">Hourly</SelectMenuItem>
-            </SelectMenu>
-          </Field>
-          <Field label="Hours per day"><Input type="number" value={shiftHours} onChange={(e) => setShiftHours(e.target.value)} /></Field>
-          <Field label="Start date"><Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></Field>
-          <Field label="Start time" hint={startDate ? undefined : 'Pick a date first'}>
-            <Input type="time" value={startTime} disabled={!startDate} onChange={(e) => setStartTime(e.target.value)} />
+          {oneTime ? (
+            <Field label="Duration *" hint="Billed by the hour">
+              <SelectMenu value={String(durationMin)} onValueChange={(v) => setDurationMin(Number(v))} className="h-10 border-white/10 bg-card text-sm">
+                {DURATIONS.map((d) => <SelectMenuItem key={d.min} value={String(d.min)}>{d.label}</SelectMenuItem>)}
+              </SelectMenu>
+            </Field>
+          ) : (
+            <>
+              <Field label="Type">
+                <SelectMenu value={placementType} onValueChange={(v) => setPlacementType(v as 'PERMANENT' | 'TEMPORARY')} className="h-10 border-white/10 bg-card text-sm">
+                  <SelectMenuItem value="PERMANENT">Permanent (monthly)</SelectMenuItem>
+                  <SelectMenuItem value="TEMPORARY">Hourly</SelectMenuItem>
+                </SelectMenu>
+              </Field>
+              <Field label="Hours per day"><Input type="number" value={shiftHours} onChange={(e) => setShiftHours(e.target.value)} /></Field>
+            </>
+          )}
+          <Field label={oneTime ? 'Visit date *' : 'Start date *'}><Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></Field>
+          <Field label={oneTime ? 'Visit time *' : 'Start time *'}>
+            <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
           </Field>
           <Field label="How many staff"><Input type="number" min={1} max={20} value={headcount} onChange={(e) => setHeadcount(e.target.value)} /></Field>
           <Field label="Staff gender">
@@ -257,6 +388,19 @@ export default function NewStaffRequestPage() {
             <Field label="Meals *"><Chips options={MEALS} value={meals} onChange={setMeals} /></Field>
             <Field label="Cuisines" hint="Comma separated, e.g. North Indian, South Indian"><Input value={cuisines} onChange={(e) => setCuisines(e.target.value)} /></Field>
             <Field label="Health needs" hint="Comma separated, e.g. Diabetic, Low salt"><Input value={healthConditions} onChange={(e) => setHealthConditions(e.target.value)} /></Field>
+            {oneTime ? (
+              <div className="space-y-3 border-t border-white/10 pt-4">
+                <h3 className="text-sm font-bold">
+                  Menu for the visit{startTime ? ` · ${titleCase(mealForTime(startTime))}` : ''}
+                </h3>
+                <Field label={`Dishes * (up to ${cap} in ${DURATIONS.find((d) => d.min === durationMin)?.label})`} hint="The cook sees these in the app once placed.">
+                  <DishPicker value={dishes} onChange={setDishes} max={cap} />
+                </Field>
+                <Field label="Instruction for the cook"><Input value={menuNote} onChange={(e) => setMenuNote(e.target.value)} placeholder="e.g. Less oil, no onion" /></Field>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">The weekly menu is set by the client in the app.</p>
+            )}
           </>
         ) : (
           <>
@@ -287,6 +431,31 @@ export default function NewStaffRequestPage() {
               <input type="checkbox" checked={nightCare} onChange={(e) => setNightCare(e.target.checked)} className="rounded" />
               Night care needed
             </label>
+            <div className="space-y-3 border-t border-white/10 pt-4">
+              <h3 className="text-sm font-bold">Care needs <span className="font-normal text-muted-foreground">— becomes the care plan once staff is placed</span></h3>
+              {!isUc && (
+                <Field label="Medicines">
+                  <div className="space-y-2">
+                    {meds.map((m, i) => (
+                      <div key={i} className="grid grid-cols-[1fr_7rem_6rem_auto] gap-2">
+                        <Input value={m.name} placeholder="Name" onChange={(e) => setMeds(meds.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+                        <Input value={m.dose} placeholder="Dose" onChange={(e) => setMeds(meds.map((x, j) => (j === i ? { ...x, dose: e.target.value } : x)))} />
+                        <Input type="time" value={m.time} onChange={(e) => setMeds(meds.map((x, j) => (j === i ? { ...x, time: e.target.value } : x)))} />
+                        <button type="button" onClick={() => setMeds(meds.filter((_, j) => j !== i))} className="px-1 text-muted-foreground hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" size="sm" onClick={() => setMeds([...meds, { name: '', dose: '', time: '09:00' }])}>
+                      <Plus className="mr-1 h-3.5 w-3.5" /> Add medicine
+                    </Button>
+                  </div>
+                </Field>
+              )}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Do's"><Input value={dos} onChange={(e) => setDos(e.target.value)} placeholder="e.g. Help him walk every evening" /></Field>
+                <Field label="Don'ts"><Input value={donts} onChange={(e) => setDonts(e.target.value)} placeholder="e.g. No sugar in tea" /></Field>
+              </div>
+              <Field label="Diet notes"><Input value={dietNotes} onChange={(e) => setDietNotes(e.target.value)} /></Field>
+            </div>
           </>
         )}
         <Field label="Notes"><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
@@ -294,7 +463,7 @@ export default function NewStaffRequestPage() {
 
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={() => router.back()}>Cancel</Button>
-        <Button disabled={!whoReady || !needsReady || submit.isPending} onClick={() => submit.mutate()}>
+        <Button disabled={!whoReady || !whenReady || !needsReady || submit.isPending} onClick={() => submit.mutate()}>
           {submit.isPending ? 'Creating…' : 'Create request'}
         </Button>
       </div>

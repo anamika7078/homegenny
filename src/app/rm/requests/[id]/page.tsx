@@ -43,6 +43,23 @@ interface Detail {
   shift_hours: number;
   start_date: string | null;
   start_time: string | null;
+  visit_type: 'REGULAR' | 'ONE_TIME';
+  duration_min: number | null;
+  menu: {
+    meal?: string;
+    meal_time?: string | null;
+    dishes?: { name: string }[];
+    special_instruction?: string | null;
+    items?: { dow: string; meal: string; dishes: { name: string }[] }[];
+  } | null;
+  care_needs: {
+    medications?: { name: string; dose: string; times: string[] }[];
+    vitals?: { type: string; times: string[] }[];
+    activities?: { title: string; times: string[] }[];
+    dos?: string | null;
+    donts?: string | null;
+    diet_notes?: string | null;
+  } | null;
   address: string | null;
   language: string | null;
   gender_pref: string;
@@ -203,9 +220,19 @@ export default function StaffRequestDetailPage() {
           <div className="grid gap-x-8 sm:grid-cols-2">
             <div>
               <Row label="Series" value={req.series} />
-              <Row label="Type" value={req.placement_type === 'TEMPORARY' ? 'Hourly' : 'Permanent'} />
-              <Row label="Hours / day" value={req.shift_hours} />
-              <Row label="Start" value={req.start_date ? `${req.start_date}${req.start_time ? ` · ${req.start_time}` : ''}` : null} />
+              {req.visit_type === 'ONE_TIME' ? (
+                <>
+                  <Row label="Booking" value="One-time visit" />
+                  <Row label="Duration" value={req.duration_min ? `${req.duration_min / 60} h` : null} />
+                  <Row label="Visit" value={req.start_date ? `${req.start_date}${req.start_time ? ` · ${req.start_time}` : ''}` : null} />
+                </>
+              ) : (
+                <>
+                  <Row label="Type" value={req.placement_type === 'TEMPORARY' ? 'Hourly' : 'Permanent'} />
+                  <Row label="Hours / day" value={req.shift_hours} />
+                  <Row label="Start" value={req.start_date ? `${req.start_date}${req.start_time ? ` · ${req.start_time}` : ''}` : null} />
+                </>
+              )}
               <Row label="How many" value={req.headcount} />
               <Row label="Staff gender" value={req.gender_pref === 'ANY' ? null : titleCase(req.gender_pref)} />
               <Row label="Language" value={req.language} />
@@ -232,6 +259,32 @@ export default function StaffRequestDetailPage() {
           </div>
           <Row label="Address" value={req.address} />
           <Row label="Notes" value={req.notes} />
+          {req.menu && (
+            <div className="mt-3 border-t border-white/10 pt-3">
+              <h3 className="mb-1 text-xs font-bold text-secondary-foreground">Menu — goes to the cook&apos;s app when placed</h3>
+              {req.menu.dishes ? (
+                <>
+                  <Row label={titleCase(req.menu.meal ?? '')} value={`${req.menu.dishes.map((d) => d.name).join(', ')}${req.menu.meal_time ? ` · ${req.menu.meal_time}` : ''}`} />
+                  <Row label="Instruction" value={req.menu.special_instruction ?? null} />
+                </>
+              ) : (
+                (req.menu.items ?? []).map((it, i) => (
+                  <Row key={i} label={`${it.dow} ${titleCase(it.meal)}`} value={it.dishes.map((d) => d.name).join(', ')} />
+                ))
+              )}
+            </div>
+          )}
+          {req.care_needs && (
+            <div className="mt-3 border-t border-white/10 pt-3">
+              <h3 className="mb-1 text-xs font-bold text-secondary-foreground">Care needs — become the care plan when placed</h3>
+              <Row label="Medicines" value={(req.care_needs.medications ?? []).map((m) => `${m.name} ${m.dose} (${m.times.join(', ')})`).join(' · ')} />
+              <Row label="Vitals" value={(req.care_needs.vitals ?? []).map((v) => `${titleCase(v.type)} (${v.times.join(', ')})`).join(' · ')} />
+              <Row label="Activities" value={(req.care_needs.activities ?? []).map((a) => `${a.title} (${a.times.join(', ')})`).join(' · ')} />
+              <Row label="Do's" value={req.care_needs.dos ?? null} />
+              <Row label="Don'ts" value={req.care_needs.donts ?? null} />
+              <Row label="Diet notes" value={req.care_needs.diet_notes ?? null} />
+            </div>
+          )}
         </div>
       </div>
 

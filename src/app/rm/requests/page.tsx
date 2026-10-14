@@ -29,6 +29,8 @@ interface Row {
   shift_hours: number;
   start_date: string | null;
   start_time: string | null;
+  visit_type?: string;
+  duration_min?: number | null;
   headcount: number;
   client_name: string | null;
   lead: { name: string; phone: string; city: string | null } | null;
@@ -133,8 +135,10 @@ export default function StaffRequestsPage() {
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {r.headcount > 1 ? `${r.headcount} staff · ` : ''}
-                    {r.placement_type === 'TEMPORARY' ? 'Hourly' : 'Permanent'} · {r.shift_hours}h
-                    {r.start_date ? ` · from ${r.start_date}${r.start_time ? ` ${r.start_time}` : ''}` : ''}
+                    {r.visit_type === 'ONE_TIME'
+                      ? `One-time visit · ${(r.duration_min ?? 0) / 60}h${r.start_date ? ` · ${r.start_date}${r.start_time ? ` ${r.start_time}` : ''}` : ''}`
+                      : <>{r.placement_type === 'TEMPORARY' ? 'Hourly' : 'Permanent'} · {r.shift_hours}h
+                        {r.start_date ? ` · from ${r.start_date}${r.start_time ? ` ${r.start_time}` : ''}` : ''}</>}
                     {' · '}{SOURCE_LABEL[r.source] ?? r.source}
                   </p>
                 </div>
