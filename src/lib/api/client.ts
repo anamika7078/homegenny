@@ -406,6 +406,9 @@ export interface ApiClient {
   decideInstruction(id: string, body: { decision: 'UPHELD' | 'OVERTURNED'; note: string }): Promise<any>;
   downloadCareReport(placementId: string, month?: string): Promise<Blob>;
   getCareFile(id: string): Promise<Blob>;
+  // Check-in map
+  getCheckins(params?: { date?: string; branch_id?: string }): Promise<any>;
+  setClientHomeLocation(clientId: string, body: { lat: number; lng: number }): Promise<any>;
   /** Staff who self-registered from the app and have no RM yet. */
   listUnassignedStaff(): Promise<any>;
   claimStaff(staffId: string): Promise<any>;
@@ -958,6 +961,8 @@ export const api: ApiClient = {
   downloadCareReport: (pid, month) =>
     apiClient.get(`/care/placements/${pid}/report`, { params: month ? { month } : {}, responseType: 'blob' }) as unknown as Promise<Blob>,
   getCareFile: (id) => apiClient.get(`/care-files/${id}`, { responseType: 'blob' }) as unknown as Promise<Blob>,
+  getCheckins: (params) => apiClient.get('/rm/checkins', { params }),
+  setClientHomeLocation: (clientId, body) => apiClient.patch(`/rm/clients/${clientId}/home-location`, body),
   listUnassignedStaff: () => apiClient.get('/rm/unassigned-staff'),
   claimStaff: (staffId) => apiClient.post(`/rm/unassigned-staff/${staffId}/claim`),
 

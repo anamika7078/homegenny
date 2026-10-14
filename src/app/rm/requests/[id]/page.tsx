@@ -42,11 +42,10 @@ interface Detail {
   placement_type: 'PERMANENT' | 'TEMPORARY';
   shift_hours: number;
   start_date: string | null;
+  start_time: string | null;
   address: string | null;
   language: string | null;
   gender_pref: string;
-  budget_min: number | null;
-  budget_max: number | null;
   headcount: number;
   requirements: Record<string, unknown>;
   notes: string | null;
@@ -206,11 +205,10 @@ export default function StaffRequestDetailPage() {
               <Row label="Series" value={req.series} />
               <Row label="Type" value={req.placement_type === 'TEMPORARY' ? 'Hourly' : 'Permanent'} />
               <Row label="Hours / day" value={req.shift_hours} />
-              <Row label="Start" value={req.start_date} />
+              <Row label="Start" value={req.start_date ? `${req.start_date}${req.start_time ? ` · ${req.start_time}` : ''}` : null} />
               <Row label="How many" value={req.headcount} />
               <Row label="Staff gender" value={req.gender_pref === 'ANY' ? null : titleCase(req.gender_pref)} />
               <Row label="Language" value={req.language} />
-              <Row label="Budget" value={req.budget_min || req.budget_max ? `₹${req.budget_min ?? '?'} – ₹${req.budget_max ?? '?'}` : null} />
             </div>
             <div>
               {req.series === 'CK' ? (

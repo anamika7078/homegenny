@@ -251,12 +251,21 @@ export default function PlacementCarePage() {
             {(menu.data?.items ?? []).length === 0 && <p className="text-sm text-muted-foreground">No menu set for this week.</p>}
             <div className="divide-y divide-white/5">
               {(menu.data?.items ?? []).map((m: any) => (
-                <div key={m.id} className="py-2 text-sm">
-                  <span className="mr-2 font-mono text-xs text-muted-foreground">{m.date} {m.meal.toLowerCase()}</span>
-                  {m.dishes.map((d: any) => d.name).join(', ')}
-                  <span className="ml-2 text-xs text-muted-foreground">{m.suggested_by_cook ? `cook's suggestion · ${tc(m.status)}` : ''}</span>
-                  {m.special_instruction && <span className="ml-2 text-xs">“{m.special_instruction}”</span>}
-                  {m.health_warnings?.length > 0 && <p className="text-xs text-amber-300">Warning: {m.health_warnings.join('; ')}</p>}
+                <div key={m.id} className="flex flex-wrap items-start justify-between gap-3 py-2 text-sm">
+                  <div className="min-w-0">
+                    <span className="mr-2 font-mono text-xs text-muted-foreground">
+                      {m.date} {m.meal.toLowerCase()}{m.meal_time ? ` · ${m.meal_time}` : ''}
+                    </span>
+                    {m.dishes.map((d: any) => d.name).join(', ')}
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {m.source === 'TEMPLATE' ? 'weekly template' : m.suggested_by_cook ? `cook's suggestion · ${tc(m.status)}` : ''}
+                    </span>
+                    {m.special_instruction && <span className="ml-2 text-xs">“{m.special_instruction}”</span>}
+                    {m.health_warnings?.length > 0 && <p className="text-xs text-amber-300">Warning: {m.health_warnings.join('; ')}</p>}
+                  </div>
+                  {(m.photo_file_ids ?? []).length > 0 && (
+                    <div className="flex gap-1">{m.photo_file_ids.map((f: string) => <FileThumb key={f} id={f} kind="PHOTO" />)}</div>
+                  )}
                 </div>
               ))}
             </div>

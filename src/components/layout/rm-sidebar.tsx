@@ -28,6 +28,7 @@ import {
   HelpCircle,
   Inbox,
   HeartPulse,
+  Navigation,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
@@ -67,6 +68,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     items: [
       { href: '/rm/requests', label: 'Staff Requests', icon: Inbox },
       { href: '/rm/care', label: 'Daily Care', icon: HeartPulse },
+      { href: '/rm/checkins', label: 'Check-ins Map', icon: Navigation },
       { href: '/rm/placements', label: 'Placements', icon: MapPin },
       { href: '/rm/trials', label: 'Trial Monitor', icon: Clock },
       { href: '/rm/shifts', label: 'Shift Logs', icon: Calendar },

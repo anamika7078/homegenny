@@ -28,6 +28,7 @@ interface Row {
   placement_type: string;
   shift_hours: number;
   start_date: string | null;
+  start_time: string | null;
   headcount: number;
   client_name: string | null;
   lead: { name: string; phone: string; city: string | null } | null;
@@ -133,7 +134,7 @@ export default function StaffRequestsPage() {
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {r.headcount > 1 ? `${r.headcount} staff · ` : ''}
                     {r.placement_type === 'TEMPORARY' ? 'Hourly' : 'Permanent'} · {r.shift_hours}h
-                    {r.start_date ? ` · from ${r.start_date}` : ''}
+                    {r.start_date ? ` · from ${r.start_date}${r.start_time ? ` ${r.start_time}` : ''}` : ''}
                     {' · '}{SOURCE_LABEL[r.source] ?? r.source}
                   </p>
                 </div>

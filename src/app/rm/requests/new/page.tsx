@@ -58,7 +58,7 @@ export default function NewStaffRequestPage() {
 
   const [forLead, setForLead] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
-  const [client, setClient] = useState<{ id: string; customer_name: string; city?: string } | null>(null);
+  const [client, setClient] = useState<{ id: string; customer_name: string; city?: string; address?: string } | null>(null);
   const [lead, setLead] = useState({ name: '', phone: '', city: '' });
 
   const [series, setSeries] = useState('UNSKILLED_CARE');
@@ -67,8 +67,7 @@ export default function NewStaffRequestPage() {
   const [startDate, setStartDate] = useState('');
   const [language, setLanguage] = useState('');
   const [genderPref, setGenderPref] = useState('ANY');
-  const [budgetMin, setBudgetMin] = useState('');
-  const [budgetMax, setBudgetMax] = useState('');
+  const [startTime, setStartTime] = useState('');
   const [headcount, setHeadcount] = useState('1');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
@@ -122,12 +121,11 @@ export default function NewStaffRequestPage() {
         placement_type: placementType,
         shift_hours: Number(shiftHours) || 8,
         start_date: startDate || undefined,
+        start_time: startDate && startTime ? startTime : undefined,
         language: language || undefined,
         gender_pref: genderPref,
-        budget_min: budgetMin ? Number(budgetMin) : undefined,
-        budget_max: budgetMax ? Number(budgetMax) : undefined,
         headcount: Number(headcount) || 1,
-        address: address || undefined,
+        address: address.trim(),
         notes: notes || undefined,
         requirements,
       });
@@ -139,7 +137,7 @@ export default function NewStaffRequestPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const whoReady = forLead ? lead.name.trim() && lead.phone.trim() : !!client;
+  const whoReady = (forLead ? lead.name.trim() && lead.phone.trim() : !!client) && address.trim().length >= 5;
   const needsReady = isCook ? dietType && Number(familySize) > 0 && meals.length : Number(patientAge) > 0 && mobility;
 
   return (
@@ -196,8 +194,8 @@ export default function NewStaffRequestPage() {
             <div className="max-h-40 divide-y divide-white/5 overflow-y-auto rounded-lg border border-white/10">
               {clientsLoading && <p className="px-3 py-3 text-xs text-muted-foreground">Loading…</p>}
               {!clientsLoading && (clients ?? []).length === 0 && <p className="px-3 py-3 text-xs text-muted-foreground">No clients found.</p>}
-              {(clients ?? []).map((c: { id: string; customer_name: string; city?: string }) => (
-                <button key={c.id} type="button" onClick={() => setClient(c)} className="w-full px-3 py-2 text-left text-xs hover:bg-white/5">
+              {(clients ?? []).map((c: { id: string; customer_name: string; city?: string; address?: string }) => (
+                <button key={c.id} type="button" onClick={() => { setClient(c); if (!address.trim() && c.address) setAddress(c.address); }} className="w-full px-3 py-2 text-left text-xs hover:bg-white/5">
                   {c.customer_name} <span className="text-muted-foreground">· {c.city ?? '—'}</span>
                 </button>
               ))}
@@ -225,6 +223,9 @@ export default function NewStaffRequestPage() {
           </Field>
           <Field label="Hours per day"><Input type="number" value={shiftHours} onChange={(e) => setShiftHours(e.target.value)} /></Field>
           <Field label="Start date"><Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></Field>
+          <Field label="Start time" hint={startDate ? undefined : 'Pick a date first'}>
+            <Input type="time" value={startTime} disabled={!startDate} onChange={(e) => setStartTime(e.target.value)} />
+          </Field>
           <Field label="How many staff"><Input type="number" min={1} max={20} value={headcount} onChange={(e) => setHeadcount(e.target.value)} /></Field>
           <Field label="Staff gender">
             <SelectMenu value={genderPref} onValueChange={setGenderPref} className="h-10 border-white/10 bg-card text-sm">
@@ -234,10 +235,8 @@ export default function NewStaffRequestPage() {
             </SelectMenu>
           </Field>
           <Field label="Language"><Input value={language} onChange={(e) => setLanguage(e.target.value)} placeholder="e.g. Hindi" /></Field>
-          <Field label="Budget from (₹/month)"><Input type="number" value={budgetMin} onChange={(e) => setBudgetMin(e.target.value)} /></Field>
-          <Field label="Budget to (₹/month)"><Input type="number" value={budgetMax} onChange={(e) => setBudgetMax(e.target.value)} /></Field>
         </div>
-        <Field label="Address" hint={forLead ? undefined : "Leave empty to use the client's address"}>
+        <Field label="Address *" hint="Where the staff will work">
           <Input value={address} onChange={(e) => setAddress(e.target.value)} />
         </Field>
       </section>
