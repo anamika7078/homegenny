@@ -34,6 +34,7 @@ import {
 import { cn } from '@/lib/utils/cn';
 import { useAuthStore } from '@/lib/store/auth.store';
 import { useSeriesCatalog } from '@/lib/series';
+import { CollapseButton, EASE, SectionHeading, foldGap, foldLabel } from './sidebar-collapse';
 
 type NavItem = {
   href: string;
@@ -104,9 +105,12 @@ function userInitials(name?: string | null): string {
 interface RmSidebarProps {
   open?: boolean;
   onClose?: () => void;
+  /** Desktop only: icons without labels. */
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export function RmSidebar({ open = false, onClose }: RmSidebarProps) {
+export function RmSidebar({ open = false, onClose, collapsed = false, onToggleCollapse }: RmSidebarProps) {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
   // The Driver practical test is Stage 2.5, which runs only while the Driver series does.
@@ -115,32 +119,44 @@ export function RmSidebar({ open = false, onClose }: RmSidebarProps) {
   return (
     <aside
       className={cn(
-        'z-50 flex h-full w-[min(260px,85vw)] shrink-0 flex-col border-r border-white/10 bg-[#0c1018] transition-transform duration-300 ease-in-out',
-        'fixed inset-y-0 left-0 lg:relative lg:z-40 lg:w-[260px] lg:translate-x-0',
+        'z-50 flex h-full w-[min(260px,85vw)] shrink-0 flex-col overflow-x-hidden border-r border-white/10 bg-[#0c1018]',
+        'transition-[transform,width] duration-300 will-change-[width] motion-reduce:transition-none',
+        EASE,
+        'fixed inset-y-0 left-0 lg:relative lg:z-40 lg:translate-x-0',
+        collapsed ? 'lg:w-[64px]' : 'lg:w-[260px]',
         open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
       )}
     >
-      <MotionHeader onClose={onClose} />
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4">
+      <MotionHeader onClose={onClose} collapsed={collapsed} onToggleCollapse={onToggleCollapse} />
+      <nav className="scrollbar-hide flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-3 pb-4">
         {NAV.map((group) => (
           <div key={group.section}>
-            <h4 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-600">
+            <SectionHeading collapsed={collapsed} className="mb-2 text-slate-600">
               {group.section}
-            </h4>
+            </SectionHeading>
             <NavGroup
               items={group.items.filter((i) => i.href !== '/rm/assessment' || stage25Enabled)}
               pathname={pathname}
               onNavigate={onClose}
+              collapsed={collapsed}
             />
           </div>
         ))}
       </nav>
       <div className="border-t border-white/5 p-3">
-        <div className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/5 p-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FF5A1F]/20 text-xs font-bold text-[#FF5A1F]">
+        <div
+          title={collapsed ? `${user?.full_name ?? 'RM User'} · ${user?.role ?? 'RM'}` : undefined}
+          className={cn(
+            'flex items-center rounded-xl border transition-[padding,background-color,border-color] duration-300 motion-reduce:transition-none',
+            EASE,
+            foldGap(collapsed),
+            collapsed ? 'border-white/5 bg-white/5 p-3 lg:justify-center lg:border-transparent lg:bg-transparent lg:p-0' : 'border-white/5 bg-white/5 p-3',
+          )}
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FF5A1F]/20 text-xs font-bold text-[#FF5A1F]">
             {userInitials(user?.full_name)}
           </div>
-          <div className="min-w-0 flex-1">
+          <div className={foldLabel(collapsed, 'flex-1')}>
             <p className="truncate text-sm font-semibold text-white">{user?.full_name ?? 'RM User'}</p>
             <p className="truncate text-[10px] text-slate-500">{user?.role ?? 'RM'} · Branch scoped</p>
           </div>
@@ -150,10 +166,24 @@ export function RmSidebar({ open = false, onClose }: RmSidebarProps) {
   );
 }
 
-function MotionHeader({ onClose }: { onClose?: () => void }) {
+function MotionHeader({
+  onClose,
+  collapsed,
+  onToggleCollapse,
+}: {
+  onClose?: () => void;
+  collapsed: boolean;
+  onToggleCollapse?: () => void;
+}) {
   return (
-    <div className="flex items-start justify-between border-b border-white/5 px-4 py-4 sm:px-5 sm:py-5">
-      <Link href="/rm/dashboard" className="block" onClick={onClose}>
+    <div
+      className={cn(
+        'flex items-start justify-between border-b border-white/5 py-4 transition-[padding] duration-300 motion-reduce:transition-none sm:py-5',
+        EASE,
+        collapsed ? 'px-4 sm:px-5 lg:px-4' : 'px-4 sm:px-5',
+      )}
+    >
+      <Link href="/rm/dashboard" className={foldLabel(collapsed, 'block')} onClick={onClose}>
         <span className="font-syne text-lg font-bold tracking-tight text-white sm:text-xl">
           Home<span className="text-[#FF5A1F]">Genny</span>
         </span>
@@ -169,6 +199,7 @@ function MotionHeader({ onClose }: { onClose?: () => void }) {
       >
         <X className="h-4 w-4" />
       </button>
+      {onToggleCollapse && <CollapseButton collapsed={collapsed} onToggle={onToggleCollapse} />}
     </div>
   );
 }
@@ -177,10 +208,12 @@ function NavGroup({
   items,
   pathname,
   onNavigate,
+  collapsed,
 }: {
   items: NavItem[];
   pathname: string;
   onNavigate?: () => void;
+  collapsed: boolean;
 }) {
   return (
     <div className="space-y-0.5">
@@ -192,15 +225,18 @@ function NavGroup({
             key={item.href}
             href={item.href}
             onClick={onNavigate}
+            title={collapsed ? item.label : undefined}
+            aria-label={collapsed ? item.label : undefined}
             className={cn(
-              'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              'flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              foldGap(collapsed),
               active
                 ? 'bg-[#FF5A1F]/15 text-[#FF8A50]'
                 : 'text-slate-400 hover:bg-white/5 hover:text-slate-200',
             )}
           >
             <Icon className="h-4 w-4 shrink-0" />
-            {item.label}
+            <span className={foldLabel(collapsed)}>{item.label}</span>
           </Link>
         );
       })}

@@ -10,11 +10,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { ShellContext } from './shell-context';
 import { cn } from '@/lib/utils/cn';
 
+const COLLAPSED_KEY = 'hg.sidebar.collapsed';
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, logout, hydrate } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const isRmPortal = pathname?.startsWith('/rm');
   const isRmUser = user?.role === 'RM';
   const showRmSidebar = isRmUser || isRmPortal;
@@ -23,9 +26,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setSidebarOpen((prev) => !prev);
   }, []);
 
+  // Desktop collapse, remembered in this browser. Read after mount so the
+  // server render and the first client render agree.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(COLLAPSED_KEY) === '1') setCollapsed(true);
+    } catch { /* storage blocked: start expanded */ }
+  }, []);
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0'); } catch { /* not remembered */ }
+      return next;
+    });
+  }, []);
+
+  // Ctrl+B / Cmd+B, except while typing.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'b') return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      e.preventDefault();
+      toggleCollapsed();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [toggleCollapsed]);
+
   const shellValue = useMemo(
-    () => ({ sidebarOpen, setSidebarOpen, toggleSidebar }),
-    [sidebarOpen, toggleSidebar],
+    () => ({ sidebarOpen, setSidebarOpen, toggleSidebar, collapsed, toggleCollapsed }),
+    [sidebarOpen, toggleSidebar, collapsed, toggleCollapsed],
   );
 
   useEffect(() => {
@@ -91,9 +122,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
 
         {showRmSidebar ? (
-          <RmSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+          <RmSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} collapsed={collapsed} onToggleCollapse={toggleCollapsed} />
         ) : (
-          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} collapsed={collapsed} onToggleCollapse={toggleCollapsed} />
         )}
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

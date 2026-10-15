@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils/cn';
 import { useAuthStore } from '@/lib/store/auth.store';
+import { CollapseButton, EASE, SectionHeading, foldGap, foldLabel } from './sidebar-collapse';
 import {
   LayoutDashboard,
   Bell,
@@ -352,28 +353,42 @@ function NavLink({
   badge,
   pathname,
   onNavigate,
-}: NavItem & { pathname: string; onNavigate?: () => void }) {
+  collapsed = false,
+}: NavItem & { pathname: string; onNavigate?: () => void; collapsed?: boolean }) {
   const active = pathname === href || (href !== '/' && pathname.startsWith(href + '/')) ||
     (href.includes('#') && pathname === href.split('#')[0]);
   return (
     <Link
       href={href.split('#')[0]}
       onClick={onNavigate}
+      title={collapsed ? label : undefined}
+      aria-label={collapsed ? label : undefined}
       className={cn(
-        'relative flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
+        'relative flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
         active
           ? 'text-[#FF5A1F] bg-[#FF5A1F]/10'
           : 'text-secondary-foreground hover:text-foreground hover:bg-white/5',
       )}
     >
-      <div className="flex items-center gap-3">
+      <div className={cn('relative flex min-w-0 items-center', foldGap(collapsed))}>
         <Icon className="w-4 h-4 flex-shrink-0" />
-        <span>{label}</span>
+        <span className={foldLabel(collapsed)}>{label}</span>
+        {/* Collapsed: a dot on the icon stands in for the count. */}
+        {badge && (
+          <span
+            aria-hidden
+            className={cn(
+              'absolute -right-1 -top-1 hidden h-2 w-2 rounded-full bg-danger transition-opacity duration-300',
+              collapsed && 'lg:block',
+            )}
+          />
+        )}
       </div>
       {badge && (
         <span
           className={cn(
-            'min-w-[22px] h-[22px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold border',
+            'min-w-[22px] h-[22px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold border transition-opacity duration-200',
+            collapsed && 'lg:hidden',
             active
               ? 'bg-[#FF5A1F]/20 border-[#FF5A1F]/40 text-[#FF5A1F]'
               : 'bg-danger/20 border-danger/30 text-danger',
@@ -390,9 +405,12 @@ function NavLink({
 interface SidebarProps {
   open?: boolean;
   onClose?: () => void;
+  /** Desktop only: icons without labels. */
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export function Sidebar({ open = false, onClose }: SidebarProps) {
+export function Sidebar({ open = false, onClose, collapsed = false, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuthStore();
   const [mounted, setMounted] = useState(false);
@@ -423,14 +441,23 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'z-50 flex h-full w-[min(280px,85vw)] shrink-0 flex-col border-r border-[#1e293b] bg-[#0f1523] transition-transform duration-300 ease-in-out',
-        'fixed inset-y-0 left-0 lg:relative lg:z-40 lg:w-[280px] lg:translate-x-0',
+        'z-50 flex h-full w-[min(280px,85vw)] shrink-0 flex-col overflow-x-hidden border-r border-[#1e293b] bg-[#0f1523]',
+        'transition-[transform,width] duration-300 will-change-[width] motion-reduce:transition-none',
+        EASE,
+        'fixed inset-y-0 left-0 lg:relative lg:z-40 lg:translate-x-0',
+        collapsed ? 'lg:w-[72px]' : 'lg:w-[280px]',
         open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
       )}
     >
       {/* Logo */}
-      <div className="flex items-start justify-between px-4 pb-6 pt-5 sm:px-6 sm:pt-6">
-        <Link href="/" className="flex flex-col" onClick={onClose}>
+      <div
+        className={cn(
+          'flex items-start justify-between pb-6 pt-5 transition-[padding] duration-300 motion-reduce:transition-none sm:pt-6',
+          EASE,
+          collapsed ? 'px-4 sm:px-6 lg:px-5' : 'px-4 sm:px-6',
+        )}
+      >
+        <Link href="/" className={foldLabel(collapsed, 'flex flex-col')} onClick={onClose}>
           <span className="font-syne text-xl font-bold tracking-tight sm:text-2xl">
             <span className="text-white">Home</span><span className="text-[#FF5A1F]">Genny</span>
           </span>
@@ -446,65 +473,66 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         >
           <X className="h-4 w-4" />
         </button>
+        {onToggleCollapse && <CollapseButton collapsed={collapsed} onToggle={onToggleCollapse} />}
       </div>
 
       {/* Role badge */}
       {isRm && (
-        <div className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-[#FF5A1F]/10 border border-[#FF5A1F]/20 px-3 py-2">
-          <Users className="w-3.5 h-3.5 text-[#FF5A1F]" />
-          <span className="text-[11px] font-semibold text-[#FF5A1F] uppercase tracking-wider">RM Portal</span>
+        <div title={collapsed ? 'RM Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-[#FF5A1F]/10 border border-[#FF5A1F]/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
+          <Users className="w-3.5 h-3.5 text-[#FF5A1F] shrink-0" />
+          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-[#FF5A1F] uppercase tracking-wider')}>RM Portal</span>
         </div>
       )}
       {isTrainer && (
-        <div className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-blue-500/10 border border-blue-500/20 px-3 py-2">
-          <GraduationCap className="w-3.5 h-3.5 text-blue-500" />
-          <span className="text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Trainer Portal</span>
+        <div title={collapsed ? 'Trainer Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-blue-500/10 border border-blue-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
+          <GraduationCap className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-blue-500 uppercase tracking-wider')}>Trainer Portal</span>
         </div>
       )}
       {isAssessor && (
-        <div className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-violet-500/10 border border-violet-500/20 px-3 py-2">
-          <ClipboardCheck className="w-3.5 h-3.5 text-violet-400" />
-          <span className="text-[11px] font-semibold text-violet-400 uppercase tracking-wider">Assessor Portal</span>
+        <div title={collapsed ? 'Assessor Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-violet-500/10 border border-violet-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
+          <ClipboardCheck className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-violet-400 uppercase tracking-wider')}>Assessor Portal</span>
         </div>
       )}
       {isAdmin && (
-        <div className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2">
-          <ShieldCheck className="w-3.5 h-3.5 text-red-400" />
-          <span className="text-[11px] font-semibold text-red-400 uppercase tracking-wider">Admin Portal</span>
+        <div title={collapsed ? 'Admin Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-red-500/10 border border-red-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
+          <ShieldCheck className="w-3.5 h-3.5 text-red-400 shrink-0" />
+          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-red-400 uppercase tracking-wider')}>Admin Portal</span>
         </div>
       )}
       {isFinance && (
-        <div className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2">
-          <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">Finance Portal</span>
+        <div title={collapsed ? 'Finance Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
+          <DollarSign className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-emerald-400 uppercase tracking-wider')}>Finance Portal</span>
         </div>
       )}
       {isSupport && (
-        <div className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-sky-500/10 border border-sky-500/20 px-3 py-2">
-          <Bell className="w-3.5 h-3.5 text-sky-400" />
-          <span className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider">Support Portal</span>
+        <div title={collapsed ? 'Support Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-sky-500/10 border border-sky-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
+          <Bell className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-sky-400 uppercase tracking-wider')}>Support Portal</span>
         </div>
       )}
       {isHr && (
-        <div className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-pink-500/10 border border-pink-500/20 px-3 py-2">
-          <Users className="w-3.5 h-3.5 text-pink-400" />
-          <span className="text-[11px] font-semibold text-pink-400 uppercase tracking-wider">HR Portal</span>
+        <div title={collapsed ? 'HR Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-pink-500/10 border border-pink-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
+          <Users className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-pink-400 uppercase tracking-wider')}>HR Portal</span>
         </div>
       )}
       {!isRm && !isTrainer && !isAssessor && !isAdmin && !isFinance && !isSupport && !isHr && (
-        <div className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
-          <LayoutDashboard className="w-3.5 h-3.5 text-amber-400" />
-          <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">BM Portal</span>
+        <div title={collapsed ? 'BM Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-amber-500/10 border border-amber-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
+          <LayoutDashboard className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-amber-400 uppercase tracking-wider')}>BM Portal</span>
         </div>
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 overflow-y-auto scrollbar-hide space-y-6 pb-6">
+      <nav className="flex-1 px-4 overflow-y-auto overflow-x-hidden scrollbar-hide space-y-6 pb-6">
         {navSections.map((section) => (
           <div key={section.section}>
-            <h4 className="text-[10px] font-bold text-secondary-foreground uppercase tracking-widest mb-3 px-3">
+            <SectionHeading collapsed={collapsed} className="mb-3 text-secondary-foreground">
               {section.section}
-            </h4>
+            </SectionHeading>
             <div className="space-y-0.5">
               {section.items.map((item) => {
                 if (item.subItems) {
@@ -514,20 +542,30 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     <div key={item.label} className="space-y-1">
                       <button
                         type="button"
-                        onClick={() => setOpenSubMenus(prev => ({ ...prev, [item.label]: !prev[item.label] }))}
+                        onClick={() => {
+                          if (collapsed && onToggleCollapse && window.matchMedia('(min-width: 1024px)').matches) {
+                            onToggleCollapse();
+                            setOpenSubMenus(prev => ({ ...prev, [item.label]: true }));
+                            return;
+                          }
+                          setOpenSubMenus(prev => ({ ...prev, [item.label]: !prev[item.label] }));
+                        }}
+                        title={collapsed ? item.label : undefined}
+                        aria-label={collapsed ? item.label : undefined}
+                        aria-expanded={!!isOpen}
                         className={cn(
-                          'w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-secondary-foreground hover:text-[#FF5A1F] hover:bg-[#FF5A1F]/5',
+                          'w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-secondary-foreground hover:text-[#FF5A1F] hover:bg-[#FF5A1F]/5',
                           active && 'text-[#FF5A1F] bg-[#FF5A1F]/10'
                         )}
                       >
-                        <div className="flex items-center gap-3">
+                        <div className={cn('flex min-w-0 items-center', foldGap(collapsed))}>
                           <item.icon className="w-4 h-4 flex-shrink-0" />
-                          <span>{item.label}</span>
+                          <span className={foldLabel(collapsed)}>{item.label}</span>
                         </div>
-                        <span className="text-[10px] font-bold">{isOpen ? '▼' : '▶'}</span>
+                        <span className={foldLabel(collapsed, 'text-[10px] font-bold')}>{isOpen ? '▼' : '▶'}</span>
                       </button>
                       {isOpen && (
-                        <div className="pl-6 space-y-0.5 border-l border-[#1e293b] ml-5 mt-1">
+                        <div className={cn('pl-6 space-y-0.5 border-l border-[#1e293b] ml-5 mt-1', collapsed && 'lg:hidden')}>
                           {item.subItems.map((sub) => {
                             const subActive = pathname === sub.href;
                             return (
@@ -551,7 +589,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     </div>
                   );
                 }
-                return <NavLink key={item.href} {...item} pathname={pathname} onNavigate={onClose} />;
+                return <NavLink key={item.href} {...item} pathname={pathname} onNavigate={onClose} collapsed={collapsed} />;
               })}
             </div>
           </div>
@@ -559,12 +597,22 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       </nav>
 
       {/* User block */}
-      <div className="p-4 mt-auto">
-        <div className="bg-[#151c2c] border border-border/50 rounded-2xl p-3 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-[#FF5A1F]/20 flex items-center justify-center text-sm font-bold text-[#FF5A1F]">
+      <div className={cn('mt-auto p-4 transition-[padding] duration-300 motion-reduce:transition-none', EASE, collapsed && 'lg:px-3')}>
+        <div
+          title={collapsed ? `${user?.full_name ?? 'HomeGenny User'} · ${roleLabel(user?.role)}` : undefined}
+          className={cn(
+            'flex items-center rounded-2xl border transition-[padding,background-color,border-color] duration-300 motion-reduce:transition-none',
+            EASE,
+            foldGap(collapsed),
+            collapsed
+              ? 'bg-[#151c2c] border-border/50 p-3 lg:justify-center lg:border-transparent lg:bg-transparent lg:p-0'
+              : 'bg-[#151c2c] border-border/50 p-3',
+          )}
+        >
+          <div className="w-10 h-10 shrink-0 rounded-full bg-[#FF5A1F]/20 flex items-center justify-center text-sm font-bold text-[#FF5A1F]">
             {initials(user?.full_name)}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className={foldLabel(collapsed, 'flex-1')}>
             <p className="text-sm font-bold text-white truncate">{user?.full_name ?? 'HomeGenny User'}</p>
             <p className="text-[10px] text-secondary-foreground truncate">
               {roleLabel(user?.role)} · Delhi NCR
