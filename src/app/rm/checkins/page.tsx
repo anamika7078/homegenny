@@ -23,6 +23,9 @@ interface Row {
   home: { lat: number; lng: number; source: 'CLIENT' | 'STAFF_REQUEST' } | null;
   check_in: Point | null;
   check_out: Point | null;
+  /** Latest location while still checked in (sent about every 5 minutes). */
+  last_location: Point | null;
+  trail: { at: string; lat: number; lng: number }[];
 }
 
 const istToday = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
@@ -30,7 +33,7 @@ const time = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : '—';
 const dist = (m: number | null) => (m === null ? 'no home on file' : m < 1000 ? `${m} m from home` : `${(m / 1000).toFixed(1)} km from home`);
 const gmaps = (lat: number, lng: number) => `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-const isFar = (r: Row) => !!(r.check_in?.far || r.check_out?.far);
+const isFar = (r: Row) => !!(r.check_in?.far || r.check_out?.far || r.last_location?.far);
 
 /**
  * Where staff checked in and out on a day, against the client's home. No live
@@ -89,6 +92,21 @@ export default function CheckinsPage() {
             L.polyline([[r.home.lat, r.home.lng], [p.lat, p.lng]], { color, weight: 1.5, dashArray: '4 4' }).addTo(layer);
           }
           bounds.push([p.lat, p.lng]);
+        }
+      }
+      for (const r of items) {
+        // The day's path: a thin line, the latest point as a larger ring.
+        if (r.trail?.length > 1) {
+          L.polyline(r.trail.map((t) => [t.lat, t.lng] as [number, number]), { color: '#6366f1', weight: selected === r.shift_id ? 3 : 2, opacity: 0.8 }).addTo(layer);
+        }
+        const now = r.last_location;
+        if (now && now.lat !== null && now.lng !== null) {
+          const color = now.far ? '#e11d48' : '#6366f1';
+          L.circleMarker([now.lat, now.lng], { radius: selected === r.shift_id ? 11 : 8, color, fillColor: '#ffffff', fillOpacity: 0.9, weight: 3 })
+            .bindTooltip(`${r.staff.name} · now (${time(now.at)}) · ${dist(now.distance_m)}`)
+            .on('click', () => setSelected(r.shift_id))
+            .addTo(layer);
+          bounds.push([now.lat, now.lng]);
         }
       }
       if (bounds.length) mapRef.current.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 });
@@ -176,6 +194,12 @@ export default function CheckinsPage() {
                     );
                   })}
                 </div>
+                {r.last_location && r.last_location.lat !== null && r.last_location.lng !== null && (
+                  <a href={gmaps(r.last_location.lat, r.last_location.lng)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                     className={cn('mt-1 inline-flex items-center gap-1 text-xs', r.last_location.far ? 'text-rose-300' : 'text-indigo-300')}>
+                    <MapPin className="h-3 w-3" />Now ({time(r.last_location.at)}): {dist(r.last_location.distance_m)}<ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
                 {r.client && pin && pin.lat !== null && pin.lng !== null && (!r.home || pin.far) && (
                   <Button
                     size="sm"
