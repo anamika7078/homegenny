@@ -195,7 +195,7 @@ export default function StaffPipelinePage() {
                       ) : (
                         stageStaff.map((applicant) => {
                           const status = getStatusBadge(applicant);
-                          const series = SERIES_CONFIG[applicant.series] ?? SERIES_CONFIG[SHORT_TO_DB[applicant.series]]
+                          const series = (applicant.series && (SERIES_CONFIG[applicant.series] ?? SERIES_CONFIG[SHORT_TO_DB[applicant.series]]))
                             ?? { label: String(applicant.series ?? '—'), color: 'text-slate-400', bg: 'bg-slate-500/10' };
                           const isUpdating = updateStageMutation.isPending && updateStageMutation.variables?.id === applicant.id;
                           

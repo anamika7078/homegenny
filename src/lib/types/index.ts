@@ -14,9 +14,15 @@ export interface User {
 }
 
 export interface StaffApplicant {
-  id: string; staff_code: string; series: Series;
+  /** series and full_name are null for an app sign-up until the RM completes S1. */
+  id: string; staff_code: string; series: Series | null;
   pipeline_stage: PipelineStage; current_scenario_code?: string;
-  full_name: string; mobile: string; language_tier?: string;
+  full_name: string | null; mobile: string; language_tier?: string;
+  /** false → app sign-up still at S1 with only a mobile number; intake_missing says what. */
+  intake_complete?: boolean; intake_missing?: string[];
+  date_of_birth?: string | null; address?: string | null; email?: string | null;
+  aadhaar_number?: string | null;
+  emergency_contact_name?: string | null; emergency_contact_mobile?: string | null;
   verified_docs: Record<string, any>; pv_status: string;
   restricted_list_flag: boolean; video_cert_id?: string;
   assigned_rm_id?: string; metadata: Record<string, any>;

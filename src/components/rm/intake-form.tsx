@@ -33,24 +33,56 @@ const schema = z.object({
   assigned_rm_id: z.string().optional(),
 });
 
-type FormValues = z.infer<typeof schema>;
+/**
+ * "Complete S1" for an app sign-up: the mobile is already on file, and Aadhaar
+ * can wait for S2 verification. Everything else S1 needs is still required.
+ */
+const completionSchema = schema.extend({
+  mobile: z.string().optional(),
+  aadhaar_number: z.union([z.literal(''), z.string().regex(/^d{12}$/, 'Aadhaar must be 12 digits')]).optional(),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
+});
+
+type FormValues = z.infer<typeof completionSchema>;
+
+/** The parts of an existing staff row the completion form starts from. */
+export interface IntakeExistingStaff {
+  id: string;
+  mobile: string;
+  full_name?: string | null;
+  date_of_birth?: string | null;
+  address?: string | null;
+  email?: string | null;
+  series_db?: string | null;
+  language_tier?: string | null;
+  aadhaar_number?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_mobile?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
 
 interface IntakeFormProps {
   /** Where a successfully-created candidate's detail page lives. */
   successBasePath?: string;
   /** Where to send the user when the restricted-list check terminates the case. */
   terminalRedirect?: string;
+  /** Complete S1 for this app sign-up instead of creating a new staff member. */
+  existingStaff?: IntakeExistingStaff;
 }
 
 export function IntakeForm({
   successBasePath = '/rm/staff',
   terminalRedirect = '/rm/terminal',
+  existingStaff,
 }: IntakeFormProps = {}) {
+  const completing = !!existingStaff;
+  const meta = (existingStaff?.metadata ?? {}) as Record<string, string | undefined>;
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const qc = useQueryClient();
   const [restrictedWarning, setRestrictedWarning] = useState<string | null>(null);
-  const needsRmPicker = user?.role !== 'RM';
+  // Completing claims the staff for whoever does it; there is no RM to pick.
+  const needsRmPicker = user?.role !== 'RM' && !completing;
   const { active: activeSeries } = useSeriesCatalog();
 
   const { data: rmUsersRaw, isLoading: rmUsersLoading } = useQuery({
@@ -69,20 +101,38 @@ export function IntakeForm({
     control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(completing ? completionSchema : schema),
     defaultValues: {
-      series: 'UNSKILLED_CARE',
-      language_tier: 'T2',
+      series: (existingStaff?.series_db as FormValues['series'] | undefined) ?? 'UNSKILLED_CARE',
+      language_tier: (existingStaff?.language_tier as FormValues['language_tier'] | undefined) ?? 'T2',
       deposit_collected: false,
+      ...(existingStaff
+        ? {
+            full_name: existingStaff.full_name ?? '',
+            date_of_birth: existingStaff.date_of_birth ? String(existingStaff.date_of_birth).slice(0, 10) : '',
+            mobile: existingStaff.mobile,
+            address: existingStaff.address ?? '',
+            aadhaar_number: existingStaff.aadhaar_number ?? '',
+            emergency_contact_name: existingStaff.emergency_contact_name ?? '',
+            emergency_contact_mobile: existingStaff.emergency_contact_mobile ?? '',
+            hometown: meta.hometown ?? '',
+            gender: meta.gender as FormValues['gender'],
+          }
+        : {}),
     },
   });
 
   const submit = useMutation({
     mutationFn: async (values: FormValues) => {
+      if (existingStaff) {
+        // The backend runs the restricted-list check (phone + Aadhaar) itself.
+        const { mobile: _mobile, assigned_rm_id: _rm, ...rest } = values;
+        return api.completeIntake(existingStaff.id, rest);
+      }
       if (needsRmPicker && !values.assigned_rm_id) {
         throw new Error('Please select which RM this candidate belongs to');
       }
-      const check = await api.checkRestricted(values.aadhaar_number, values.mobile);
+      const check = await api.checkRestricted(values.aadhaar_number ?? "", values.mobile ?? "");
       const hit = (check as { found?: boolean; data?: { found?: boolean } })?.found
         ?? (check as { data?: { found?: boolean } })?.data?.found;
       if (hit) {
@@ -99,6 +149,7 @@ export function IntakeForm({
       qc.invalidateQueries({ queryKey: ['rm-kanban'] });
       qc.invalidateQueries({ queryKey: ['rm-dashboard'] });
       qc.invalidateQueries({ queryKey: ['staff'] });
+      qc.invalidateQueries({ queryKey: ['rm-unassigned-staff'] });
       if (res.outcome === 'RESTRICTED') {
         toast.error('Restricted list — case terminated');
         router.push(terminalRedirect);
@@ -149,11 +200,31 @@ export function IntakeForm({
           <Input type="date" {...register('date_of_birth')} />
         </Field>
         <Field label="Mobile" error={errors.mobile?.message}>
-          <Input {...register('mobile')} placeholder="10-digit mobile" />
+          <Input {...register('mobile')} placeholder="10-digit mobile" disabled={completing} />
         </Field>
-        <Field label="Aadhaar" error={errors.aadhaar_number?.message}>
+        <Field label={completing ? 'Aadhaar (optional — S2 verifies it)' : 'Aadhaar'} error={errors.aadhaar_number?.message}>
           <Input {...register('aadhaar_number')} placeholder="12 digits" maxLength={12} />
         </Field>
+        {completing && (
+          <Field label="Gender" error={errors.gender?.message}>
+            <Controller
+              control={control}
+              name="gender"
+              render={({ field }) => (
+                <SelectMenu
+                  value={field.value ?? ''}
+                  onValueChange={field.onChange}
+                  placeholder="Select gender"
+                  className="h-10 border-white/10 bg-card text-sm"
+                >
+                  <SelectMenuItem value="FEMALE">Female</SelectMenuItem>
+                  <SelectMenuItem value="MALE">Male</SelectMenuItem>
+                  <SelectMenuItem value="OTHER">Other</SelectMenuItem>
+                </SelectMenu>
+              )}
+            />
+          </Field>
+        )}
         <Field label="Series" error={errors.series?.message}>
           <Controller
             control={control}
@@ -221,7 +292,7 @@ export function IntakeForm({
         </Field>
       </div>
 
-      <FormActions isSubmitting={isSubmitting || submit.isPending} />
+      <FormActions isSubmitting={isSubmitting || submit.isPending} label={completing ? 'Complete S1 → S2' : 'Submit Intake'} />
     </form>
   );
 }
@@ -254,11 +325,11 @@ function Field({
   );
 }
 
-function FormActions({ isSubmitting }: { isSubmitting: boolean }) {
+function FormActions({ isSubmitting, label }: { isSubmitting: boolean; label: string }) {
   return (
     <div className="flex justify-end gap-3 border-t border-white/10 pt-4">
       <Button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? 'Processing...' : 'Submit Intake'}
+        {isSubmitting ? 'Processing...' : label}
       </Button>
     </div>
   );

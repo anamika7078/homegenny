@@ -43,7 +43,7 @@ export function StaffCard({ staff, compact, onAdvance, onHold }: StaffCardProps)
         <div className="min-w-0 flex-1">
           <Link href={`/rm/staff/${staff.id}`} className="block">
             <p className="truncate text-sm font-semibold text-foreground">
-              {staff.full_name || staff.staff_code}
+              {staff.full_name || staff.mobile || staff.staff_code}
             </p>
             <p className="text-xs text-muted-foreground">{staff.staff_code}</p>
           </Link>

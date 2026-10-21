@@ -413,6 +413,9 @@ export interface ApiClient {
   /** Staff who self-registered from the app and have no RM yet. */
   listUnassignedStaff(): Promise<any>;
   claimStaff(staffId: string): Promise<any>;
+  completeIntake(staffId: string, body: Record<string, unknown>): Promise<any>;
+  listClientLeads(status?: string): Promise<any>;
+  updateClientLead(customerId: string, body: Record<string, unknown>): Promise<any>;
 
   // Verification (S2)
   getVerificationStatus(staffId: string): Promise<any>;
@@ -967,6 +970,9 @@ export const api: ApiClient = {
   setClientHomeLocation: (clientId, body) => apiClient.patch(`/rm/clients/${clientId}/home-location`, body),
   listUnassignedStaff: () => apiClient.get('/rm/unassigned-staff'),
   claimStaff: (staffId) => apiClient.post(`/rm/unassigned-staff/${staffId}/claim`),
+  completeIntake: (staffId, body) => apiClient.post(`/rm/staff/${staffId}/complete-intake`, body),
+  listClientLeads: (status) => apiClient.get('/rm/client-leads', { params: status ? { status } : {} }),
+  updateClientLead: (customerId, body) => apiClient.patch(`/rm/client-leads/${customerId}`, body),
 
   // Verification (S2)
   getVerificationStatus: (staffId) => apiClient.get(`/verification/${staffId}`),

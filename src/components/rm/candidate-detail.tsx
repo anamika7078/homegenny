@@ -71,7 +71,7 @@ export function CandidateDetail({ backHref, backLabel }: CandidateDetailProps) {
   return (
     <div className="space-y-6 p-6">
       <RmPageHeader
-        title={s?.full_name ?? 'Staff'}
+        title={s?.full_name || s?.mobile || 'Staff'}
         description={s?.staff_code}
         actions={
           <>
@@ -84,6 +84,20 @@ export function CandidateDetail({ backHref, backLabel }: CandidateDetailProps) {
           </>
         }
       />
+
+      {s?.pipeline_stage === 'S1_INTAKE' && (s as unknown as { intake_complete?: boolean })?.intake_complete === false && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <div>
+            <p className="font-semibold text-amber-200">Signed up from the app — S1 not complete</p>
+            <p className="text-sm text-muted-foreground">
+              Only the mobile number is on file. Call {s?.mobile} and fill in the rest to move them to S2.
+            </p>
+          </div>
+          <Link href={`/rm/staff/${id}/intake`}>
+            <Button>Complete S1</Button>
+          </Link>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <InfoCard label="Series" value={SERIES_LABELS[s?.series ?? ''] ?? s?.series} />

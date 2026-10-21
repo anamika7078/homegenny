@@ -29,7 +29,7 @@ export function useRmKanban(params?: { search?: string; series?: string }) {
   });
 }
 
-/** Staff who self-registered from the app: S1 already done, no RM yet. */
+/** Staff who self-registered from the app with no RM yet — new ones still need S1 completed. */
 export function useUnassignedStaff() {
   return useQuery({
     queryKey: ['rm-unassigned-staff'],
@@ -48,6 +48,23 @@ export function useClaimStaff() {
       qc.invalidateQueries({ queryKey: ['rm-kanban'] });
       qc.invalidateQueries({ queryKey: ['rm-dashboard'] });
     },
+  });
+}
+
+/** Clients who signed up from the app — profile status and whether they have asked for staff. */
+export function useClientLeads(status?: string) {
+  return useQuery({
+    queryKey: ['rm-client-leads', status],
+    queryFn: () => api.listClientLeads(status),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useUpdateClientLead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; body: Record<string, unknown> }) => api.updateClientLead(input.id, input.body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rm-client-leads'] }),
   });
 }
 
