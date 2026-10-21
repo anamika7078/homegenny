@@ -20,6 +20,8 @@ export interface StaffApplicant {
   full_name: string | null; mobile: string; language_tier?: string;
   /** false → app sign-up still at S1 with only a mobile number; intake_missing says what. */
   intake_complete?: boolean; intake_missing?: string[];
+  /** S1 only: every profile field still empty (the app profile's list) — on the Leads list. */
+  profile_missing?: string[];
   date_of_birth?: string | null; address?: string | null; email?: string | null;
   aadhaar_number?: string | null;
   emergency_contact_name?: string | null; emergency_contact_mobile?: string | null;

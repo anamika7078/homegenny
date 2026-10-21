@@ -124,6 +124,7 @@ const BM_NAV: NavSection[] = [
     section: 'Overview',
     items: [
       { href: '/bm/dashboard', label: 'BM Dashboard', icon: LayoutDashboard },
+      { href: '/rm/snapshot', label: 'Staff Snapshot', icon: Activity },
     ],
   },
   {
@@ -265,6 +266,7 @@ const ADMIN_NAV: NavSection[] = [
     section: 'Overview',
     items: [
       { href: '/admin/dashboard', label: 'Admin Dashboard', icon: LayoutDashboard },
+      { href: '/rm/snapshot', label: 'Staff Snapshot', icon: Activity },
     ],
   },
   {

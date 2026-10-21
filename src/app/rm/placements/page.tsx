@@ -55,6 +55,8 @@ function NewPlacementModal({
   const [placementType, setPlacementType] = useState<'PERMANENT' | 'TEMPORARY'>(fromRequest?.placementType ?? 'PERMANENT');
   const [hourlyRate, setHourlyRate] = useState('');
   const [hourlyFee, setHourlyFee] = useState('');
+  // HH:MM the shift starts. Left empty for a request, the backend takes the booking's time.
+  const [shiftStart, setShiftStart] = useState('');
 
   // Why this staff member can't take the placement being made, if they can't: a
   // permanent placement is always their only one, so an active one rules out anything
@@ -122,6 +124,7 @@ function NewPlacementModal({
       placement_type: placementType,
       ...(fromRequest ? { staff_request_id: fromRequest.id } : {}),
       ...(confirmNow ? { status: 'CONFIRMED' } : {}),
+      ...(shiftStart ? { shift_start: shiftStart } : {}),
       ...(isHourly
         ? { hourly_rate: rateNum, hourly_fee: feePerHourNum }
         : { wage_config: wageConfig, shift_hours: wageConfig?.working_hours }),
@@ -314,6 +317,20 @@ function NewPlacementModal({
             )}
           </div>
         )}
+
+        <div className="space-y-1.5">
+          <label htmlFor="input-shift-start" className="text-xs font-semibold text-[#8D9AB5]">Shift starts at</label>
+          <input
+            id="input-shift-start"
+            type="time"
+            value={shiftStart}
+            onChange={(e) => setShiftStart(e.target.value)}
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#E8EDF8] focus:outline-none focus:border-[#FF5A1F]/50"
+          />
+          <p className="text-[10px] text-[#8D9AB5]">
+            {fromRequest ? 'Leave empty to use the time from the request. ' : ''}Used to show late check-ins on the Staff Snapshot.
+          </p>
+        </div>
 
         {/* Trial or Confirm Now */}
         <div className="space-y-1.5">

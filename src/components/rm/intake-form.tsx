@@ -35,12 +35,18 @@ const schema = z.object({
 
 /**
  * "Complete S1" for an app sign-up: the mobile is already on file, and Aadhaar
- * can wait for S2 verification. Everything else S1 needs is still required.
+ * can wait for S2 verification. Everything else S1 needs is required — the same
+ * fields the staff app's own profile asks for (docs/REGISTRATION_ONBOARDING_PLAN.md §A4).
  */
 const completionSchema = schema.extend({
   mobile: z.string().optional(),
-  aadhaar_number: z.union([z.literal(''), z.string().regex(/^d{12}$/, 'Aadhaar must be 12 digits')]).optional(),
-  gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
+  aadhaar_number: z.union([z.literal(''), z.string().regex(/^\d{12}$/, 'Aadhaar must be 12 digits')]).optional(),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER'], { required_error: 'Gender required' }),
+  city: z.string().min(1, 'City required'),
+  area: z.string().optional(),
+  pincode: z.string().regex(/^[1-9]\d{5}$/, '6-digit pincode'),
+  emergency_contact_name: z.string().min(2, 'Emergency contact required'),
+  emergency_contact_mobile: z.string().regex(/^[6-9]\d{9}$/, '10-digit mobile'),
 });
 
 type FormValues = z.infer<typeof completionSchema>;
@@ -95,10 +101,24 @@ export function IntakeForm({
     (rmUsersRaw as { id: string; full_name: string }[]) ??
     [];
 
+  // The cities HomeGenny works in (GET /meta/cities) — the city picks the branch.
+  const { data: citiesRaw } = useQuery({
+    queryKey: ['meta-cities'],
+    queryFn: () => api.getCities(),
+    enabled: completing,
+    staleTime: 10 * 60_000,
+  });
+  const cities: { city: string; areas: string[] }[] =
+    (citiesRaw as { cities?: { city: string; areas: string[] }[] })?.cities ??
+    (citiesRaw as { data?: { cities?: { city: string; areas: string[] }[] } })?.data?.cities ??
+    [];
+  const areasOf = (city?: string) => cities.find((c) => c.city === city)?.areas ?? [];
+
   const {
     register,
     handleSubmit,
     control,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(completing ? completionSchema : schema),
@@ -117,10 +137,15 @@ export function IntakeForm({
             emergency_contact_mobile: existingStaff.emergency_contact_mobile ?? '',
             hometown: meta.hometown ?? '',
             gender: meta.gender as FormValues['gender'],
+            city: meta.city ?? '',
+            area: meta.area ?? '',
+            pincode: meta.pincode ?? '',
           }
         : {}),
     },
   });
+
+  const selectedCity = watch('city');
 
   const submit = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -268,6 +293,51 @@ export function IntakeForm({
         <Field label="Address" className="md:col-span-2" error={errors.address?.message}>
           <Input {...register('address')} />
         </Field>
+        {completing && (
+          <>
+            <Field label="City" error={errors.city?.message}>
+              <Controller
+                control={control}
+                name="city"
+                render={({ field }) => (
+                  <SelectMenu
+                    value={field.value ?? ''}
+                    onValueChange={field.onChange}
+                    placeholder="Select city"
+                    className="h-10 border-white/10 bg-card text-sm"
+                  >
+                    {cities.map((c) => (
+                      <SelectMenuItem key={c.city} value={c.city}>{c.city}</SelectMenuItem>
+                    ))}
+                  </SelectMenu>
+                )}
+              />
+            </Field>
+            <Field label="Pincode" error={errors.pincode?.message}>
+              <Input {...register('pincode')} placeholder="6 digits" maxLength={6} inputMode="numeric" />
+            </Field>
+            {areasOf(selectedCity).length > 0 && (
+              <Field label="Area (optional)">
+                <Controller
+                  control={control}
+                  name="area"
+                  render={({ field }) => (
+                    <SelectMenu
+                      value={field.value ?? ''}
+                      onValueChange={field.onChange}
+                      placeholder="Select area"
+                      className="h-10 border-white/10 bg-card text-sm"
+                    >
+                      {areasOf(selectedCity).map((a) => (
+                        <SelectMenuItem key={a} value={a}>{a}</SelectMenuItem>
+                      ))}
+                    </SelectMenu>
+                  )}
+                />
+              </Field>
+            )}
+          </>
+        )}
         <Field label="Referral source">
           <Input {...register('referral_source')} placeholder="Walk-in, referral, camp..." />
         </Field>
@@ -278,11 +348,11 @@ export function IntakeForm({
           <input type="checkbox" {...register('deposit_collected')} className="rounded" />
           Deposit collected at intake
         </label>
-        <Field label="Emergency contact name">
+        <Field label="Emergency contact name" error={errors.emergency_contact_name?.message}>
           <Input {...register('emergency_contact_name')} />
         </Field>
-        <Field label="Emergency contact mobile">
-          <Input {...register('emergency_contact_mobile')} />
+        <Field label="Emergency contact mobile" error={errors.emergency_contact_mobile?.message}>
+          <Input {...register('emergency_contact_mobile')} maxLength={10} inputMode="numeric" />
         </Field>
         <Field label="Intake notes" className="md:col-span-2">
           <textarea

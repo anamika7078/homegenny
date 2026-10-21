@@ -29,6 +29,7 @@ import {
   Inbox,
   HeartPulse,
   Navigation,
+  Gauge,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
@@ -43,7 +44,13 @@ type NavItem = {
 };
 
 const NAV: { section: string; items: NavItem[] }[] = [
-  { section: 'Overview', items: [{ href: '/rm/dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
+  {
+    section: 'Overview',
+    items: [
+      { href: '/rm/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { href: '/rm/snapshot', label: 'Staff Snapshot', icon: Gauge },
+    ],
+  },
   {
     section: 'Pipeline',
     items: [

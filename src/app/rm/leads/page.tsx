@@ -17,11 +17,12 @@ import type { StaffApplicant } from '@/lib/types';
 /**
  * People who signed up from the app with a mobile number only.
  *
- * Staff land at S1 with no RM: claim one (or go straight to Complete S1, which
- * claims it), call them, and fill in name / DOB / address / series — that
- * moves them to S2. Clients get a pending profile: they fill in name and
- * address when they first ask for staff, but an RM can call and fill it in
- * (PAN/GST too) beforehand.
+ * Staff fill in their own profile in the app; submitting it moves them to S2
+ * and gives them the RM of their city automatically. Two kinds show here:
+ * still filling the profile (call them, or fill it in with Complete S1), and
+ * finished but with no RM in their city (claim them). Clients finish their
+ * profile in the app before they can ask for staff; an RM can call and fill
+ * it in (PAN/GST too). docs/REGISTRATION_ONBOARDING_PLAN.md.
  */
 export default function RmLeadsPage() {
   const [tab, setTab] = useState<'staff' | 'clients'>('staff');
@@ -29,7 +30,7 @@ export default function RmLeadsPage() {
     <div className="page-padding max-w-4xl mx-auto space-y-4">
       <RmPageHeader
         title="New Leads"
-        description="Signed up from the app with a mobile number — call them and complete their details"
+        description="App sign-ups still filling their profile, or with no RM in their city"
       />
       <div className="flex gap-2">
         {(['staff', 'clients'] as const).map((t) => (
@@ -47,7 +48,11 @@ const MISSING_LABEL: Record<string, string> = {
   full_name: 'name',
   date_of_birth: 'DOB',
   address: 'address',
-  series: 'series',
+  series: 'category',
+  gender: 'gender',
+  city: 'city',
+  pincode: 'pincode',
+  emergency_contact: 'emergency contact',
   name: 'name',
 };
 
@@ -64,7 +69,8 @@ function StaffLeads() {
     <div className="space-y-2">
       {leads.map((s) => {
         const seriesKey = (s.series ?? '') as string;
-        const needsS1 = s.pipeline_stage === 'S1_INTAKE' && s.intake_complete === false;
+        // Still in S1 = still filling the profile; past it with no RM = no RM in their city.
+        const needsS1 = s.pipeline_stage === 'S1_INTAKE';
         const label = s.full_name || s.mobile;
         return (
           <div key={s.id} className="glass-card rounded-lg p-4 flex items-center justify-between gap-4 flex-wrap">
@@ -85,7 +91,12 @@ function StaffLeads() {
                 )}
                 {needsS1 && (
                   <span className="shrink-0 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-300">
-                    S1 pending
+                    Filling profile
+                  </span>
+                )}
+                {!needsS1 && (
+                  <span className="shrink-0 rounded border border-sky-500/30 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-sky-300">
+                    No RM in city
                   </span>
                 )}
               </div>
@@ -96,8 +107,8 @@ function StaffLeads() {
               </p>
               <p className="text-xs text-muted-foreground">
                 registered {fToNow(s.created_at)} · now at {STAGE_LABELS[s.pipeline_stage] ?? s.pipeline_stage}
-                {needsS1 && s.intake_missing?.length
-                  ? ` · missing ${s.intake_missing.map((m) => MISSING_LABEL[m] ?? m).join(', ')}`
+                {needsS1 && (s.profile_missing ?? s.intake_missing)?.length
+                  ? ` · missing ${(s.profile_missing ?? s.intake_missing ?? []).map((m) => MISSING_LABEL[m] ?? m).join(', ')}`
                   : ''}
               </p>
             </div>

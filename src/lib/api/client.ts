@@ -310,6 +310,7 @@ export interface ApiClient {
   createPlacement(body: Record<string, unknown>): Promise<any>;
   confirmPlacement(id: string): Promise<any>;
   exitPlacement(id: string, body: Record<string, unknown>): Promise<any>;
+  updatePlacementTerms(id: string, body: Record<string, unknown>): Promise<any>;
   calculateWage(body: Record<string, unknown>): Promise<any>;
 
   getStaffTimeline(id: string): Promise<any>;
@@ -395,6 +396,7 @@ export interface ApiClient {
   cancelStaffRequest(id: string, reason: string): Promise<any>;
   // Daily care (Phases C–E)
   getCareCompliance(): Promise<any>;
+  getRmSnapshot(params?: { date?: string; series?: string; branch_id?: string }): Promise<any>;
   getCarePlan(placementId: string): Promise<any>;
   getCareDay(placementId: string, date?: string): Promise<any>;
   getCareHistory(placementId: string, params?: { from?: string; to?: string }): Promise<any>;
@@ -414,6 +416,7 @@ export interface ApiClient {
   listUnassignedStaff(): Promise<any>;
   claimStaff(staffId: string): Promise<any>;
   completeIntake(staffId: string, body: Record<string, unknown>): Promise<any>;
+  getCities(): Promise<any>;
   listClientLeads(status?: string): Promise<any>;
   updateClientLead(customerId: string, body: Record<string, unknown>): Promise<any>;
 
@@ -860,6 +863,8 @@ export const api: ApiClient = {
     apiClient.post(`/placements/${id}/confirm`),
   exitPlacement: (id: string, body: Record<string, unknown>) =>
     apiClient.post(`/placements/${id}/exit`, body),
+  updatePlacementTerms: (id: string, body: Record<string, unknown>) =>
+    apiClient.patch(`/placements/${id}/terms`, body),
   calculateWage: (body: Record<string, unknown>) =>
     apiClient.post('/placements/calculate-wage', body),
 
@@ -953,6 +958,7 @@ export const api: ApiClient = {
   linkStaffRequestPlacement: (id, placementId) => apiClient.post(`/rm/staff-requests/${id}/link-placement`, { placement_id: placementId }),
   cancelStaffRequest: (id, reason) => apiClient.post(`/rm/staff-requests/${id}/cancel`, { reason }),
   getCareCompliance: () => apiClient.get('/rm/care/compliance'),
+  getRmSnapshot: (params) => apiClient.get('/rm/snapshot', { params }),
   getCarePlan: (pid) => apiClient.get(`/care/placements/${pid}/plan`),
   getCareDay: (pid, date) => apiClient.get(`/care/placements/${pid}/day`, { params: date ? { date } : {} }),
   getCareHistory: (pid, params) => apiClient.get(`/care/placements/${pid}/history`, { params }),
@@ -971,6 +977,7 @@ export const api: ApiClient = {
   listUnassignedStaff: () => apiClient.get('/rm/unassigned-staff'),
   claimStaff: (staffId) => apiClient.post(`/rm/unassigned-staff/${staffId}/claim`),
   completeIntake: (staffId, body) => apiClient.post(`/rm/staff/${staffId}/complete-intake`, body),
+  getCities: () => apiClient.get('/meta/cities'),
   listClientLeads: (status) => apiClient.get('/rm/client-leads', { params: status ? { status } : {} }),
   updateClientLead: (customerId, body) => apiClient.patch(`/rm/client-leads/${customerId}`, body),
 

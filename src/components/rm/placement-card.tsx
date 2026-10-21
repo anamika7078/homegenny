@@ -1,5 +1,8 @@
 'use client';
 import { useState } from 'react';
+import toast from 'react-hot-toast';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, ChevronDown, Clock, CheckCircle2, XCircle, FileText, ShieldAlert } from 'lucide-react';
 import {
@@ -33,6 +36,8 @@ export interface Placement {
   hourly_rate?: number | null;
   hourly_fee?: number | null;
   shift_hours?: number | null;
+  /** HH:MM (IST) the shift starts — what "late" on the Staff Snapshot is measured from. */
+  shift_start?: string | null;
   wage_breakup?: Partial<WageBreakup> | null;
   trial_start_date: string | null;
   trial_end_date: string | null;
@@ -258,6 +263,53 @@ function PayFigures({ p }: { p: Placement }) {
   );
 }
 
+/**
+ * When the shift starts. The Staff Snapshot measures "late" from it; a
+ * placement without one is never marked late. Filled from the booking when
+ * the placement came from a staff request.
+ */
+function ShiftStartEditor({ p }: { p: Placement }) {
+  const qc = useQueryClient();
+  const [value, setValue] = useState(p.shift_start ?? '');
+  const save = useMutation({
+    mutationFn: (shift_start: string) => api.updatePlacementTerms(p.id, { shift_start }),
+    onSuccess: (_r, v) => {
+      toast.success(v ? `Shift start set to ${v}` : 'Shift start cleared');
+      qc.invalidateQueries({ queryKey: ['placements'] });
+      qc.invalidateQueries({ queryKey: ['rm-snapshot'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const changed = value !== (p.shift_start ?? '');
+  return (
+    <div className="flex flex-wrap items-end gap-2 text-xs">
+      <div>
+        <label htmlFor={`shift-start-${p.id}`} className="mb-1 flex items-center gap-1 text-muted-foreground">
+          <Clock className="h-3 w-3" /> Shift starts at
+        </label>
+        <input
+          id={`shift-start-${p.id}`}
+          type="time"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-foreground focus:border-[#FF5A1F]/50 focus:outline-none"
+        />
+      </div>
+      <button
+        type="button"
+        disabled={!changed || save.isPending}
+        onClick={() => save.mutate(value)}
+        className="rounded-lg border border-white/15 px-3 py-1.5 font-semibold text-foreground hover:bg-white/5 disabled:opacity-40"
+      >
+        {save.isPending ? 'Saving…' : 'Save'}
+      </button>
+      {!p.shift_start && !changed && (
+        <span className="text-muted-foreground">Not set — the Staff Snapshot can't tell if they are late.</span>
+      )}
+    </div>
+  );
+}
+
 export function PlacementCard({
   p,
   onConfirm,
@@ -323,6 +375,8 @@ export function PlacementCard({
                 <Figure label="Trial start" value={fmtDate(p.trial_start_date)} />
                 <Figure label="Trial end" value={fmtDate(p.trial_end_date)} />
               </div>
+
+              {(p.status === 'TRIAL' || p.status === 'CONFIRMED') && <ShiftStartEditor p={p} />}
 
               {p.status === 'TRIAL' && (
                 <div>
