@@ -132,17 +132,14 @@ const BM_NAV: NavSection[] = [
     items: [
       { href: '/alarms', label: 'Issues & Alarms', icon: Bell },
       { href: '/rm/pipeline', label: 'Pipeline Kanban', icon: GitBranch },
-      { href: '/staff/intake', label: 'S1 Intake', icon: UserPlus },
-      { href: '/video-cert', label: 'Video Cert', icon: Video },
-      { href: '/agreements', label: 'Agreements', icon: FileText },
-      { href: '/payroll', label: 'Payroll', icon: DollarSign },
+      { href: '/rm/intake', label: 'S1 Intake', icon: UserPlus },
+      { href: '/rm/agreements', label: 'Agreements', icon: FileText },
     ],
   },
   {
     section: 'System',
     items: [
       { href: '/monitoring', label: 'Monitoring', icon: Activity },
-      { href: '/system-status', label: 'System Status', icon: ShieldCheck },
     ],
   },
 ];

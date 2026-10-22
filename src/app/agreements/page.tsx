@@ -50,54 +50,6 @@ function staffToPendingRow(s: StaffListItem): PendingRow {
   };
 }
 
-/** Demo rows — only used when API returns no staff (IDs are not in DB) */
-const DEMO_ROWS: PendingRow[] = [
-  {
-    staffId: 'a0000001-0000-4000-8000-000000000001',
-    staff: 'Ramesh Babu Trivedi',
-    series: 'DR',
-    client: 'Kapoor Family',
-    a1: 'signed',
-    a2: 'pending',
-    a3: 'pending',
-    addendum: 'locked',
-    action: { label: 'Send A2 OTP', step: 'A2' },
-  },
-  {
-    staffId: 'a0000002-0000-4000-8000-000000000002',
-    staff: 'Durga Devi Joshi',
-    series: 'SC',
-    client: 'Srivastava Family',
-    a1: 'signed',
-    a2: 'signed',
-    a3: 'pending',
-    addendum: 'pending',
-    action: { label: 'Send A4 OTP', step: 'A4' },
-  },
-  {
-    staffId: 'a0000003-0000-4000-8000-000000000003',
-    staff: 'Geeta Rani',
-    series: 'MAID',
-    client: 'Mehrotra Family',
-    a1: 'pending',
-    a2: 'locked',
-    a3: 'locked',
-    addendum: 'na',
-    action: { label: 'Send A1 OTP', step: 'A1' },
-  },
-  {
-    staffId: 'a0000004-0000-4000-8000-000000000004',
-    staff: 'Ramkishan Yadav',
-    series: 'DR',
-    client: 'Khanna Family',
-    a1: 'signed',
-    a2: 'signed',
-    a3: 'pending',
-    addendum: 'locked',
-    action: { label: 'Send A3 OTP', step: 'A3' },
-  },
-];
-
 const SERIES_BADGE: Record<PendingRow['series'], { bg: string; text: string }> = {
   DR: { bg: 'bg-sky-500/15', text: 'text-sky-400' },
   SC: { bg: 'bg-emerald-500/15', text: 'text-emerald-400' },
@@ -172,16 +124,11 @@ export default function AgreementsPage() {
         const body = unwrap<{ items?: StaffListItem[] }>(raw);
         return body.items ?? [];
       };
-      const atStage = await load({ stage: 'S4_AGREEMENTS', limit: 50 });
-      if (atStage.length) return atStage;
-      return load({ limit: 50 });
+      return load({ stage: 'S4_AGREEMENTS', limit: 50 });
     },
   });
 
-  const rows = useMemo(
-    () => (staffItems.length ? staffItems.map(staffToPendingRow) : DEMO_ROWS),
-    [staffItems],
-  );
+  const rows = useMemo(() => staffItems.map(staffToPendingRow), [staffItems]);
 
   const sendOtp = useCallback(async (row: PendingRow) => {
     if (!row.action) return;
@@ -232,6 +179,12 @@ export default function AgreementsPage() {
                 <tr>
                   <td colSpan={8} className="px-5 py-8 text-center text-sm text-muted-foreground">
                     Loading staff…
+                  </td>
+                </tr>
+              ) : !rows.length ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                    No staff are waiting at the agreements stage.
                   </td>
                 </tr>
               ) : null}

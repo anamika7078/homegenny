@@ -1,15 +1,10 @@
 'use client';
 
-import { RmPageHeader } from '@/components/rm/rm-page-header';
+import { RoleRedirect } from '@/components/layout/role-redirect';
 
-export default function RmNotificationsPage() {
-  return (
-    <div className="page-padding">
-      <RmPageHeader title="Notifications" description="WhatsApp, SMS, email, and in-app alerts" />
-      <div className="glass-card rounded-xl p-8 text-center text-muted-foreground">
-        In-app notifications are delivered via the header drawer. Stage and verification events are
-        queued through BullMQ + Redis on the backend.
-      </div>
-    </div>
-  );
+/** This page had no notifications behind it: nothing sends RM in-app notifications yet. */
+const TO = {};
+
+export default function Page() {
+  return <RoleRedirect to={TO} />;
 }

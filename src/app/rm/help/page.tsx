@@ -3,11 +3,14 @@
 import { RmPageHeader } from '@/components/rm/rm-page-header';
 
 const TOPICS = [
-  ['FSM transitions', 'Use Pipeline Board — direct stage PATCH is blocked for RM role.'],
-  ['Restricted list', 'Always runs at S1 intake before deposit collection.'],
-  ['PV rules', 'Maid may deploy with pending PV; SC/UC/DR require CLEAR PV.'],
-  ['Driver assessment', 'Max 3 attempts — failures 1–2 defer, attempt 3 terminals.'],
-  ['Deferred timeout', 'Auto-terminal after 90 days via cron job.'],
+  ['Moving stages', 'Use the Kanban Board. If a move is refused, the message lists exactly what is still missing.'],
+  ['Restricted list', 'Checked first at S1, and again on every later move. A match stops the staff member.'],
+  ['Verification (S2)', 'Aadhaar eKYC, police verification and medical clearance must all be Clear before S3.'],
+  ['Training (S3)', 'A failed quiz only schedules a retake. Every required video prompt must be approved before S4.'],
+  ['Holds', 'Hold a stage to let the staff member move on while one item is pending. Nobody on hold can be placed.'],
+  ['Deferred', 'A reason is required. Resume never goes past the stage deferred from. Cases close after 90 days.'],
+  ['Placements', 'A Permanent placement must be the staff member’s only one. Several Temporary (hourly) placements are fine.'],
+  ['Leaving staff', 'Exit every active placement, with a date and reason, before closing a staff member as Terminal.'],
 ];
 
 export default function RmHelpPage() {

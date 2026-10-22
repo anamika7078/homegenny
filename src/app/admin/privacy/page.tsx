@@ -78,35 +78,41 @@ export default function AdminPrivacyPage() {
     r.requestType?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleTestPiiExport = () => {
-    toast.success("Generating DPDP PII-Masked Compliance Export...");
-    setTimeout(() => {
-      const piiMask = (val: string, type: 'name' | 'phone' | 'email') => {
-        if (!isPiiMaskingEnabled) return val;
-        if (type === 'phone') return val.replace(/(\+\d{2}\s*\d{2})\d{4}(\d{2})/, '$1****$2');
-        if (type === 'email') return val.replace(/(^.|\@.)([^@]+)(?=@)/g, '$1***');
-        return val.replace(/\b(\w)(\w+)/g, '$1***');
-      };
+  // Exports the privacy requests on record, not sample rows. With masking on,
+  // the data principal's identifier keeps only its first and last two characters.
+  const handlePiiExport = () => {
+    if (!rawRequests.length) {
+      toast.error("There are no privacy requests to export yet.");
+      return;
+    }
+    const mask = (val: string) =>
+      !isPiiMaskingEnabled || val.length <= 4 ? val : `${val.slice(0, 2)}${'*'.repeat(val.length - 4)}${val.slice(-2)}`;
+    const cell = (val: unknown) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+    const rows = rawRequests.map((r: any) => [
+      r.id,
+      mask(String(r.userId ?? '')),
+      r.requestType,
+      r.status,
+      r.reason,
+      r.createdAt ? new Date(r.createdAt).toISOString() : '',
+      r.preservedVideoCerts ?? '',
+    ].map(cell).join(','));
 
-      const sampleData = [
-        { name: piiMask("Pooja Mishra", 'name'), phone: piiMask("+91 9800000002", 'phone'), email: piiMask("pooja@homegenny.com", 'email'), dpdpStatus: "ERASED_EXCEPT_NEVER_DELETE_CERT" },
-        { name: piiMask("Amit Gupta", 'name'), phone: piiMask("+91 9800000001", 'phone'), email: piiMask("amit@homegenny.com", 'email'), dpdpStatus: "PII_MASKED" },
-      ];
+    const csv = [
+      `DPDP Act 2023 privacy requests (PII masking: ${isPiiMaskingEnabled ? 'enabled' : 'disabled'})`,
+      'Request ID,Data Principal,Request Type,Status,Reason,Created At,Preserved Video Certs',
+      ...rows,
+    ].join('\n');
 
-      const csvContent = "data:text/csv;charset=utf-8,"
-        + `DPDP ACT 2023 AUDIT REPORT (PII Masking: ${isPiiMaskingEnabled ? 'ENABLED' : 'DISABLED'})\n`
-        + "Staff Name,Phone,Email,DPDP Compliance Status\n"
-        + sampleData.map(d => `"${d.name}","${d.phone}","${d.email}","${d.dpdpStatus}"`).join("\n");
-
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `dpdp_compliance_export_pii_${isPiiMaskingEnabled ? 'masked' : 'unmasked'}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      toast.success("DPDP Export Downloaded!");
-    }, 1000);
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `dpdp_privacy_requests_${isPiiMaskingEnabled ? 'masked' : 'unmasked'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${rows.length} privacy request${rows.length === 1 ? '' : 's'}`);
   };
 
   return (
@@ -122,8 +128,8 @@ export default function AdminPrivacyPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleTestPiiExport} variant="outline" className="border-border/60 hover:bg-[#1C2740] hover:text-white transition-all text-[#8D9AB5] bg-transparent">
-            <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-400" /> Export PII-Masked Report
+          <Button onClick={handlePiiExport} variant="outline" className="border-border/60 hover:bg-[#1C2740] hover:text-white transition-all text-[#8D9AB5] bg-transparent">
+            <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-400" /> Export Requests (CSV)
           </Button>
           <Button onClick={() => setIsRequestModalOpen(true)} className="bg-rose-600 hover:bg-rose-700 text-white shadow-md hover:shadow-lg transition-all">
             <Plus className="mr-2 h-4 w-4" /> Process DPDP Erasure

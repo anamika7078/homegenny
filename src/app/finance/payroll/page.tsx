@@ -19,7 +19,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { ShieldCheck, FileText, Users, Eye } from 'lucide-react';
+import { ShieldCheck, FileText, Eye } from 'lucide-react';
 import { LegacyDisbursementTab } from './components/legacy-disbursement-tab';
 import { RunStaffPayrollModal } from './components/run-staff-payroll-modal';
 
@@ -68,13 +68,6 @@ export default function FinancePayrollPage() {
             >
               <FileText className="w-4 h-4 text-emerald-400" />
               Client Invoices
-            </Link>
-            <Link
-              href="/hr/payroll"
-              className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-semibold text-sm border border-white/10 transition"
-            >
-              <Users className="w-4 h-4 text-indigo-400" />
-              Salary Slips
             </Link>
           </div>
         </div>

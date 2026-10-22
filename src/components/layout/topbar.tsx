@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils/cn';
@@ -10,10 +9,6 @@ import { useAuthStore } from '@/lib/store/auth.store';
 import { api } from '@/lib/api/client';
 import { disconnectSocket } from '@/lib/api/socket';
 import { useShell } from './shell-context';
-
-/** BM header counts — replace with API / store when alarms are live */
-const CRITICAL_COUNT = 3;
-const HIGH_COUNT = 5;
 
 const BM_RM_DASHBOARD = new Set(['/bm/dashboard', '/rm/dashboard']);
 
@@ -94,11 +89,11 @@ export function Topbar() {
           </h2>
           {isDashboardHome ? (
             <p className="mt-0.5 hidden text-[11px] font-medium text-secondary-foreground sm:block">
-              {dateLine} · Delhi NCR Branch · Last sync: 2 min ago
+              {dateLine}
             </p>
           ) : (
             <p className="mt-0.5 truncate text-[10px] font-medium text-secondary-foreground">
-              {user?.role?.replace('_', ' ') ?? 'HomeGenny'} · Delhi NCR
+              {user?.role?.replace('_', ' ') ?? 'HomeGenny'}
             </p>
           )}
         </div>
@@ -107,25 +102,9 @@ export function Topbar() {
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         {isBmDashboard && (
           <>
-            <Link
-              href="/alarms?tab=CRITICAL"
-              className="hidden items-center gap-2 rounded-full border border-red-500/50 bg-[#1a1012] px-2.5 py-1.5 transition-opacity hover:opacity-90 sm:inline-flex sm:px-3"
-            >
-              <span className="h-2 w-2 shrink-0 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.7)]" />
-              <span className="text-[11px] font-bold text-red-400">{CRITICAL_COUNT} Critical</span>
-            </Link>
-
-            <Link
-              href="/alarms"
-              className="hidden items-center gap-2 rounded-full border border-amber-400/45 bg-[#1a160c] px-2.5 py-1.5 transition-opacity hover:opacity-90 sm:inline-flex sm:px-3"
-            >
-              <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.5)]" />
-              <span className="text-[11px] font-bold text-amber-300">{HIGH_COUNT} High</span>
-            </Link>
-
             <button
               type="button"
-              onClick={() => router.push('/staff/intake')}
+              onClick={() => router.push('/rm/intake')}
               className="hidden items-center gap-1.5 rounded-full bg-[#FF5A1F] px-3 py-1.5 text-xs font-bold text-white shadow-lg shadow-[#FF5A1F]/20 transition-colors hover:bg-[#FF5A1F]/90 sm:flex sm:px-4"
             >
               <Plus className="h-3.5 w-3.5" />
