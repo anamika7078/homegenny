@@ -60,6 +60,66 @@ interface StaffRow {
   hours_worked: number;
 }
 
+const CYCLES: { id: string; label: string; hint: string }[] = [
+  { id: 'MONTHLY', label: 'Monthly', hint: 'One invoice for the month, raised on the 1st' },
+  { id: 'FORTNIGHTLY', label: 'Fortnightly', hint: '1–15 and 16–end, raised the next morning' },
+  { id: 'WEEKLY', label: 'Weekly', hint: '1–7, 8–14, 15–21, 22–end, raised the next morning' },
+  { id: 'MANUAL', label: 'Manual', hint: 'Nothing automatic — invoice by hand from Invoices' },
+];
+
+/**
+ * How often this client is invoiced automatically, and their state (which
+ * decides CGST+SGST against IGST — a Tax Invoice is refused without it).
+ */
+function BillingSettings({ customer, onSaved }: { customer: any; onSaved: () => void }) {
+  const [cycle, setCycle] = useState<string>(customer?.billing_cycle ?? 'MONTHLY');
+  const [state, setState] = useState<string>(customer?.state ?? '');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const changed = cycle !== (customer?.billing_cycle ?? 'MONTHLY') || state !== (customer?.state ?? '');
+
+  const save = async () => {
+    setSaving(true); setMsg(null);
+    try {
+      await api.updateFinanceCustomer(customer.id, { billing_cycle: cycle, state });
+      setMsg({ ok: true, text: 'Saved' });
+      onSaved();
+    } catch (e: any) {
+      setMsg({ ok: false, text: e?.response?.data?.message?.message ?? e?.response?.data?.message ?? e.message ?? 'Could not save' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const field = 'rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-white focus:border-emerald-500/50 focus:outline-none';
+  return (
+    <div className="mt-3 flex flex-wrap items-end gap-3 rounded-xl border border-white/8 bg-white/[0.02] p-3">
+      <div>
+        <label htmlFor="select-billing-cycle" className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Billing cycle</label>
+        <select id="select-billing-cycle" value={cycle} onChange={(e) => setCycle(e.target.value)} className={field}>
+          {CYCLES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <label htmlFor="input-customer-state" className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">State</label>
+        <input id="input-customer-state" value={state} onChange={(e) => setState(e.target.value)} placeholder="e.g. Uttarakhand" className={`${field} w-40`} />
+      </div>
+      <button
+        type="button"
+        onClick={save}
+        disabled={!changed || saving}
+        className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/5 disabled:opacity-40"
+      >
+        {saving ? 'Saving…' : 'Save'}
+      </button>
+      <p className="basis-full text-[11px] text-slate-500">
+        {CYCLES.find((c) => c.id === cycle)?.hint}. Invoices are raised as DRAFT — you still approve and send them.
+      </p>
+      {msg && <p className={`basis-full text-[11px] ${msg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{msg.text}</p>}
+    </div>
+  );
+}
+
 export function CustomerDetailDialog({
   customerId,
   onClose,
@@ -233,6 +293,7 @@ export function CustomerDetailDialog({
                     <span className="font-mono text-[11px] text-emerald-400">{lastBill}</span>
                   )}
                 </div>
+                {c?.id && <BillingSettings key={`${c.id}-${c.billing_cycle}-${c.state}`} customer={c} onSaved={() => load(month, year)} />}
               </>
             )}
           </div>

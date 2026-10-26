@@ -35,6 +35,13 @@ export interface Placement {
   management_fee: number | string | null;
   hourly_rate?: number | null;
   hourly_fee?: number | null;
+  /** MONTHLY | HOURLY | PER_DUTY. PER_DUTY is 24×7 live-in or relief. */
+  rate_basis?: 'MONTHLY' | 'HOURLY' | 'PER_DUTY';
+  duty_rate?: number | null;
+  duty_billing_rate?: number | null;
+  esic_applicable?: boolean;
+  pf_applicable?: boolean;
+  covers_placement_id?: string | null;
   shift_hours?: number | null;
   /** HH:MM (IST) the shift starts — what "late" on the Staff Snapshot is measured from. */
   shift_start?: string | null;
@@ -236,6 +243,16 @@ function Figure({ label, value }: { label: string; value: string }) {
 
 /** What the placement pays and bills — the full breakup for a permanent one, the hourly pair for an hourly one. */
 function PayFigures({ p }: { p: Placement }) {
+  const statutory = `${p.esic_applicable === false ? 'No ESIC' : 'ESIC'} · ${p.pf_applicable === false ? 'No PF' : 'PF'}`;
+  if (p.rate_basis === 'PER_DUTY') {
+    return (
+      <>
+        <Figure label="Staff pay" value={`${inr(p.duty_rate)}/duty`} />
+        <Figure label="Client billing" value={`${inr(p.duty_billing_rate)}/duty + GST`} />
+        <Figure label="Statutory" value={statutory} />
+      </>
+    );
+  }
   if (p.placement_type === 'TEMPORARY') {
     return (
       <>
@@ -310,6 +327,90 @@ function ShiftStartEditor({ p }: { p: Placement }) {
   );
 }
 
+/**
+ * Change how a running placement is priced — move it onto per-duty (24×7
+ * live-in or relief), change its duty rates, or switch ESIC/PF off or on.
+ *
+ * New placements could already be created per-duty, but one already running
+ * on a monthly wage had no way across. The change applies to payroll run from
+ * now on; payroll already run keeps the figures it was run with.
+ */
+function RatesEditor({ p }: { p: Placement }) {
+  const qc = useQueryClient();
+  const temp = p.placement_type === 'TEMPORARY';
+  const [perDuty, setPerDuty] = useState(p.rate_basis === 'PER_DUTY');
+  const [rate, setRate] = useState(p.duty_rate != null ? String(p.duty_rate) : '');
+  const [bill, setBill] = useState(p.duty_billing_rate != null ? String(p.duty_billing_rate) : '');
+  const [esic, setEsic] = useState(p.esic_applicable !== false);
+  const [pf, setPf] = useState(p.pf_applicable !== false);
+
+  const save = useMutation({
+    mutationFn: () => api.updatePlacementTerms(p.id, {
+      // Sent only when the basis actually changes, so toggling ESIC on a
+      // monthly placement does not re-validate its salary.
+      ...(perDuty !== (p.rate_basis === 'PER_DUTY')
+        ? { rate_basis: perDuty ? 'PER_DUTY' : temp ? 'HOURLY' : 'MONTHLY' }
+        : {}),
+      ...(perDuty ? { duty_rate: Number(rate), duty_billing_rate: Number(bill), shift_hours: 24 } : {}),
+      esic_applicable: esic,
+      pf_applicable: pf,
+    }),
+    onSuccess: () => {
+      toast.success('Rates saved — payroll run from now on uses them.');
+      qc.invalidateQueries({ queryKey: ['placements'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const rateN = Number(rate), billN = Number(bill);
+  const invalid = perDuty && (!(rateN > 0) || !(billN > 0) || billN < rateN);
+  const input = 'w-24 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-foreground focus:border-[#FF5A1F]/50 focus:outline-none';
+
+  return (
+    <div className="space-y-2 text-xs rounded-lg border border-white/8 p-3">
+      <p className="font-semibold text-foreground">Pricing</p>
+      <label className="flex items-center gap-2 cursor-pointer" htmlFor={`perduty-${p.id}`}>
+        <input id={`perduty-${p.id}`} type="checkbox" checked={perDuty} onChange={(e) => setPerDuty(e.target.checked)} className="accent-[#FF5A1F]" />
+        {temp ? 'Relief — paid per duty' : '24×7 Live-in — paid per duty'}
+        <span className="text-muted-foreground">(otherwise {temp ? 'hourly' : 'monthly salary'})</span>
+      </label>
+      {perDuty && (
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label htmlFor={`dr-${p.id}`} className="mb-1 block text-muted-foreground">Staff pay ₹/duty</label>
+            <input id={`dr-${p.id}`} type="number" min="0" value={rate} onChange={(e) => setRate(e.target.value)} className={input} />
+          </div>
+          <div>
+            <label htmlFor={`db-${p.id}`} className="mb-1 block text-muted-foreground">Client billing ₹/duty</label>
+            <input id={`db-${p.id}`} type="number" min="0" value={bill} onChange={(e) => setBill(e.target.value)} className={input} />
+          </div>
+          {rateN > 0 && billN > 0 && billN < rateN && (
+            <span className="text-amber-400">Billing is below the staff pay.</span>
+          )}
+        </div>
+      )}
+      <div className="flex gap-4">
+        <label className="flex items-center gap-2 cursor-pointer" htmlFor={`esic-${p.id}`}>
+          <input id={`esic-${p.id}`} type="checkbox" checked={esic} onChange={(e) => setEsic(e.target.checked)} className="accent-[#FF5A1F]" />
+          ESIC applies
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer" htmlFor={`pf-${p.id}`}>
+          <input id={`pf-${p.id}`} type="checkbox" checked={pf} onChange={(e) => setPf(e.target.checked)} className="accent-[#FF5A1F]" />
+          PF applies
+        </label>
+      </div>
+      <button
+        type="button"
+        disabled={invalid || save.isPending}
+        onClick={() => save.mutate()}
+        className="rounded-lg border border-white/15 px-3 py-1.5 font-semibold text-foreground hover:bg-white/5 disabled:opacity-40"
+      >
+        {save.isPending ? 'Saving…' : 'Save pricing'}
+      </button>
+    </div>
+  );
+}
+
 export function PlacementCard({
   p,
   onConfirm,
@@ -345,7 +446,9 @@ export function PlacementCard({
               </span>
             )}
             <span className="text-[9px] font-bold uppercase border rounded-full px-2 py-0.5 bg-white/5 border-white/10 text-muted-foreground">
-              {hourly ? 'Hourly' : 'Permanent'}
+              {p.rate_basis === 'PER_DUTY'
+                ? (hourly ? 'Relief · per duty' : '24×7 Live-in')
+                : hourly ? 'Hourly' : 'Permanent'}
             </span>
           </div>
           <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
@@ -377,6 +480,7 @@ export function PlacementCard({
               </div>
 
               {(p.status === 'TRIAL' || p.status === 'CONFIRMED') && <ShiftStartEditor p={p} />}
+              {(p.status === 'TRIAL' || p.status === 'CONFIRMED') && <RatesEditor p={p} />}
 
               {p.status === 'TRIAL' && (
                 <div>

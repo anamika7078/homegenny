@@ -164,6 +164,29 @@ export default function InvoicesPage() {
     }
   };
 
+  // Rebuilds an unsent invoice with the current Company & GST settings — how a
+  // Bill of Supply raised before the GSTIN was entered becomes a Tax Invoice.
+  const handleRecalculate = async (id: string) => {
+    setActioning(id + '_recalc');
+    try {
+      const res: any = await api.recalculateFinanceInvoice(id);
+      const out = res?.data ?? res;
+      const p = out?.preview;
+      showToast(
+        'success',
+        p?.document_type === 'TAX_INVOICE'
+          ? `Recalculated as a Tax Invoice — GST ${fmtRs(p?.totals?.gst_total ?? 0)}, total ${fmtRs(p?.totals?.total ?? 0)}`
+          : 'Recalculated — still a Bill of Supply. Fill in Finance → Company & GST first.',
+      );
+      setSelected(null);
+      load();
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Could not recalculate');
+    } finally {
+      setActioning(null);
+    }
+  };
+
   const handleMarkSettled = async () => {
     if (!settleFor) return;
     if (!settleRef.trim()) { showToast('error', 'A payment reference is required'); return; }
@@ -221,6 +244,24 @@ export default function InvoicesPage() {
       );
     } catch (e: any) {
       showToast('error', e.message ?? 'Failed to generate payment link');
+    } finally {
+      setActioning(null);
+    }
+  };
+
+  // One salary slip per staff member on the invoice, for the same days.
+  const handleSalarySlips = async (id: string, invoiceNumber: string) => {
+    setActioning(id + '_slips');
+    try {
+      const blob = await api.downloadInvoiceSalarySlips(id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `salary-slips-${invoiceNumber || id}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Could not download the salary slips');
     } finally {
       setActioning(null);
     }
@@ -301,12 +342,24 @@ export default function InvoicesPage() {
               </div>
               <div className="flex justify-between py-2 border-b border-white/5">
                 <span className="text-slate-400">Period</span>
-                <span className="text-white">{MONTHS_SHORT[selected.period_month - 1]} {selected.period_year}</span>
+                <span className="text-white">
+                  {selected.period_from && selected.period_to
+                    ? `${String(selected.period_from).slice(0, 10).split('-').reverse().join('/')} – ${String(selected.period_to).slice(0, 10).split('-').reverse().join('/')}`
+                    : `${MONTHS_SHORT[selected.period_month - 1]} ${selected.period_year}`}
+                </span>
               </div>
               <div className="flex justify-between py-2 border-b border-white/5">
                 <span className="text-slate-400">Due Date</span>
                 <span className="text-white">{new Date(selected.due_date).toLocaleDateString('en-IN')}</span>
               </div>
+              {selected.document_type && (
+                <div className="flex justify-between py-2 border-b border-white/5">
+                  <span className="text-slate-400">Document</span>
+                  <span className={selected.document_type === 'TAX_INVOICE' ? 'text-emerald-400' : 'text-amber-400'}>
+                    {selected.document_type === 'TAX_INVOICE' ? 'Tax Invoice' : 'Bill of Supply — no GST'}
+                  </span>
+                </div>
+              )}
               {selected.line_items?.map((li: LineItem) => (
                 <div key={li.description} className="flex justify-between py-2 border-b border-white/5 last:border-0">
                   <div>
@@ -318,7 +371,52 @@ export default function InvoicesPage() {
                   <span className="text-white font-medium">{fmtRs(li.amount)}</span>
                 </div>
               ))}
+              {selected.document_type === 'TAX_INVOICE' && (
+                <div className="pt-2 space-y-1 text-xs">
+                  <div className="flex justify-between text-slate-400">
+                    <span>Taxable value</span><span>{fmtRs(selected.taxable_value ?? 0)}</span>
+                  </div>
+                  {Number(selected.igst_amount) > 0 ? (
+                    <div className="flex justify-between text-slate-400">
+                      <span>IGST · place of supply {selected.place_of_supply ?? '—'}</span>
+                      <span>{fmtRs(selected.igst_amount)}</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-slate-400"><span>CGST</span><span>{fmtRs(selected.cgst_amount ?? 0)}</span></div>
+                      <div className="flex justify-between text-slate-400"><span>SGST</span><span>{fmtRs(selected.sgst_amount ?? 0)}</span></div>
+                    </>
+                  )}
+                  <div className="flex justify-between text-white font-semibold pt-1">
+                    <span>Total</span><span>{fmtRs(selected.total_amount)}</span>
+                  </div>
+                </div>
+              )}
             </div>
+            {selected.is_consolidated && (
+              <button
+                id={`btn-modal-salary-slips-${selected.id}`}
+                onClick={() => handleSalarySlips(selected.id, selected.invoice_number)}
+                disabled={actioning === selected.id + '_slips'}
+                className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm font-semibold transition disabled:opacity-50"
+              >
+                {actioning === selected.id + '_slips' ? 'Preparing…' : 'Download salary slips (one per staff)'}
+              </button>
+            )}
+            {selected.is_consolidated && ['DRAFT', 'APPROVED'].includes(selected.status) && (
+              <button
+                id={`btn-modal-recalc-${selected.id}`}
+                onClick={() => handleRecalculate(selected.id)}
+                disabled={actioning === selected.id + '_recalc'}
+                className="w-full py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm font-semibold transition disabled:opacity-50"
+              >
+                {actioning === selected.id + '_recalc'
+                  ? 'Recalculating…'
+                  : selected.document_type === 'BILL_OF_SUPPLY'
+                    ? 'Recalculate with GST (current Company & GST settings)'
+                    : 'Recalculate with current settings'}
+              </button>
+            )}
             <div className="flex gap-3 pt-2">
               {canGo(selected.status, 'APPROVED') && (
                 <button
@@ -597,7 +695,7 @@ export default function InvoicesPage() {
                   <th className="px-4 py-3 text-left">Staff billed</th>
                   <th className="px-4 py-3 text-center">Period</th>
                   <th className="px-4 py-3 text-right">Salary</th>
-                  <th className="px-4 py-3 text-right">Fee + GST</th>
+                  <th className="px-4 py-3 text-right">GST</th>
                   <th className="px-4 py-3 text-right">Total</th>
                   <th className="px-4 py-3 text-center">Due Date</th>
                   <th className="px-4 py-3 text-center">Status</th>
@@ -607,13 +705,13 @@ export default function InvoicesPage() {
               <tbody>
                 {filtered.map((inv: any) => {
                   const overdue = isOverdue(inv);
-                  const managementFeeAmt = parseFloat(inv.management_fee ?? 0);
                   const gstAmt = parseFloat(inv.gst_amount ?? 0);
-                  const feeGst = managementFeeAmt + gstAmt;
-                  // gst_amount/management_fee reverse-derives the rate actually
-                  // applied — client_invoices doesn't store gst_pct directly,
-                  // and this can differ per placement (RM's wage_config).
-                  const gstPct = managementFeeAmt > 0 ? Math.round((gstAmt / managementFeeAmt) * 10000) / 100 : null;
+                  // GST is charged on the whole taxable value (wages + employer
+                  // ESIC/PF + fee), so the rate is read against that. Dividing
+                  // by the fee alone printed "170% GST on fee".
+                  const taxable = parseFloat(inv.taxable_value ?? 0);
+                  const gstPct = taxable > 0 && gstAmt > 0 ? Math.round((gstAmt / taxable) * 10000) / 100 : null;
+                  const isBos = inv.document_type === 'BILL_OF_SUPPLY';
                   return (
                     <tr key={inv.id} className={`border-b border-white/5 hover:bg-white/2 transition ${overdue ? 'bg-red-500/3' : ''}`}>
                       <td className="px-5 py-3 font-mono text-xs text-slate-300">{inv.invoice_number}</td>
@@ -638,11 +736,20 @@ export default function InvoicesPage() {
                           </>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center text-slate-400">{MONTHS_SHORT[inv.period_month - 1]} {inv.period_year}</td>
+                      <td className="px-4 py-3 text-center text-slate-400">
+                        {/* An invoice can cover part of a month — show its own dates. */}
+                        {inv.period_from && inv.period_to && !(String(inv.period_from).slice(8, 10) === '01' && new Date(String(inv.period_to).slice(0, 10) + 'T00:00:00Z').getUTCDate() === new Date(Date.UTC(inv.period_year, inv.period_month, 0)).getUTCDate())
+                          ? <span className="text-xs">{String(inv.period_from).slice(8, 10)}–{String(inv.period_to).slice(8, 10)} {MONTHS_SHORT[inv.period_month - 1]} {inv.period_year}</span>
+                          : <>{MONTHS_SHORT[inv.period_month - 1]} {inv.period_year}</>}
+                      </td>
                       <td className="px-4 py-3 text-right text-slate-300">{fmtRs(inv.staff_salary_component)}</td>
                       <td className="px-4 py-3 text-right">
-                        <span className="text-indigo-400">{fmtRs(feeGst)}</span>
-                        <span className="text-[10px] text-slate-500 block">{gstPct != null ? `${gstPct}% GST on fee` : 'GST on fee'}</span>
+                        <span className={isBos ? 'text-amber-400' : 'text-indigo-400'}>{fmtRs(gstAmt)}</span>
+                        <span className="text-[10px] text-slate-500 block">
+                          {isBos
+                            ? 'Bill of Supply — no GST'
+                            : gstPct != null ? `${gstPct}% on ${fmtRs(taxable)}` : 'GST'}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-right text-white font-bold">{fmtRs(inv.total_amount)}</td>
                       <td className="px-4 py-3 text-center text-xs">

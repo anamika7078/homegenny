@@ -51,7 +51,7 @@ export function InvoiceViewModal({ data, onClose, title }: InvoiceViewModalProps
               )}
               {calc.gstOnFee != null && (
                 <Row
-                  label={`GST on fee${calc.ratesUsed ? ` (${calc.ratesUsed.gstPct}%)` : ''}`}
+                  label={`GST${calc.ratesUsed ? ` (${calc.ratesUsed.gstPct}%)` : ''}`}
                   value={fmtRs(calc.gstOnFee)}
                 />
               )}

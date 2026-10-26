@@ -34,6 +34,7 @@ import {
   Inbox,
   HeartPulse,
   Navigation,
+  Building2,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -332,6 +333,9 @@ const FINANCE_NAV: NavSection[] = [
       { href: '/finance/exit-settlements', label: 'Exit Settlements', icon: LogOut },
       { href: '/finance/esic-pf', label: 'ESIC & PF', icon: ShieldCheck },
       { href: '/finance/tax-rules', label: 'Tax Rules', icon: Scale },
+      // Without a GSTIN on file every invoice is a Bill of Supply with no GST,
+      // and this was only settable by script.
+      { href: '/finance/settings', label: 'Company & GST', icon: Building2 },
 
     ],
   },

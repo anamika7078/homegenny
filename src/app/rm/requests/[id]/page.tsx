@@ -154,6 +154,8 @@ export default function StaffRequestDetailPage() {
       clientId: req.client?.id ?? '',
       clientName: req.client?.name ?? '',
       type: req.placement_type,
+      // A 24-hour request is a live-in: the placement form opens on 24×7 Live-in.
+      ...(Number(req.shift_hours) >= 24 ? { liveIn: '1' } : {}),
     })}`;
 
   return (
@@ -229,7 +231,7 @@ export default function StaffRequestDetailPage() {
               ) : (
                 <>
                   <Row label="Type" value={req.placement_type === 'TEMPORARY' ? 'Hourly' : 'Permanent'} />
-                  <Row label="Hours / day" value={req.shift_hours} />
+                  <Row label="Hours / day" value={Number(req.shift_hours) >= 24 ? '24×7 live-in' : req.shift_hours} />
                   <Row label="Start" value={req.start_date ? `${req.start_date}${req.start_time ? ` · ${req.start_time}` : ''}` : null} />
                 </>
               )}

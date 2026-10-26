@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import {
   Loader2, Search, MapPin, Clock, CalendarDays, FileText,
@@ -45,6 +44,14 @@ interface PlacementRow {
   hours_this_period: number;
   payroll_run: boolean;
   invoiced: boolean;
+  /** PER_DUTY = 24×7 live-in or relief, billed per duty. */
+  rate_basis?: string | null;
+  duty_billing_rate?: string | null;
+}
+
+interface MonthInvoice {
+  id: string; invoice_number: string; status: string; total_amount: string;
+  period_from: string | null; period_to: string | null;
 }
 
 interface Lookup {
@@ -54,13 +61,21 @@ interface Lookup {
   };
   period: { month: number; year: number };
   placements: PlacementRow[];
-  existing_invoice: { id: string; invoice_number: string; status: string; total_amount: string } | null;
+  existing_invoice: MonthInvoice | null;
+  /** Every invoice this client has for the month, in date order. */
+  invoices?: MonthInvoice[];
+  /** Where the next invoice would start and the month's last day; null when fully invoiced. */
+  next_period?: { from: string; to: string } | null;
   un_invoiced: { staff_count: number; salary_total: number };
 }
 
+/** "2026-10-07" → "07/10/2026" */
+const dmy = (iso: string | null | undefined) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—');
+
 /** One line per person working here — what they did, and what it is worth. */
 function PlacementLine({ p }: { p: PlacementRow }) {
-  const hourly = p.placement_type === 'TEMPORARY';
+  const perDuty = p.rate_basis === 'PER_DUTY';
+  const hourly = !perDuty && p.placement_type === 'TEMPORARY';
   const rate = parseFloat(p.hourly_rate ?? '0');
   const worked = hourly ? p.hours_this_period : p.days_this_period;
   const earned = hourly ? worked * rate : null;
@@ -76,7 +91,19 @@ function PlacementLine({ p }: { p: PlacementRow }) {
         {/* The arithmetic, in the open. A client should never have to take a
             total on trust. */}
         <div className="text-right tabular-nums">
-          {hourly ? (
+          {perDuty ? (
+            <>
+              <p className="text-sm text-white">
+                {p.days_this_period} <span className="text-slate-500">duties</span>
+                <span className="text-slate-600 mx-1.5">×</span>
+                <span className="text-slate-400">{fmtRs(p.duty_billing_rate ?? 0)}</span>
+              </p>
+              <p className="text-[10px] text-amber-400/80">
+                = {fmtRs(p.days_this_period * parseFloat(p.duty_billing_rate ?? '0'))} + GST
+                {p.placement_type === 'TEMPORARY' ? ' · relief' : ' · 24×7'}
+              </p>
+            </>
+          ) : hourly ? (
             <>
               <p className="text-sm text-white">
                 {fmt(worked)} <span className="text-slate-500">hrs</span>
@@ -130,13 +157,18 @@ export default function ClientLookup({
   const [busy, setBusy]     = useState(false);
   const [issuing, setIssuing] = useState(false);
   const [error, setError]   = useState<string | null>(null);
+  // "Invoice up to" — defaults to the month's last day. Choosing the 7th bills
+  // the 1st–7th; the next invoice then starts on the 8th.
+  const [tillDate, setTillDate] = useState('');
 
   const lookup = async (m = month, y = year) => {
     if (!code.trim()) { setError('Enter a unit code'); return; }
     setBusy(true); setError(null);
     try {
       const res: any = await api.getClientByUnitCode(code.trim(), m, y);
-      setData(res?.data ?? res);
+      const d = res?.data ?? res;
+      setData(d);
+      setTillDate(d?.next_period?.to ?? d?.existing_invoice?.period_to ?? '');
     } catch (e: any) {
       setData(null);
       setError(e?.response?.data?.message ?? e.message ?? 'Lookup failed');
@@ -156,13 +188,16 @@ export default function ClientLookup({
     if (!data) return;
     setIssuing(true); setError(null);
     try {
-      const res: any = await api.generateConsolidatedInvoice(data.customer.id, month, year);
+      const res: any = await api.generateConsolidatedInvoice(data.customer.id, month, year, tillDate || undefined);
       const out = res?.data ?? res;
       const inv = out?.invoice ?? out;
+      const span = `${dmy(out?.preview?.period_from)} – ${dmy(out?.preview?.period_to)}`;
+      const skipped = (out?.payroll_skipped ?? []) as { staff_name: string; reason: string }[];
       onIssued(
-        out?.amended
-          ? `${inv?.invoice_number} updated — new work folded into the open draft`
-          : `${inv?.invoice_number} created for ${data.customer.customer_name}`,
+        (out?.amended
+          ? `${inv?.invoice_number} (${span}) refreshed`
+          : `${inv?.invoice_number} created for ${data.customer.customer_name}, ${span}`) +
+          (skipped.length ? ` — left off: ${skipped.map((x) => x.staff_name).join(', ')}` : ''),
       );
       await lookup();
     } catch (e: any) {
@@ -174,7 +209,13 @@ export default function ClientLookup({
 
   const permanent = (data?.placements ?? []).filter((p) => p.placement_type === 'PERMANENT');
   const temporary = (data?.placements ?? []).filter((p) => p.placement_type === 'TEMPORARY');
-  const canIssue  = (data?.un_invoiced.staff_count ?? 0) > 0;
+  const invoices = data?.invoices ?? (data?.existing_invoice ? [data.existing_invoice] : []);
+  const latest = invoices[invoices.length - 1] ?? null;
+  const next = data?.next_period ?? null;
+  // Payroll for the period is run as part of issuing, so anyone placed here
+  // can be billed; the latest DRAFT can always be refreshed.
+  const canIssue = Boolean(data && data.placements.length > 0 && (next || latest?.status === 'DRAFT'));
+  const refreshing = Boolean(latest && latest.status === 'DRAFT' && (!next || tillDate === latest.period_to));
 
   return (
     <div className="rounded-2xl border border-white/8 bg-[#131c2e] overflow-hidden">
@@ -296,73 +337,86 @@ export default function ClientLookup({
             </div>
           )}
 
+          {/* This month's invoices — a client can be billed in parts. */}
+          {invoices.length > 0 && (
+            <div className="px-5 py-3 border-t border-white/5 space-y-1.5">
+              <p className="text-[11px] uppercase tracking-wider text-slate-500">Invoices this month</p>
+              {invoices.map((inv) => (
+                <button
+                  key={inv.id}
+                  onClick={() => onViewInvoice(inv.id)}
+                  className="w-full flex items-center gap-3 text-left text-sm px-3 py-2 rounded-lg hover:bg-white/5"
+                >
+                  <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                  <span className="font-mono text-xs text-slate-300">{inv.invoice_number}</span>
+                  <span className="text-xs text-slate-400">{dmy(inv.period_from)} – {dmy(inv.period_to)}</span>
+                  <span className="text-[10px] uppercase font-semibold text-slate-500">{inv.status}</span>
+                  <span className="ml-auto text-white font-semibold">{fmtRs(inv.total_amount)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* What happens next */}
-          <div className="flex items-center justify-between gap-4 flex-wrap px-5 py-4 border-t border-white/5 bg-[#0f172a]">
-            <div className="text-sm">
-              {data.existing_invoice ? (
-                <p className="flex items-center gap-2 text-slate-300">
-                  <FileText className="w-4 h-4 text-slate-500" />
-                  <span className="font-mono text-xs">{data.existing_invoice.invoice_number}</span>
-                  <span className="text-slate-500">·</span>
-                  <span className="text-xs uppercase font-semibold text-slate-400">
-                    {data.existing_invoice.status}
-                  </span>
-                  <span className="text-white font-bold">{fmtRs(data.existing_invoice.total_amount)}</span>
-                </p>
+          <div className="flex items-end justify-between gap-4 flex-wrap px-5 py-4 border-t border-white/5 bg-[#0f172a]">
+            <div className="text-sm space-y-2">
+              {next ? (
+                <div className="flex items-end gap-3 flex-wrap">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">Next invoice from</p>
+                    <p className="text-white font-semibold">{dmy(next.from)}</p>
+                  </div>
+                  <div>
+                    <label htmlFor="input-invoice-till" className="block text-[11px] uppercase tracking-wider text-slate-500 mb-1">
+                      Up to
+                    </label>
+                    <input
+                      id="input-invoice-till"
+                      type="date"
+                      value={tillDate}
+                      min={latest?.status === 'DRAFT' ? latest.period_to ?? next.from : next.from}
+                      max={next.to}
+                      onChange={(e) => setTillDate(e.target.value)}
+                      className="bg-[#131c2e] border border-white/10 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+              ) : latest ? (
+                <p className="text-slate-400">The whole month is invoiced.</p>
               ) : (
                 <p className="text-slate-500">No invoice for this period yet.</p>
               )}
-
-              {canIssue && (
-                <p className="text-xs text-amber-400/90 mt-1">
-                  {data.un_invoiced.staff_count} staff · {fmtRs(data.un_invoiced.salary_total)} salary
-                  {data.existing_invoice ? ' not yet on this invoice' : ' ready to bill'}
-                </p>
-              )}
-              {!canIssue && !data.existing_invoice && (
-                <p className="text-xs text-slate-500 mt-1">
-                  Run payroll for this period first — an invoice bills what payroll has computed.
-                </p>
-              )}
+              <p className="text-xs text-slate-500">
+                Payroll for those days is run as the invoice is made. Days already invoiced cannot be billed again.
+              </p>
             </div>
 
-            {/* When there is nothing to bill, the useful button is the one that
-                gets there: payroll, for someone actually placed here. */}
-            {!canIssue && !data.existing_invoice && data.placements.length > 0 ? (
-              <Link
-                href="/finance/payroll"
-                className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10
-                           text-slate-200 text-sm font-semibold transition flex items-center gap-2"
+            {canIssue ? (
+              <button
+                id="btn-issue-from-lookup"
+                onClick={issue}
+                disabled={issuing || (!!next && !tillDate)}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold
+                           disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-2"
               >
-                Go to Payroll
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            ) : !canIssue && data.existing_invoice ? (
-              /* Fully billed. The only thing left to do here is look at it —
-                 a greyed-out "Add to this invoice" is not an action. */
+                {issuing
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : refreshing ? <CheckCircle2 className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
+                {refreshing
+                  ? `Refresh ${latest?.invoice_number}`
+                  : next ? `Create invoice ${dmy(next.from)} – ${dmy(tillDate || next.to)}` : 'Create invoice'}
+              </button>
+            ) : latest ? (
               <button
                 id="btn-view-invoice-from-lookup"
-                onClick={() => onViewInvoice(data.existing_invoice!.id)}
+                onClick={() => onViewInvoice(latest.id)}
                 className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10
                            text-slate-200 text-sm font-semibold transition flex items-center gap-2"
               >
                 <FileText className="w-4 h-4" />
                 View invoice
               </button>
-            ) : (
-              <button
-                id="btn-issue-from-lookup"
-                onClick={issue}
-                disabled={issuing || !canIssue}
-                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold
-                           disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-2"
-              >
-                {issuing
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : data.existing_invoice ? <CheckCircle2 className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
-                {data.existing_invoice ? 'Add to this invoice' : 'Create invoice'}
-              </button>
-            )}
+            ) : null}
           </div>
         </div>
       )}

@@ -380,16 +380,16 @@ export function RunStaffPayrollModal({
                           <span className="text-xs text-indigo-400/80">
                             {calc.documentType === 'BILL_OF_SUPPLY'
                               ? 'GST — not charged'
-                              : `GST on Fee${calc.ratesUsed ? ` (${calc.ratesUsed.gstPct}%)` : ''}`}
+                              : `GST${calc.ratesUsed ? ` (${calc.ratesUsed.gstPct}%)` : ''}`}
                           </span>
                           <span className="text-xs text-indigo-400">{fmtRs(calc.gstOnFee)}</span>
                         </div>
                         {calc.documentType === 'BILL_OF_SUPPLY' && (
                           <div className="px-4 py-2 border-b border-white/5">
                             <p className="text-[10px] leading-relaxed text-amber-300/80">
-                              Issued as a <strong>Bill of Supply</strong> — <code>finance.supplier_gstin</code>{' '}
-                              is not set, so no GST is charged. Fill it in and the next
-                              invoice becomes a Tax Invoice with GST on the fee only.
+                              Issued as a <strong>Bill of Supply</strong> — no valid GSTIN is on file
+                              under Finance → Company &amp; GST, so no GST is charged. Fill it in and
+                              the next invoice becomes a Tax Invoice with GST on the full value.
                             </p>
                           </div>
                         )}

@@ -23,18 +23,21 @@ function NewPlacementModal({
   fromRequest,
   activePairs,
   activeByStaff,
+  livePlacements,
 }: {
   onClose: () => void;
   onCreate: (body: Record<string, unknown>) => Promise<void>;
   creating: boolean;
   initialStaffId?: string | null;
   /** Opened from a staff request (/rm/requests/[id]): the client and terms come from it. */
-  fromRequest?: { id: string; requestNo: string; clientId: string; clientName: string; placementType: 'PERMANENT' | 'TEMPORARY' } | null;
+  fromRequest?: { id: string; requestNo: string; clientId: string; clientName: string; placementType: 'PERMANENT' | 'TEMPORARY'; liveIn?: boolean } | null;
   /** "staffId::clientId" for every TRIAL/CONFIRMED placement — one staff member
    *  may work at many clients, but not twice at the same one. */
   activePairs: Set<string>;
   /** staffId → their active (TRIAL/CONFIRMED) placements. */
   activeByStaff: Map<string, ActivePlacement[]>;
+  /** Every TRIAL/CONFIRMED placement — a relief placement picks the post it covers from these. */
+  livePlacements: Placement[];
 }) {
   const { data: kanban } = useRmKanban();
   const [staffSearch, setStaffSearch] = useState('');
@@ -52,9 +55,31 @@ function NewPlacementModal({
   // How this placement is paid. PERMANENT holds the client's whole shift and is
   // billed monthly; TEMPORARY is billed on the hours actually worked there, and
   // the same staff member can carry a different rate at each client.
-  const [placementType, setPlacementType] = useState<'PERMANENT' | 'TEMPORARY'>(fromRequest?.placementType ?? 'PERMANENT');
+  //
+  // Four ways a placement is priced:
+  //   MONTHLY  — permanent, monthly salary through the wage breakup
+  //   HOURLY   — temporary, paid for the hours worked
+  //   LIVE_IN  — permanent 24×7, a fixed rate per duty (one duty = one day)
+  //   RELIEF   — temporary 24×7 cover for a live-in's off days, per duty
+  type Mode = 'MONTHLY' | 'HOURLY' | 'LIVE_IN' | 'RELIEF';
+  const [mode, setMode] = useState<Mode>(
+    fromRequest?.liveIn ? 'LIVE_IN' : fromRequest?.placementType === 'TEMPORARY' ? 'HOURLY' : 'MONTHLY',
+  );
+  const placementType: 'PERMANENT' | 'TEMPORARY' = mode === 'HOURLY' || mode === 'RELIEF' ? 'TEMPORARY' : 'PERMANENT';
+  const isPerDuty = mode === 'LIVE_IN' || mode === 'RELIEF';
   const [hourlyRate, setHourlyRate] = useState('');
   const [hourlyFee, setHourlyFee] = useState('');
+  const [dutyRate, setDutyRate] = useState('');
+  const [dutyBillingRate, setDutyBillingRate] = useState('');
+  const [coversPlacementId, setCoversPlacementId] = useState('');
+  // ESIC and PF can each be off for a placement. Live-in duty sheets carry
+  // neither, so per-duty starts with both off; the others keep the old default.
+  const [esicOn, setEsicOn] = useState(true);
+  const [pfOn, setPfOn] = useState(true);
+  useEffect(() => {
+    setEsicOn(!isPerDuty);
+    setPfOn(!isPerDuty);
+  }, [isPerDuty]);
   // HH:MM the shift starts. Left empty for a request, the backend takes the booking's time.
   const [shiftStart, setShiftStart] = useState('');
 
@@ -105,15 +130,24 @@ function NewPlacementModal({
     queryFn: () => api.listFinanceCustomers(clientSearch || undefined),
   });
 
-  const isHourly = placementType === 'TEMPORARY';
+  const isHourly = mode === 'HOURLY';
   const rateNum = Number(hourlyRate) || undefined;
   const feePerHourNum = Number(hourlyFee) || undefined;
+  const dutyRateNum = Number(dutyRate) || undefined;
+  const dutyBillNum = Number(dutyBillingRate) || undefined;
+  const dutyReady = Boolean(dutyRateNum && dutyBillNum && dutyBillNum >= dutyRateNum);
   // Same bar the mobile form sets before it lets a wage breakup through.
   const wageReady = Boolean(wageConfig && wageConfig.basic_wage > 0 && wageConfig.management_pct > 0);
 
+  // A relief placement covers a live-in post at the same client.
+  const coverablePosts = useMemo(
+    () => livePlacements.filter((p) => selectedClient && p.client_id === selectedClient.id && p.placement_type !== 'TEMPORARY'),
+    [livePlacements, selectedClient],
+  );
+
   const canSubmit = Boolean(
     selectedStaff && selectedClient && !selectedStaffBlocked &&
-    (isHourly ? rateNum && feePerHourNum : wageReady),
+    (isPerDuty ? dutyReady : isHourly ? rateNum && feePerHourNum : wageReady),
   );
 
   const handleSubmit = async () => {
@@ -125,9 +159,19 @@ function NewPlacementModal({
       ...(fromRequest ? { staff_request_id: fromRequest.id } : {}),
       ...(confirmNow ? { status: 'CONFIRMED' } : {}),
       ...(shiftStart ? { shift_start: shiftStart } : {}),
-      ...(isHourly
-        ? { hourly_rate: rateNum, hourly_fee: feePerHourNum }
-        : { wage_config: wageConfig, shift_hours: wageConfig?.working_hours }),
+      esic_applicable: esicOn,
+      pf_applicable: pfOn,
+      ...(isPerDuty
+        ? {
+            rate_basis: 'PER_DUTY',
+            duty_rate: dutyRateNum,
+            duty_billing_rate: dutyBillNum,
+            shift_hours: 24,
+            ...(mode === 'RELIEF' && coversPlacementId ? { covers_placement_id: coversPlacementId } : {}),
+          }
+        : isHourly
+          ? { hourly_rate: rateNum, hourly_fee: feePerHourNum }
+          : { wage_config: wageConfig, shift_hours: wageConfig?.working_hours }),
     });
   };
 
@@ -245,34 +289,100 @@ function NewPlacementModal({
           <label className="text-xs font-semibold text-[#8D9AB5]">How is this placement paid?</label>
           <div className="grid grid-cols-2 gap-2">
             {([
-              { id: 'PERMANENT', title: 'Permanent', blurb: 'Holds this client’s full shift. Paid a monthly salary.' },
-              { id: 'TEMPORARY', title: 'Hourly', blurb: 'Works a few hours here. Paid for the hours worked.' },
+              { id: 'MONTHLY', title: 'Permanent', blurb: 'Holds this client’s full shift. Paid a monthly salary.' },
+              { id: 'HOURLY', title: 'Hourly', blurb: 'Works a few hours here. Paid for the hours worked.' },
+              { id: 'LIVE_IN', title: '24×7 Live-in', blurb: 'Stays at the client round the clock. Paid per duty (one day = one duty).' },
+              { id: 'RELIEF', title: 'Relief (per duty)', blurb: 'Covers a live-in’s off days. Paid per duty worked.' },
             ] as const).map((opt) => (
               <button
                 key={opt.id}
-                id={`btn-placement-type-${opt.id.toLowerCase()}`}
-                onClick={() => setPlacementType(opt.id)}
+                id={`btn-placement-mode-${opt.id.toLowerCase()}`}
+                onClick={() => setMode(opt.id)}
                 className={`text-left px-3 py-2.5 rounded-lg border transition-colors ${
-                  placementType === opt.id
+                  mode === opt.id
                     ? 'bg-[#FF5A1F]/10 border-[#FF5A1F]/50'
                     : 'bg-white/5 border-white/10 hover:border-white/20'
                 }`}
               >
-                <p className={`text-xs font-bold ${placementType === opt.id ? 'text-[#FF5A1F]' : 'text-[#E8EDF8]'}`}>
+                <p className={`text-xs font-bold ${mode === opt.id ? 'text-[#FF5A1F]' : 'text-[#E8EDF8]'}`}>
                   {opt.title}
                 </p>
                 <p className="text-[10px] text-[#8D9AB5] mt-0.5 leading-snug">{opt.blurb}</p>
               </button>
             ))}
           </div>
-          {isHourly && (
+          {(isHourly || isPerDuty) && (
             <p className="text-[10px] text-[#8D9AB5]">
               The rate is per client — the same staff member can be worth a different rate at the next house.
             </p>
           )}
         </div>
 
-        {isHourly ? (
+        {isPerDuty && (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label htmlFor="input-duty-rate" className="text-xs font-semibold text-[#8D9AB5]">Staff pay (₹/duty)</label>
+              <input
+                id="input-duty-rate" type="number" min="0" value={dutyRate}
+                onChange={(e) => setDutyRate(e.target.value)} placeholder="517"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#E8EDF8] focus:outline-none focus:border-[#FF5A1F]/50"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="input-duty-billing-rate" className="text-xs font-semibold text-[#8D9AB5]">Client billing (₹/duty)</label>
+              <input
+                id="input-duty-billing-rate" type="number" min="0" value={dutyBillingRate}
+                onChange={(e) => setDutyBillingRate(e.target.value)} placeholder="585"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#E8EDF8] focus:outline-none focus:border-[#FF5A1F]/50"
+              />
+            </div>
+            {dutyRateNum && dutyBillNum ? (
+              dutyBillNum < dutyRateNum ? (
+                <p className="col-span-2 text-[11px] text-amber-400">Billing is below the staff pay — the client would be billed less than the staff is paid.</p>
+              ) : (
+                <p className="col-span-2 text-[11px] text-[#8D9AB5]">
+                  A 30-duty month bills{' '}
+                  <span className="text-[#E8EDF8] font-semibold">₹{(30 * dutyBillNum).toLocaleString('en-IN')}</span>{' '}
+                  + GST and pays ₹{(30 * dutyRateNum).toLocaleString('en-IN')} — a margin of ₹
+                  {(30 * (dutyBillNum - dutyRateNum)).toLocaleString('en-IN')}. Employer ESIC/PF, if on, come out of that margin.
+                </p>
+              )
+            ) : null}
+            {mode === 'RELIEF' && (
+              <div className="col-span-2 space-y-1.5">
+                <label htmlFor="select-covers" className="text-xs font-semibold text-[#8D9AB5]">Covers whose off days? (optional)</label>
+                <select
+                  id="select-covers" value={coversPlacementId}
+                  onChange={(e) => setCoversPlacementId(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-[#E8EDF8] focus:outline-none focus:border-[#FF5A1F]/50"
+                >
+                  <option value="">— Not tied to one person —</option>
+                  {coverablePosts.map((p: any) => (
+                    <option key={p.id} value={p.id}>{p.staff_name ?? p.staff_code ?? p.id.slice(0, 8)}</option>
+                  ))}
+                </select>
+                {selectedClient && coverablePosts.length === 0 && (
+                  <p className="text-[10px] text-[#8D9AB5]">No live-in staff at this client yet.</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Statutory — each can be off for a placement. */}
+        <div className="flex flex-wrap gap-4">
+          {([
+            ['ESIC', esicOn, setEsicOn, 'toggle-esic'],
+            ['PF', pfOn, setPfOn, 'toggle-pf'],
+          ] as const).map(([label, on, set, id]) => (
+            <label key={label} htmlFor={id} className="flex items-center gap-2 text-xs text-[#E8EDF8] cursor-pointer">
+              <input id={id} type="checkbox" checked={on} onChange={(e) => set(e.target.checked)} className="accent-[#FF5A1F]" />
+              {label} applies
+            </label>
+          ))}
+        </div>
+
+        {isPerDuty ? null : isHourly ? (
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-[#8D9AB5]">Staff rate (₹/hour)</label>
@@ -398,6 +508,7 @@ export default function PlacementsPage() {
           clientId: searchParams.get('clientId') as string,
           clientName: searchParams.get('clientName') ?? 'Client',
           placementType: (searchParams.get('type') === 'TEMPORARY' ? 'TEMPORARY' : 'PERMANENT') as 'PERMANENT' | 'TEMPORARY',
+          liveIn: searchParams.get('liveIn') === '1',
         }
       : null;
   const [showNewModal, setShowNewModal] = useState(false);
@@ -552,6 +663,7 @@ export default function PlacementsPage() {
           fromRequest={fromRequest}
           activePairs={activePairs}
           activeByStaff={activeByStaff}
+          livePlacements={livePlacements}
         />
       )}
 

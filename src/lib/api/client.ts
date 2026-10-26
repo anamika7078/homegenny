@@ -481,7 +481,9 @@ export interface ApiClient {
   approveExitSettlement(id: string): Promise<any>;
   settleExitSettlement(id: string): Promise<any>;
   getConsolidatedPreview(customerId: string, month: number, year: number): Promise<any>;
-  generateConsolidatedInvoice(customerId: string, month: number, year: number): Promise<any>;
+  generateConsolidatedInvoice(customerId: string, month: number, year: number, toDate?: string): Promise<any>;
+  /** Salary slip per staff member on an invoice, as printable HTML. */
+  downloadInvoiceSalarySlips(id: string): Promise<Blob>;
   saveStaffBankAccount(staffId: string, body: {
     account_holder_name: string; account_number: string; ifsc: string; bank_name?: string;
   }): Promise<any>;
@@ -493,6 +495,13 @@ export interface ApiClient {
   getFinanceInvoiceSummary(): Promise<any>;
   approveFinanceInvoice(id: string): Promise<any>;
   sendFinanceInvoice(id: string): Promise<any>;
+  /** Rebuild a DRAFT/APPROVED invoice with the current Company & GST settings. */
+  recalculateFinanceInvoice(id: string): Promise<any>;
+  cancelFinanceInvoice(id: string, reason: string): Promise<any>;
+
+  // Company & GST settings
+  getCompanySettings(): Promise<any>;
+  updateCompanySettings(body: Record<string, string | number | null>): Promise<any>;
   createInvoicePaymentOrder(invoiceId: string, amount: number): Promise<any>;
 
   // Settlements
@@ -1087,8 +1096,19 @@ export const api: ApiClient = {
   settleExitSettlement: (id: string) => apiClient.post(`/finance/exit-settlements/${id}/settle`),
   getConsolidatedPreview: (customerId: string, month: number, year: number) =>
     apiClient.get('/finance/invoices/consolidated/preview', { params: { customerId, month, year } }),
-  generateConsolidatedInvoice: (customerId: string, month: number, year: number) =>
-    apiClient.post('/finance/invoices/consolidated/generate', { customer_id: customerId, month, year }),
+  // toDate (YYYY-MM-DD): invoice up to that day; the next invoice starts the day after.
+  generateConsolidatedInvoice: (customerId: string, month: number, year: number, toDate?: string) =>
+    apiClient.post('/finance/invoices/consolidated/generate', {
+      customer_id: customerId, month, year, ...(toDate ? { to_date: toDate } : {}),
+    }),
+  downloadInvoiceSalarySlips: async (id: string): Promise<Blob> => {
+    const token = tokenStore.getAccess();
+    const res = await axios.get(`${BASE_URL}/finance/invoices/${id}/salary-slips`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      responseType: 'blob',
+    });
+    return res.data as Blob;
+  },
   saveStaffBankAccount: (staffId: string, body: {
     account_holder_name: string; account_number: string; ifsc: string; bank_name?: string;
   }) => apiClient.post(`/finance/payroll/staff/${staffId}/bank-account`, body),
@@ -1112,6 +1132,14 @@ export const api: ApiClient = {
     apiClient.post(`/finance/invoices/${id}/approve`),
   sendFinanceInvoice: (id: string) =>
     apiClient.post(`/finance/invoices/${id}/send`),
+  recalculateFinanceInvoice: (id: string) =>
+    apiClient.post(`/finance/invoices/${id}/recalculate`),
+  cancelFinanceInvoice: (id: string, reason: string) =>
+    apiClient.post(`/finance/invoices/${id}/cancel`, { reason }),
+  getCompanySettings: () =>
+    apiClient.get('/finance/settings/company'),
+  updateCompanySettings: (body: Record<string, string | number | null>) =>
+    apiClient.put('/finance/settings/company', body),
   createInvoicePaymentOrder: (invoiceId: string, amount: number) =>
     apiClient.post(`/payroll/invoice/${invoiceId}/payment-order`, { amount }),
 
