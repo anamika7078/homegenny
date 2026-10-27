@@ -336,6 +336,7 @@ const FINANCE_NAV: NavSection[] = [
       // Without a GSTIN on file every invoice is a Bill of Supply with no GST,
       // and this was only settable by script.
       { href: '/finance/settings', label: 'Company & GST', icon: Building2 },
+      { href: '/finance/notifications', label: 'Notifications', icon: Bell },
 
     ],
   },

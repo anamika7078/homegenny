@@ -132,6 +132,33 @@ export function LegacyDisbursementTab() {
     }
   };
 
+  // Re-runs a row not yet issued as a payslip at the placement's current rate
+  // and attendance — the old row is voided and kept; a draft invoice is rebuilt.
+  const handleRerun = async (r: any) => {
+    const reason = prompt(
+      `Re-run ${r.staff_name}'s payroll at the current rate and attendance?
+
+Reason (kept on record):`,
+      'Rate or attendance corrected',
+    );
+    if (reason === null) return;
+    setApproving(r.id);
+    try {
+      const res: any = await api.rerunPayrollRecord(r.id, reason);
+      const out = res?.data ?? res;
+      showToast(
+        'success',
+        `Re-run: ${fmtRs(out?.before?.net_salary ?? 0)} → ${fmtRs(out?.after?.net_salary ?? 0)}` +
+          (out?.invoice_rebuilt ? ` · ${out.invoice_rebuilt.invoice_number} rebuilt` : ''),
+      );
+      load();
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Re-run failed');
+    } finally {
+      setApproving(null);
+    }
+  };
+
   const handleDisburse = async (r: any) => {
     const amount = fmtRs(r.net_salary);
     const warning = payoutReady?.configured
@@ -313,6 +340,9 @@ export function LegacyDisbursementTab() {
                     r.disbursement_status && r.disbursement_status !== 'NOT_STARTED'
                       ? r.disbursement_status
                       : (r.status ?? 'PENDING');
+                  // Not a payslip until Finance approves the invoice it is on.
+                  const held = r.type !== 'EMPLOYEE' && !r.released_at;
+                  const canRerun = held && (!r.invoice_status || r.invoice_status === 'DRAFT');
                   const needsApproval = r.type !== 'EMPLOYEE' && (r.status ?? 'PENDING') === 'PENDING';
                   const payable = r.type === 'EMPLOYEE' || r.status === 'APPROVED';
                   const settled = r.disbursement_status === 'PAID' || (r.type === 'EMPLOYEE' && r.disbursed_at);
@@ -333,6 +363,24 @@ export function LegacyDisbursementTab() {
                           <div className="flex items-center justify-center gap-1 text-emerald-400">
                             <CheckCircle2 className="w-4 h-4" />
                             <span className="text-xs">Paid</span>
+                          </div>
+                        ) : held ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="text-[11px] text-amber-400">
+                              {r.invoice_number
+                                ? `Waiting for ${r.invoice_number} to be approved`
+                                : 'Not on an invoice yet'}
+                            </span>
+                            {canRerun && (
+                              <button
+                                onClick={() => handleRerun(r)}
+                                disabled={approving === r.id}
+                                className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-200 text-[11px] font-semibold border border-white/10 transition disabled:opacity-50"
+                                title="Re-run at the current rate and attendance"
+                              >
+                                {approving === r.id ? 'Re-running…' : 'Re-run'}
+                              </button>
+                            )}
                           </div>
                         ) : needsApproval ? (
                           // Approval comes first now — disbursing an unapproved

@@ -2,6 +2,7 @@
 
 import { RmPageHeader } from '@/components/rm/rm-page-header';
 import { RmDashboardWidgets } from '@/components/rm/dashboard-widgets';
+import { RateReviewAlert } from '@/components/rm/rate-review-alert';
 
 export default function RmDashboardPage() {
   return (
@@ -10,6 +11,7 @@ export default function RmDashboardPage() {
         title="RM Dashboard"
         description="Pipeline oversight, verification queues, and placement performance"
       />
+      <RateReviewAlert />
       <RmDashboardWidgets />
     </div>
   );

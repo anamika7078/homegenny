@@ -526,6 +526,17 @@ export default function PlacementsPage() {
     refetchInterval: 30_000,
   });
   const placements: Placement[] = data?.items ?? [];
+  // Placements whose invoice Finance rejected: the client cannot be invoiced
+  // until the RM corrects or confirms the rate, so they come first, and
+  // ?review=1 (the dashboard link) shows only them.
+  const [onlyReview, setOnlyReview] = useState(searchParams.get('review') === '1');
+  const reviewCount = placements.filter((p) => p.rate_review).length;
+  const shown = useMemo(
+    () => (onlyReview ? placements.filter((p) => p.rate_review) : placements)
+      .slice()
+      .sort((a, b) => Number(Boolean(b.rate_review)) - Number(Boolean(a.rate_review))),
+    [placements, onlyReview],
+  );
   // Who is already working where. A maid can work several houses by the hour,
   // but never twice at the same client, and a permanent placement is always her
   // only one. The backend enforces all of it (placement.service); this mirrors it.
@@ -554,8 +565,13 @@ export default function PlacementsPage() {
 
   const createMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) => api.createPlacement(body),
-    onSuccess: (_res, body) => {
+    onSuccess: (res: any, body) => {
       toast.success(body.status === 'CONFIRMED' ? 'Placement created — confirmed.' : 'Placement created — trial started.');
+      // Things worth a second look: no margin, a rate far from the usual, or a
+      // placement unlike what the client asked for. Not refusals — the RM decides.
+      for (const w of (res?.warnings ?? res?.data?.warnings ?? []) as string[]) {
+        toast(w, { icon: '⚠️', duration: 9000 });
+      }
       setShowNewModal(false);
       invalidate();
       if (body.staff_request_id) queryClient.invalidateQueries({ queryKey: ['staff-requests'] });
@@ -618,6 +634,25 @@ export default function PlacementsPage() {
         ))}
       </div>
 
+      {reviewCount > 0 && (
+        <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30">
+          <AlertTriangle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+          <p className="text-sm text-rose-300 font-semibold flex-1">
+            Finance rejected invoices on {reviewCount} placement{reviewCount === 1 ? '' : 's'} — correct the rate in
+            Pricing, or confirm it is right. These clients cannot be invoiced until you do.
+          </p>
+          <button
+            id="btn-filter-rate-review"
+            onClick={() => setOnlyReview((v) => !v)}
+            className={`rounded-full border px-3 py-1 text-xs font-bold ${
+              onlyReview ? 'border-rose-400 bg-rose-500/30 text-white' : 'border-rose-500/40 text-rose-300 hover:bg-rose-500/20'
+            }`}
+          >
+            {onlyReview ? 'Show all placements' : `Rate review (${reviewCount})`}
+          </button>
+        </div>
+      )}
+
       {stats.expiring > 0 && (
         <div className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20">
           <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
@@ -643,10 +678,11 @@ export default function PlacementsPage() {
             <p className="text-muted-foreground">No placements yet — click New Placement to start a trial.</p>
           </div>
         )}
-        {placements.map((p) => (
+        {shown.map((p) => (
           <PlacementCard
             key={p.id}
             p={p}
+            defaultOpen={onlyReview && Boolean(p.rate_review)}
             confirmingId={confirmMutation.isPending ? (confirmMutation.variables as string) : null}
             onConfirm={(id) => confirmMutation.mutate(id)}
             onExit={(pl) => setExitingPlacement(pl)}

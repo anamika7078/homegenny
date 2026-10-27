@@ -37,6 +37,9 @@ const STATUS_TABS = [
   { id: 'PAID',           label: 'Paid' },
   { id: 'OVERDUE',        label: 'Overdue' },
   { id: 'CREDIT_NOTE',    label: 'Credit Note' },
+  // Cancelled with a rejection reason — the invoices waiting on an RM, or
+  // ready to be raised again (see "Needs attention").
+  { id: 'REJECTED',       label: 'Rejected' },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -116,6 +119,57 @@ export default function InvoicesPage() {
   const [crediting, setCrediting]     = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [selected, setSelected]     = useState<any | null>(null);
+  // Rejecting an unsent invoice: the reason box opens inside the detail modal.
+  const [rejecting, setRejecting]   = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  // Correcting an invoice the client already has: preview first, then apply.
+  const [correction, setCorrection] = useState<any | null>(null);
+  const [correctionReason, setCorrectionReason] = useState('');
+  const [corrections, setCorrections] = useState<any[]>([]);
+  useEffect(() => {
+    setRejecting(false); setRejectReason('');
+    setCorrection(null); setCorrectionReason(''); setCorrections([]);
+    if (selected?.id && ['SENT', 'PARTIALLY_PAID', 'OVERDUE', 'PAID'].includes(selected.status)) {
+      api.getInvoiceCorrections(selected.id)
+        .then((res: any) => setCorrections(res?.data ?? res ?? []))
+        .catch(() => setCorrections([]));
+    }
+  }, [selected?.id]);
+
+  const loadCorrection = async (id: string) => {
+    setActioning(id + '_corr');
+    try {
+      const res: any = await api.getInvoiceCorrection(id);
+      setCorrection(res?.data ?? res);
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Could not work out the correction');
+    } finally {
+      setActioning(null);
+    }
+  };
+
+  const applyCorrection = async (id: string) => {
+    const reason = correctionReason.trim();
+    if (reason.length < 10) { showToast('error', 'Write the reason (at least 10 characters)'); return; }
+    setActioning(id + '_corr_apply');
+    try {
+      const res: any = await api.correctFinanceInvoice(id, reason);
+      const out = res?.data ?? res;
+      const parts = [
+        out?.credit_note ? `credit note ${out.credit_note.credit_note_number} (${fmtRs(out.credit_note.credit_amount)})` : null,
+        out?.supplementary_invoice ? `supplementary invoice ${out.supplementary_invoice.invoice_number} (draft)` : null,
+        out?.arrears_pending ? `${fmtRs(out.arrears_pending)} arrears on the next salary` : null,
+        out?.overpayment_recorded ? `${fmtRs(out.overpayment_recorded)} overpaid — recorded, not deducted` : null,
+      ].filter(Boolean);
+      showToast('success', `Corrected: ${parts.join('; ')}`);
+      setSelected(null);
+      load();
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Correction failed');
+    } finally {
+      setActioning(null);
+    }
+  };
   const [toast, setToast]           = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   const showToast = (type: 'success' | 'error', msg: string) => {
@@ -138,11 +192,51 @@ export default function InvoicesPage() {
 
   useEffect(() => { load(); }, [status]);
 
+  // What is stuck — drafts holding salary, held slips, rate reviews, sent
+  // invoices to correct, arrears. Refreshed with the list.
+  const [attention, setAttention] = useState<any | null>(null);
+  useEffect(() => {
+    api.getFinanceAttention()
+      .then((res: any) => setAttention(res?.data ?? res))
+      .catch(() => setAttention(null));
+  }, [invoices]);
+
+  // Raises a rejected invoice again — same client, same days, at the rate the
+  // RM has now corrected or confirmed. Lands as a DRAFT like any other.
+  const handleReinvoice = async (x: any) => {
+    setActioning(x.id + '_reinvoice');
+    try {
+      const res: any = await api.generateConsolidatedInvoice(x.client_id, x.period_month, x.period_year, x.period_to);
+      const inv = res?.invoice ?? res?.data?.invoice;
+      showToast('success', `${inv?.invoice_number ?? 'Invoice'} raised as a draft — check it and approve`);
+      load();
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Could not raise the invoice');
+    } finally {
+      setActioning(null);
+    }
+  };
+
+  // An invoice's story, loaded when the detail opens.
+  const [history, setHistory] = useState<any[]>([]);
+  useEffect(() => {
+    setHistory([]);
+    if (selected?.id && selected?.type !== 'EMPLOYEE') {
+      api.getInvoiceHistory(selected.id)
+        .then((res: any) => setHistory((res?.data ?? res)?.events ?? []))
+        .catch(() => setHistory([]));
+    }
+  }, [selected?.id]);
+
   const handleApprove = async (id: string) => {
     setActioning(id + '_approve');
     try {
-      await api.approveFinanceInvoice(id);
-      showToast('success', 'Invoice approved');
+      const res: any = await api.approveFinanceInvoice(id);
+      const released = res?.payslips_released ?? res?.data?.payslips_released;
+      showToast(
+        'success',
+        released ? `Invoice approved — ${released} salary slip${released === 1 ? '' : 's'} released to staff` : 'Invoice approved',
+      );
       load();
     } catch (e: any) {
       showToast('error', e.message ?? 'Approval failed');
@@ -159,6 +253,33 @@ export default function InvoicesPage() {
       load();
     } catch (e: any) {
       showToast('error', e.message ?? 'Send failed');
+    } finally {
+      setActioning(null);
+    }
+  };
+
+  // Finance sends an unsent invoice back: it is cancelled with the reason, its
+  // payroll is voided (kept on record), and the RM must correct or confirm the
+  // rate before this client can be invoiced again.
+  const handleReject = async (id: string) => {
+    const reason = rejectReason.trim();
+    if (reason.length < 10) { showToast('error', 'Write the reason (at least 10 characters)'); return; }
+    setActioning(id + '_reject');
+    try {
+      const res: any = await api.rejectFinanceInvoice(id, reason);
+      const out = res?.data ?? res;
+      const who = (out?.placements_for_review ?? []).map((p: any) => p.staff_name).join(', ');
+      showToast(
+        'success',
+        `${out?.invoice_number ?? 'Invoice'} rejected — ${out?.payroll_voided ?? 0} payroll row(s) voided` +
+          (who ? `; RM asked to check the rate for ${who}` : ''),
+      );
+      setRejecting(false);
+      setRejectReason('');
+      setSelected(null);
+      load();
+    } catch (e: any) {
+      showToast('error', e.message ?? 'Could not reject');
     } finally {
       setActioning(null);
     }
@@ -417,6 +538,184 @@ export default function InvoicesPage() {
                     : 'Recalculate with current settings'}
               </button>
             )}
+            {/* What is new since Finance last approved: a first invoice for a
+                placement, or a rate changed after the last approval. Approving
+                is the rate check, so this is what to look at. */}
+            {['DRAFT', 'APPROVED'].includes(selected.status) && (selected.rate_notes ?? []).length > 0 && (
+              <div className="space-y-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                <p className="font-semibold">Check these rates before approving</p>
+                {(selected.rate_notes as any[]).map((n) => (
+                  <div key={n.placement_id}>
+                    <span className="font-medium">{n.staff_name}</span>
+                    {n.first_invoice && <span className="text-amber-300"> — first invoice on this placement</span>}
+                    {(n.changes ?? []).map((c: any, i: number) => (
+                      <p key={i} className="pl-3 text-amber-200/90">
+                        From {c.effective_from}:{' '}
+                        {(c.fields ?? []).map((f: any) => `${f.field.replace(/_/g, ' ')} ${f.before ?? '—'} → ${f.after ?? '—'}`).join(', ')}
+                        {c.changed_by ? ` — ${c.changed_by}` : ''}
+                        {c.reason ? ` · “${c.reason}”` : ''}
+                      </p>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+            {selected.is_consolidated && ['SENT', 'PARTIALLY_PAID', 'OVERDUE', 'PAID'].includes(selected.status) && (
+              <div className="space-y-2 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3 text-xs">
+                {!correction ? (
+                  <button
+                    id={`btn-modal-correct-${selected.id}`}
+                    onClick={() => loadCorrection(selected.id)}
+                    disabled={actioning === selected.id + '_corr'}
+                    className="w-full py-2 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 text-sm font-semibold transition disabled:opacity-50"
+                  >
+                    {actioning === selected.id + '_corr' ? 'Working it out…' : 'Correct this invoice (rate changed after it was sent)'}
+                  </button>
+                ) : correction.nothing_to_correct ? (
+                  <p className="text-slate-300">
+                    This invoice already matches the rates and attendance on record. Change the rate on the placement
+                    first (back-dated to these days), then correct it here.
+                  </p>
+                ) : (
+                  <>
+                    <p className="font-semibold text-sky-200">What it should have been — the sent invoice is not edited</p>
+                    <table className="w-full text-[11px]">
+                      <thead className="text-slate-400">
+                        <tr>
+                          <th className="text-left">Staff</th><th className="text-right">Billed</th><th className="text-right">Should be</th>
+                          <th className="text-right">Paid</th><th className="text-right">Should be</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(correction.lines ?? []).map((l: any) => (
+                          <tr key={l.payroll_id} className="text-slate-200">
+                            <td>{l.staff_name} <span className="text-slate-500">{l.period}</span></td>
+                            <td className="text-right">{fmtRs(l.billed_before)}</td>
+                            <td className="text-right">{fmtRs(l.billed_after)}</td>
+                            <td className="text-right">{fmtRs(l.paid_before)}</td>
+                            <td className="text-right">{fmtRs(l.paid_after)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <ul className="list-disc pl-4 text-slate-200">
+                      {correction.actions?.credit_note > 0 && (
+                        <li>Credit note to the client: {fmtRs(correction.actions.credit_note)} (tax included)</li>
+                      )}
+                      {correction.actions?.supplementary_invoice > 0 && (
+                        <li>Supplementary invoice (draft): {fmtRs(correction.actions.supplementary_invoice)} (tax included)</li>
+                      )}
+                      {correction.actions?.arrears_to_pay > 0 && (
+                        <li>Arrears added to the staff member&apos;s next salary: {fmtRs(correction.actions.arrears_to_pay)}</li>
+                      )}
+                      {correction.actions?.overpayment_recorded > 0 && (
+                        <li>Staff overpaid {fmtRs(correction.actions.overpayment_recorded)} — recorded, never deducted</li>
+                      )}
+                    </ul>
+                    <textarea
+                      id={`input-correction-reason-${selected.id}`}
+                      value={correctionReason}
+                      onChange={(e) => setCorrectionReason(e.target.value)}
+                      rows={2}
+                      placeholder="Why — this goes on the credit note / supplementary invoice"
+                      className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100"
+                    />
+                    <button
+                      id={`btn-modal-correct-apply-${selected.id}`}
+                      onClick={() => applyCorrection(selected.id)}
+                      disabled={actioning === selected.id + '_corr_apply' || correctionReason.trim().length < 10}
+                      className="w-full py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold transition disabled:opacity-50"
+                    >
+                      {actioning === selected.id + '_corr_apply' ? 'Applying…' : 'Apply correction'}
+                    </button>
+                  </>
+                )}
+                {corrections.length > 0 && (
+                  <details>
+                    <summary className="cursor-pointer text-slate-400">Earlier corrections ({corrections.length})</summary>
+                    <ul className="mt-1 space-y-1 text-slate-300">
+                      {corrections.map((c: any) => (
+                        <li key={c.id}>
+                          {new Date(c.created_at).toLocaleDateString('en-IN')} — {c.created_by_name ?? 'Finance'}: “{c.reason}”
+                          {c.credit_note_number ? ` · ${c.credit_note_number}` : ''}
+                          {c.supplementary_invoice_number ? ` · ${c.supplementary_invoice_number}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
+            {history.length > 0 && (
+              <details className="rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300">
+                <summary className="cursor-pointer text-slate-400">History ({history.length})</summary>
+                <ul className="mt-2 space-y-1">
+                  {history.map((e: any, i: number) => (
+                    <li key={i}>
+                      <span className="text-slate-500">{e.at ? new Date(e.at).toLocaleString('en-IN') : '—'}</span>{' '}
+                      {e.what}
+                      {e.who ? <span className="text-slate-400"> — {e.who}</span> : null}
+                      {e.detail ? <span className="text-slate-400"> · “{e.detail}”</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+            {selected.status === 'CANCELLED' && selected.reject_reason && (
+              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+                <span className="font-semibold">Rejected by Finance</span>
+                {selected.rejected_at ? ` on ${new Date(selected.rejected_at).toLocaleDateString('en-IN')}` : ''}:
+                {' '}{selected.reject_reason}
+              </div>
+            )}
+            {selected.is_consolidated && ['DRAFT', 'APPROVED'].includes(selected.status) && (
+              rejecting ? (
+                <div className="space-y-2 rounded-xl border border-rose-500/30 bg-rose-500/5 p-3">
+                  <p className="text-xs text-slate-300">
+                    Why is this invoice wrong? The RM is told, its payroll is voided, and this client cannot be
+                    invoiced again until the RM corrects or confirms the rate.
+                  </p>
+                  <textarea
+                    id={`input-reject-reason-${selected.id}`}
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    rows={3}
+                    placeholder="e.g. Live-in rate entered as ₹5,000 per duty, agreed rate is ₹500"
+                    className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      id={`btn-modal-reject-confirm-${selected.id}`}
+                      onClick={() => handleReject(selected.id)}
+                      disabled={actioning === selected.id + '_reject' || rejectReason.trim().length < 10}
+                      className="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition disabled:opacity-50"
+                    >
+                      {actioning === selected.id + '_reject' ? 'Rejecting…' : 'Reject invoice'}
+                    </button>
+                    <button
+                      onClick={() => { setRejecting(false); setRejectReason(''); }}
+                      className="py-2 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm"
+                    >
+                      Back
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  id={`btn-modal-reject-${selected.id}`}
+                  onClick={() => setRejecting(true)}
+                  className="w-full py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-sm font-semibold transition"
+                >
+                  Reject — wrong rate, days or anything else
+                </button>
+              )
+            )}
+            {canGo(selected.status, 'APPROVED') && (
+              <p className="text-xs text-slate-400">
+                Check every staff line — rate, duties or days — before approving. Approving releases the
+                salary slips to the staff app and makes them payable.
+              </p>
+            )}
             <div className="flex gap-3 pt-2">
               {canGo(selected.status, 'APPROVED') && (
                 <button
@@ -587,6 +886,87 @@ export default function InvoicesPage() {
         </div>
       )}
 
+      {/* What needs Finance today. Salary waits on a draft invoice, a client
+          waits on an RM's rate check — this is where either gets noticed. */}
+      {attention && Object.values(attention.counts ?? {}).some((n: any) => n > 0) && (
+        <details className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-100">
+          <summary className="cursor-pointer font-semibold">
+            Needs attention —{' '}
+            {[
+              attention.counts.draft_invoices_waiting && `${attention.counts.draft_invoices_waiting} draft invoice(s) holding salary`,
+              attention.counts.slips_held && `${attention.counts.slips_held} slip(s) held`,
+              attention.counts.rate_reviews_open && `${attention.counts.rate_reviews_open} rate review(s) with RMs`,
+              attention.counts.sent_invoices_needing_correction && `${attention.counts.sent_invoices_needing_correction} sent invoice(s) to correct`,
+              attention.counts.arrears_pending && `${attention.counts.arrears_pending} arrears pending`,
+              attention.counts.ready_to_reinvoice && `${attention.counts.ready_to_reinvoice} ready to re-invoice`,
+            ].filter(Boolean).join(' · ')}
+          </summary>
+          <div className="mt-3 grid gap-3 text-xs md:grid-cols-2">
+            {(attention.ready_to_reinvoice ?? []).length > 0 && (
+              <div className="md:col-span-2">
+                <p className="font-semibold text-emerald-300">Ready to re-invoice — the RM has corrected or confirmed the rate</p>
+                {attention.ready_to_reinvoice.map((x: any) => (
+                  <div key={x.id} className="flex flex-wrap items-center gap-2 py-0.5">
+                    <span>
+                      {x.invoice_number} · {x.customer_name} · {x.period_from} to {x.period_to}
+                      <span className="text-amber-200/70"> — rejected: “{x.reject_reason}”</span>
+                    </span>
+                    <button
+                      id={`btn-reinvoice-${x.id}`}
+                      onClick={() => handleReinvoice(x)}
+                      disabled={actioning === x.id + '_reinvoice'}
+                      className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
+                    >
+                      {actioning === x.id + '_reinvoice' ? 'Raising…' : 'Re-invoice'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {(attention.draft_invoices_waiting ?? []).length > 0 && (
+              <div>
+                <p className="font-semibold text-amber-200">Drafts waiting for approval</p>
+                {attention.draft_invoices_waiting.map((x: any) => (
+                  <p key={x.id}>{x.invoice_number} · {x.customer_name} · {x.days_waiting} days</p>
+                ))}
+              </div>
+            )}
+            {(attention.rate_reviews_open ?? []).length > 0 && (
+              <div>
+                <p className="font-semibold text-amber-200">Waiting for the RM to check the rate</p>
+                {attention.rate_reviews_open.map((x: any) => (
+                  <p key={x.placement_id}>{x.staff_name} · {x.customer_name} · {x.rm_name ?? 'RM'} · {x.days_waiting} days</p>
+                ))}
+              </div>
+            )}
+            {(attention.sent_invoices_needing_correction ?? []).length > 0 && (
+              <div>
+                <p className="font-semibold text-amber-200">Sent, then the rate changed — open and correct</p>
+                {attention.sent_invoices_needing_correction.map((x: any) => (
+                  <p key={x.id}>{x.invoice_number} · {x.staff_name} · from {x.effective_from}</p>
+                ))}
+              </div>
+            )}
+            {(attention.arrears_pending ?? []).length > 0 && (
+              <div>
+                <p className="font-semibold text-amber-200">Arrears waiting for the next payroll</p>
+                {attention.arrears_pending.map((x: any) => (
+                  <p key={x.id}>{x.staff_name} · {fmtRs(x.amount)} · {x.days_waiting} days</p>
+                ))}
+              </div>
+            )}
+            {(attention.slips_held ?? []).length > 0 && (
+              <div>
+                <p className="font-semibold text-amber-200">Salary slips held (Admin can release with a reason)</p>
+                {attention.slips_held.map((x: any) => (
+                  <p key={x.payroll_id}>{x.staff_name} · {x.invoice_number ?? 'no invoice'} · {x.days_waiting} days</p>
+                ))}
+              </div>
+            )}
+          </div>
+        </details>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
@@ -715,7 +1095,14 @@ export default function InvoicesPage() {
                   return (
                     <tr key={inv.id} className={`border-b border-white/5 hover:bg-white/2 transition ${overdue ? 'bg-red-500/3' : ''}`}>
                       <td className="px-5 py-3 font-mono text-xs text-slate-300">{inv.invoice_number}</td>
-                      <td className="px-4 py-3 text-white">{inv.client_name ?? inv.client_id?.slice(0, 8)}</td>
+                      <td className="px-4 py-3 text-white">
+                        {inv.client_name ?? inv.client_id?.slice(0, 8)}
+                        {inv.reject_reason && (
+                          <p className="text-[11px] text-rose-300 mt-0.5 max-w-[260px] truncate" title={inv.reject_reason}>
+                            Rejected: {inv.reject_reason}
+                          </p>
+                        )}
+                      </td>
                       {/*
                         A consolidated invoice bills a whole client, so it says
                         how many people are on it. Only a legacy per-placement

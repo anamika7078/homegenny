@@ -225,6 +225,9 @@ export interface ApiClient {
     salary?: number;
     joiningDate: string;
     gender: string;
+    /** Required only when the pipeline record has none (mobile self-registration). */
+    address?: string;
+    dateOfBirth?: string;
     city?: string;
     state?: string;
     pincode?: string;
@@ -311,6 +314,7 @@ export interface ApiClient {
   confirmPlacement(id: string): Promise<any>;
   exitPlacement(id: string, body: Record<string, unknown>): Promise<any>;
   updatePlacementTerms(id: string, body: Record<string, unknown>): Promise<any>;
+  getPlacementRateHistory(id: string): Promise<any>;
   calculateWage(body: Record<string, unknown>): Promise<any>;
 
   getStaffTimeline(id: string): Promise<any>;
@@ -498,6 +502,15 @@ export interface ApiClient {
   /** Rebuild a DRAFT/APPROVED invoice with the current Company & GST settings. */
   recalculateFinanceInvoice(id: string): Promise<any>;
   cancelFinanceInvoice(id: string, reason: string): Promise<any>;
+  rejectFinanceInvoice(id: string, reason: string): Promise<any>;
+  getInvoiceCorrection(id: string): Promise<any>;
+  correctFinanceInvoice(id: string, reason: string): Promise<any>;
+  getInvoiceCorrections(id: string): Promise<any>;
+  getFinanceAttention(): Promise<any>;
+  getInvoiceHistory(id: string): Promise<any>;
+  getInvoiceVoidedPayroll(id: string): Promise<any>;
+  rerunPayrollRecord(payrollId: string, reason?: string): Promise<any>;
+  confirmPlacementRateReview(placementId: string, note: string): Promise<any>;
 
   // Company & GST settings
   getCompanySettings(): Promise<any>;
@@ -874,6 +887,8 @@ export const api: ApiClient = {
     apiClient.post(`/placements/${id}/exit`, body),
   updatePlacementTerms: (id: string, body: Record<string, unknown>) =>
     apiClient.patch(`/placements/${id}/terms`, body),
+  getPlacementRateHistory: (id: string) =>
+    apiClient.get(`/placements/${id}/rate-history`),
   calculateWage: (body: Record<string, unknown>) =>
     apiClient.post('/placements/calculate-wage', body),
 
@@ -1136,6 +1151,24 @@ export const api: ApiClient = {
     apiClient.post(`/finance/invoices/${id}/recalculate`),
   cancelFinanceInvoice: (id: string, reason: string) =>
     apiClient.post(`/finance/invoices/${id}/cancel`, { reason }),
+  rejectFinanceInvoice: (id: string, reason: string) =>
+    apiClient.post(`/finance/invoices/${id}/reject`, { reason }),
+  getInvoiceCorrection: (id: string) =>
+    apiClient.get(`/finance/invoices/${id}/correction`),
+  correctFinanceInvoice: (id: string, reason: string) =>
+    apiClient.post(`/finance/invoices/${id}/correct`, { reason }),
+  getInvoiceCorrections: (id: string) =>
+    apiClient.get(`/finance/invoices/${id}/corrections`),
+  getFinanceAttention: () =>
+    apiClient.get('/finance/invoices/attention'),
+  getInvoiceHistory: (id: string) =>
+    apiClient.get(`/finance/invoices/${id}/history`),
+  getInvoiceVoidedPayroll: (id: string) =>
+    apiClient.get(`/finance/invoices/${id}/voided-payroll`),
+  rerunPayrollRecord: (payrollId: string, reason?: string) =>
+    apiClient.post(`/finance/payroll/${payrollId}/rerun`, { reason }),
+  confirmPlacementRateReview: (placementId: string, note: string) =>
+    apiClient.post(`/placements/${placementId}/rate-review/confirm`, { note }),
   getCompanySettings: () =>
     apiClient.get('/finance/settings/company'),
   updateCompanySettings: (body: Record<string, string | number | null>) =>

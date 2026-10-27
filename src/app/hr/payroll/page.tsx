@@ -39,6 +39,12 @@ interface Slip {
   status: string;
   invoiced: boolean;
   /**
+   * Whether the slip has been issued. A payslip is released when Finance
+   * approves the client's invoice; until then the staff member cannot see it
+   * and there is no PDF to open.
+   */
+  released?: boolean;
+  /**
    * The houses this month's pay came from, when it came from several. A maid
    * working three clients is paid once, so she is one row here — this is what
    * the one figure is made of.
@@ -306,7 +312,14 @@ export default function HrSalarySlipsPage() {
                         Unbilled means payroll ran but the invoice could not be
                         touched — usually because it had already been sent.
                       */}
-                      {r.invoiced ? (
+                      {r.released === false ? (
+                        <span
+                          className="text-[10px] font-medium text-amber-500"
+                          title="The slip is issued when Finance approves the client's invoice"
+                        >
+                          awaiting Finance approval
+                        </span>
+                      ) : r.invoiced ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-500">
                           <Receipt className="h-3 w-3" /> on invoice
                         </span>
@@ -318,7 +331,7 @@ export default function HrSalarySlipsPage() {
                       <div className="flex items-center justify-center gap-1.5">
                         <button
                           onClick={() => openPreview(r)}
-                          disabled={!r.employeeId || busy === r.ref}
+                          disabled={!r.employeeId || r.released === false || busy === r.ref}
                           className="rounded-lg border border-border p-1.5 text-secondary-foreground hover:bg-muted disabled:opacity-40"
                           title="Read the payslip"
                         >
@@ -328,7 +341,7 @@ export default function HrSalarySlipsPage() {
                         </button>
                         <button
                           onClick={() => download(r)}
-                          disabled={!r.employeeId || busy === r.ref}
+                          disabled={!r.employeeId || r.released === false || busy === r.ref}
                           className="rounded-lg border border-border p-1.5 text-secondary-foreground hover:bg-muted disabled:opacity-40"
                           title="Save the payslip PDF"
                         >

@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, ChevronDown, Clock, CheckCircle2, XCircle, FileText, ShieldAlert } from 'lucide-react';
@@ -42,6 +42,8 @@ export interface Placement {
   esic_applicable?: boolean;
   pf_applicable?: boolean;
   covers_placement_id?: string | null;
+  /** Set when Finance rejected an invoice built on this placement. The client is not invoiced until it is cleared. */
+  rate_review?: { status: 'REVIEW_NEEDED'; reason: string | null; at: string | null; invoice_id: string | null } | null;
   shift_hours?: number | null;
   /** HH:MM (IST) the shift starts — what "late" on the Staff Snapshot is measured from. */
   shift_start?: string | null;
@@ -335,36 +337,156 @@ function ShiftStartEditor({ p }: { p: Placement }) {
  * on a monthly wage had no way across. The change applies to payroll run from
  * now on; payroll already run keeps the figures it was run with.
  */
+/**
+ * Finance rejected an invoice built on this placement. The RM either corrects
+ * the rate (Pricing below — saving it clears this) or says the rate stands.
+ * Until one of those, the client cannot be invoiced.
+ */
+function RateReviewBanner({ p }: { p: Placement }) {
+  const qc = useQueryClient();
+  const [note, setNote] = useState('');
+  const [open, setOpen] = useState(false);
+  const confirm = useMutation({
+    mutationFn: () => api.confirmPlacementRateReview(p.id, note.trim()),
+    onSuccess: () => {
+      toast.success('Rate confirmed — Finance can invoice this client again.');
+      qc.invalidateQueries({ queryKey: ['placements'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  if (!p.rate_review) return null;
+  return (
+    <div className="space-y-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs">
+      <p className="font-semibold text-rose-200">Finance rejected an invoice for this placement</p>
+      {p.rate_review.reason && <p className="text-rose-100">“{p.rate_review.reason}”</p>}
+      <p className="text-muted-foreground">
+        Correct the rate in Pricing below, or confirm it is right. Until then this client cannot be invoiced.
+      </p>
+      {open ? (
+        <div className="space-y-2">
+          <textarea
+            id={`rate-review-note-${p.id}`}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            placeholder="Why the rate is right, e.g. ₹450/duty is the agreed relief rate"
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-foreground"
+          />
+          <button
+            type="button"
+            disabled={note.trim().length < 10 || confirm.isPending}
+            onClick={() => confirm.mutate()}
+            className="rounded-lg border border-white/15 px-3 py-1.5 font-semibold text-foreground hover:bg-white/5 disabled:opacity-40"
+          >
+            {confirm.isPending ? 'Saving…' : 'Confirm the rate is right'}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded-lg border border-white/15 px-3 py-1.5 font-semibold text-foreground hover:bg-white/5"
+        >
+          The rate is right
+        </button>
+      )}
+    </div>
+  );
+}
+
+const numOrEmpty = (v: unknown) => (v != null && v !== '' ? String(Number(v)) : '');
+
+/**
+ * Pricing, for every way a placement is paid: per duty, a monthly salary, or
+ * by the hour. A change is dated — it applies from "Applies from" (default:
+ * the first day no payroll covers yet). Going further back re-runs payroll
+ * still in draft; the server refuses it over anything Finance has approved.
+ */
 function RatesEditor({ p }: { p: Placement }) {
   const qc = useQueryClient();
   const temp = p.placement_type === 'TEMPORARY';
   const [perDuty, setPerDuty] = useState(p.rate_basis === 'PER_DUTY');
-  const [rate, setRate] = useState(p.duty_rate != null ? String(p.duty_rate) : '');
-  const [bill, setBill] = useState(p.duty_billing_rate != null ? String(p.duty_billing_rate) : '');
+  const [rate, setRate] = useState(numOrEmpty(p.duty_rate));
+  const [bill, setBill] = useState(numOrEmpty(p.duty_billing_rate));
+  const [salary, setSalary] = useState(numOrEmpty(p.staff_salary));
+  const [fee, setFee] = useState(numOrEmpty(p.management_fee));
+  const [hourly, setHourly] = useState(numOrEmpty(p.hourly_rate));
+  const [hourlyFee, setHourlyFee] = useState(numOrEmpty(p.hourly_fee));
   const [esic, setEsic] = useState(p.esic_applicable !== false);
   const [pf, setPf] = useState(p.pf_applicable !== false);
+  const [from, setFrom] = useState('');
+  const [reason, setReason] = useState('');
+  // A salary built from a wage breakup drives PF from that breakup; editing
+  // the flat figure here would leave the breakup behind.
+  const fromBreakup = !!p.wage_breakup && !perDuty && !temp;
+
+  const history = useQuery({
+    queryKey: ['placement-rate-history', p.id],
+    queryFn: () => api.getPlacementRateHistory(p.id),
+  });
+  const defaultFrom: string | undefined = history.data?.next_unbilled_day ?? history.data?.data?.next_unbilled_day;
+
+  const body = () => {
+    const b: Record<string, unknown> = {};
+    const changed = (now: string, was: unknown) => now !== numOrEmpty(was);
+    if (perDuty !== (p.rate_basis === 'PER_DUTY')) b.rate_basis = perDuty ? 'PER_DUTY' : temp ? 'HOURLY' : 'MONTHLY';
+    if (perDuty) {
+      if (changed(rate, p.duty_rate) || b.rate_basis) b.duty_rate = Number(rate);
+      if (changed(bill, p.duty_billing_rate) || b.rate_basis) b.duty_billing_rate = Number(bill);
+      if (b.rate_basis) b.shift_hours = 24;
+    } else if (temp) {
+      if (changed(hourly, p.hourly_rate)) b.hourly_rate = Number(hourly);
+      if (changed(hourlyFee, p.hourly_fee)) b.hourly_fee = Number(hourlyFee);
+    } else if (!fromBreakup) {
+      if (changed(salary, p.staff_salary)) b.staff_salary = Number(salary);
+      if (changed(fee, p.management_fee)) b.management_fee = Number(fee);
+    }
+    if (esic !== (p.esic_applicable !== false)) b.esic_applicable = esic;
+    if (pf !== (p.pf_applicable !== false)) b.pf_applicable = pf;
+    if (Object.keys(b).length) {
+      if (from) b.effective_from = from;
+      if (reason.trim()) b.reason = reason.trim();
+    }
+    return b;
+  };
 
   const save = useMutation({
-    mutationFn: () => api.updatePlacementTerms(p.id, {
-      // Sent only when the basis actually changes, so toggling ESIC on a
-      // monthly placement does not re-validate its salary.
-      ...(perDuty !== (p.rate_basis === 'PER_DUTY')
-        ? { rate_basis: perDuty ? 'PER_DUTY' : temp ? 'HOURLY' : 'MONTHLY' }
-        : {}),
-      ...(perDuty ? { duty_rate: Number(rate), duty_billing_rate: Number(bill), shift_hours: 24 } : {}),
-      esic_applicable: esic,
-      pf_applicable: pf,
-    }),
-    onSuccess: () => {
-      toast.success('Rates saved — payroll run from now on uses them.');
+    mutationFn: () => api.updatePlacementTerms(p.id, body()),
+    onSuccess: (res: any) => {
+      const out = res?.data ?? res;
+      const rebuilt = (out?.rate_change?.rebuilt ?? []) as { invoice_number: string | null; period: string }[];
+      toast.success(
+        p.rate_review
+          ? 'Rates corrected — Finance can invoice this client again.'
+          : out?.rate_change
+            ? `Rates saved — they apply from ${out.rate_change.effective_from}.` +
+              (rebuilt.length ? ` Re-run: ${rebuilt.map((x) => x.invoice_number ?? x.period).join(', ')}.` : '')
+            : 'Saved.',
+      );
+      for (const w of (out?.warnings ?? []) as string[]) toast(w, { icon: '⚠️', duration: 9000 });
+      // Days already on an invoice the client has stay as billed; Finance
+      // settles the difference by correcting that invoice.
+      const toCorrect = (out?.rate_change?.invoices_to_correct ?? []) as string[];
+      if (toCorrect.length) {
+        toast(`Already sent to the client: ${toCorrect.join(', ')}. Ask Finance to correct ${toCorrect.length > 1 ? 'them' : 'it'}.`, {
+          icon: '📄', duration: 12000,
+        });
+      }
+      setReason('');
       qc.invalidateQueries({ queryKey: ['placements'] });
+      qc.invalidateQueries({ queryKey: ['placement-rate-history', p.id] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const rateN = Number(rate), billN = Number(bill);
-  const invalid = perDuty && (!(rateN > 0) || !(billN > 0) || billN < rateN);
+  const invalid =
+    (perDuty && (!(rateN > 0) || !(billN > 0) || billN < rateN)) ||
+    (!perDuty && temp && !(Number(hourly) > 0)) ||
+    (!perDuty && !temp && !fromBreakup && !(Number(salary) > 0));
+  const nothing = Object.keys(body()).length === 0;
   const input = 'w-24 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-foreground focus:border-[#FF5A1F]/50 focus:outline-none';
+  const changes: any[] = history.data?.changes ?? history.data?.data?.changes ?? [];
 
   return (
     <div className="space-y-2 text-xs rounded-lg border border-white/8 p-3">
@@ -374,7 +496,7 @@ function RatesEditor({ p }: { p: Placement }) {
         {temp ? 'Relief — paid per duty' : '24×7 Live-in — paid per duty'}
         <span className="text-muted-foreground">(otherwise {temp ? 'hourly' : 'monthly salary'})</span>
       </label>
-      {perDuty && (
+      {perDuty ? (
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label htmlFor={`dr-${p.id}`} className="mb-1 block text-muted-foreground">Staff pay ₹/duty</label>
@@ -388,6 +510,33 @@ function RatesEditor({ p }: { p: Placement }) {
             <span className="text-amber-400">Billing is below the staff pay.</span>
           )}
         </div>
+      ) : temp ? (
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label htmlFor={`hr-${p.id}`} className="mb-1 block text-muted-foreground">Staff pay ₹/hour</label>
+            <input id={`hr-${p.id}`} type="number" min="0" value={hourly} onChange={(e) => setHourly(e.target.value)} className={input} />
+          </div>
+          <div>
+            <label htmlFor={`hf-${p.id}`} className="mb-1 block text-muted-foreground">Fee ₹/hour</label>
+            <input id={`hf-${p.id}`} type="number" min="0" value={hourlyFee} onChange={(e) => setHourlyFee(e.target.value)} className={input} />
+          </div>
+        </div>
+      ) : fromBreakup ? (
+        <p className="text-muted-foreground">
+          The monthly salary comes from a wage breakup ({inr(Number(p.staff_salary))} + fee {inr(Number(p.management_fee))}).
+          Change it from the breakup so PF stays right.
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label htmlFor={`ss-${p.id}`} className="mb-1 block text-muted-foreground">Staff salary ₹/month</label>
+            <input id={`ss-${p.id}`} type="number" min="0" value={salary} onChange={(e) => setSalary(e.target.value)} className={input} />
+          </div>
+          <div>
+            <label htmlFor={`mf-${p.id}`} className="mb-1 block text-muted-foreground">Fee ₹/month</label>
+            <input id={`mf-${p.id}`} type="number" min="0" value={fee} onChange={(e) => setFee(e.target.value)} className={input} />
+          </div>
+        </div>
       )}
       <div className="flex gap-4">
         <label className="flex items-center gap-2 cursor-pointer" htmlFor={`esic-${p.id}`}>
@@ -399,16 +548,75 @@ function RatesEditor({ p }: { p: Placement }) {
           PF applies
         </label>
       </div>
+      {!nothing && (
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label htmlFor={`ef-${p.id}`} className="mb-1 block text-muted-foreground">Applies from</label>
+            <input
+              id={`ef-${p.id}`}
+              type="date"
+              value={from || defaultFrom || ''}
+              onChange={(e) => setFrom(e.target.value)}
+              className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-foreground"
+            />
+          </div>
+          <div className="flex-1 min-w-[180px]">
+            <label htmlFor={`rr-${p.id}`} className="mb-1 block text-muted-foreground">Why (kept on the history)</label>
+            <input
+              id={`rr-${p.id}`}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. Increment agreed with the client"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-foreground"
+            />
+          </div>
+          {defaultFrom && from && from < defaultFrom && (
+            <p className="w-full text-amber-400">
+              Payroll from {from} is already run — it will be re-run at the new rate if its invoice is still a draft.
+            </p>
+          )}
+        </div>
+      )}
       <button
         type="button"
-        disabled={invalid || save.isPending}
+        disabled={invalid || nothing || save.isPending}
         onClick={() => save.mutate()}
         className="rounded-lg border border-white/15 px-3 py-1.5 font-semibold text-foreground hover:bg-white/5 disabled:opacity-40"
       >
         {save.isPending ? 'Saving…' : 'Save pricing'}
       </button>
+      {changes.length > 0 && (
+        <details className="pt-1">
+          <summary className="cursor-pointer text-muted-foreground">Rate history ({changes.length})</summary>
+          <ul className="mt-2 space-y-1.5">
+            {changes.map((c) => (
+              <li key={c.id} className={c.superseded_at ? 'text-muted-foreground line-through' : 'text-foreground'}>
+                From {c.effective_from}: {describeRateChange(c.before, c.after)}
+                <span className="text-muted-foreground">
+                  {' '}— {c.changed_by_name ?? 'someone'}, {new Date(c.changed_at).toLocaleDateString('en-IN')}
+                  {c.reason ? ` · “${c.reason}”` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
+}
+
+const RATE_LABELS: Record<string, string> = {
+  duty_rate: 'pay/duty', duty_billing_rate: 'billing/duty', staff_salary: 'salary', management_fee: 'fee',
+  hourly_rate: 'pay/hour', hourly_fee: 'fee/hour', rate_basis: 'basis', esic_applicable: 'ESIC', pf_applicable: 'PF',
+};
+function describeRateChange(before: Record<string, unknown> = {}, after: Record<string, unknown> = {}) {
+  const parts = Object.keys(RATE_LABELS)
+    .filter((k) => JSON.stringify(before?.[k] ?? null) !== JSON.stringify(after?.[k] ?? null))
+    .map((k) => {
+      const show = (v: unknown) => (typeof v === 'number' ? inr(v) : typeof v === 'boolean' ? (v ? 'on' : 'off') : String(v ?? '—'));
+      return `${RATE_LABELS[k]} ${show(before?.[k])} → ${show(after?.[k])}`;
+    });
+  return parts.length ? parts.join(', ') : 'no change';
 }
 
 export function PlacementCard({
@@ -457,6 +665,11 @@ export function PlacementCard({
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {p.rate_review && (
+            <span className="text-[10px] font-bold uppercase tracking-wide border rounded-full px-2.5 py-0.5 bg-rose-500/15 border-rose-500/30 text-rose-300">
+              Rate review
+            </span>
+          )}
           <DaysLeftBadge days={dl} />
           <span className={`text-[10px] font-bold uppercase tracking-wide border rounded-full px-2.5 py-0.5 ${st.cls}`}>{st.label}</span>
           <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -479,6 +692,7 @@ export function PlacementCard({
                 <Figure label="Trial end" value={fmtDate(p.trial_end_date)} />
               </div>
 
+              <RateReviewBanner p={p} />
               {(p.status === 'TRIAL' || p.status === 'CONFIRMED') && <ShiftStartEditor p={p} />}
               {(p.status === 'TRIAL' || p.status === 'CONFIRMED') && <RatesEditor p={p} />}
 
