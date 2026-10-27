@@ -42,6 +42,8 @@ const EMPTY_FORM = {
   employmentType: 'Full Time',
   joiningDate: todayIso(),
   gender: 'Female',
+  address: '',
+  dateOfBirth: '',
   city: '',
   state: '',
   pincode: '',
@@ -110,8 +112,10 @@ export default function HrOnboardingPage() {
 
   const submit = async () => {
     if (!selected) return;
-    const missing = (['department', 'designation', 'categoryId', 'employmentType', 'joiningDate', 'gender'] as const)
+    const missing: string[] = (['department', 'designation', 'categoryId', 'employmentType', 'joiningDate', 'gender'] as const)
       .filter((k) => !form[k]);
+    if (!selected.address && !form.address.trim()) missing.push('address');
+    if (!selected.dateOfBirth && !form.dateOfBirth) missing.push('date of birth');
     if (missing.length) {
       toast.error(`Please fill: ${missing.join(', ')}`);
       return;
@@ -126,6 +130,8 @@ export default function HrOnboardingPage() {
         employmentType: form.employmentType,
         joiningDate: form.joiningDate,
         gender: form.gender,
+        address: form.address.trim() || undefined,
+        dateOfBirth: form.dateOfBirth || undefined,
         city: form.city.trim() || undefined,
         state: form.state.trim() || undefined,
         pincode: form.pincode.trim() || undefined,
@@ -322,6 +328,31 @@ export default function HrOnboardingPage() {
                   className="w-full rounded-xl border border-white/10 bg-background px-3 py-2 text-sm text-white"
                 />
               </div>
+
+              {/* Staff who registered on the mobile app were never asked for
+                  these, and the employee record cannot be created without them. */}
+              {!selected.dateOfBirth && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-white">Date of birth *</label>
+                  <input
+                    type="date"
+                    value={form.dateOfBirth}
+                    onChange={(e) => setForm((s) => ({ ...s, dateOfBirth: e.target.value }))}
+                    className="w-full rounded-xl border border-white/10 bg-background px-3 py-2 text-sm text-white"
+                  />
+                </div>
+              )}
+              {!selected.address && (
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-sm font-semibold text-white">Address *</label>
+                  <input
+                    value={form.address}
+                    placeholder="Not on the pipeline record — enter the staff member's address"
+                    onChange={(e) => setForm((s) => ({ ...s, address: e.target.value }))}
+                    className="w-full rounded-xl border border-white/10 bg-background px-3 py-2 text-sm text-white placeholder:text-secondary-foreground/50"
+                  />
+                </div>
+              )}
 
               {/* Intake stores one free-text address, so city/state/pincode have
                   to be entered here or the employee record carries NOT_SET. */}
