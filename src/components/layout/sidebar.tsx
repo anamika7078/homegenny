@@ -471,9 +471,6 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
           <span className="font-syne text-xl font-bold tracking-tight sm:text-2xl">
             <span className="text-white">Home</span><span className="text-[#FF5A1F]">Genny</span>
           </span>
-          <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-secondary-foreground opacity-70">
-            DOMESTIC STAFFING · GCP ·<br />DELHI NCR
-          </span>
         </Link>
         <button
           type="button"
@@ -509,12 +506,6 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
         <div title={collapsed ? 'Admin Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-red-500/10 border border-red-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
           <ShieldCheck className="w-3.5 h-3.5 text-red-400 shrink-0" />
           <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-red-400 uppercase tracking-wider')}>Admin Portal</span>
-        </div>
-      )}
-      {isFinance && (
-        <div title={collapsed ? 'Finance Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
-          <DollarSign className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-emerald-400 uppercase tracking-wider')}>Finance Portal</span>
         </div>
       )}
       {isSupport && (
