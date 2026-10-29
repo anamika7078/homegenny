@@ -649,28 +649,6 @@ export default function FinanceCustomersPage() {
         />
       </div>
 
-      {/* Stats row */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard
-          label="Total Customers"
-          value={String(customers.length)}
-          icon={<Users className="w-4 h-4" />}
-          color="#10b981"
-        />
-        <StatCard
-          label="Active Customers"
-          value={String(customers.filter((c) => c.status === 'ACTIVE').length)}
-          icon={<Building2 className="w-4 h-4" />}
-          color="#6366f1"
-        />
-        <StatCard
-          label="With GSTN"
-          value={String(customers.filter((c) => c.gstn).length)}
-          icon={<Shield className="w-4 h-4" />}
-          color="#f59e0b"
-        />
-      </div>
-
       {/* Table */}
       <div className="rounded-2xl border border-white/8 bg-[#131c2e] overflow-hidden">
         {loading ? (
@@ -767,24 +745,6 @@ export default function FinanceCustomersPage() {
           onPanVerified={handlePanVerified}
         />
       )}
-    </div>
-  );
-}
-
-// ── StatCard ──────────────────────────────────────────────────────────────────
-function StatCard({ label, value, icon, color }: { label: string; value: string; icon: React.ReactNode; color: string }) {
-  return (
-    <div className="rounded-2xl border border-white/8 bg-[#131c2e] p-5 flex items-center gap-4">
-      <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-        style={{ background: `${color}22` }}
-      >
-        <span style={{ color }}>{icon}</span>
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{label}</p>
-        <p className="text-2xl font-bold text-white">{value}</p>
-      </div>
     </div>
   );
 }
