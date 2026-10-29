@@ -16,6 +16,13 @@ function fmt(n: number | string) {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(Number(n));
 }
 function fmtRs(n: number | string) { return `₹${fmt(n)}`; }
+// A DATE column reaches us as IST midnight in UTC ("2026-09-30T18:30:00Z" for
+// 1 Oct), so slicing the string shows the day before. Read it in IST.
+function istDay(v: string | Date) {
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.split('-').reverse().join('/');
+  return new Date(s).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' });
+}
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -227,6 +234,50 @@ export default function InvoicesPage() {
         .catch(() => setHistory([]));
     }
   }, [selected?.id]);
+
+  // The detail is a preview: the invoice document as the client gets it, and
+  // the month's muster roll behind it, each downloadable as a PDF.
+  const [previewTab, setPreviewTab] = useState<'invoice' | 'muster'>('invoice');
+  const [previewHtml, setPreviewHtml] = useState<{ invoice?: string | null; muster?: string | null }>({});
+  const proof = selected?.attendance_proof ?? null;
+  const musterOpts = proof?.muster_roll ? { version: proof.muster_roll.version } : {};
+  useEffect(() => {
+    setPreviewTab('invoice');
+    setPreviewHtml({});
+    if (!selected?.id) return;
+    const token = tokenStore.getAccess();
+    axios.get(`${BASE_URL}/finance/invoices/${selected.id}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      responseType: 'text',
+    })
+      .then((res) => setPreviewHtml((p) => ({ ...p, invoice: String(res.data) })))
+      .catch(() => setPreviewHtml((p) => ({ ...p, invoice: null })));
+    const ap = selected.attendance_proof;
+    if (ap) {
+      api.printMusterRoll(ap.client_id, ap.period_month, ap.period_year, ap.muster_roll ? { version: ap.muster_roll.version } : {})
+        .then((blob: Blob) => blob.text())
+        .then((html: string) => setPreviewHtml((p) => ({ ...p, muster: html })))
+        .catch(() => setPreviewHtml((p) => ({ ...p, muster: null })));
+    }
+  }, [selected?.id]);
+
+  /** Opens the browser's print dialog on the document, named for "Save as PDF". */
+  const saveAsPdf = (html: string | null | undefined, name: string) => {
+    if (!html) { showToast('error', 'The document is still loading'); return; }
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+    document.body.appendChild(frame);
+    const before = document.title;
+    frame.onload = () => {
+      document.title = name;
+      frame.contentDocument && (frame.contentDocument.title = name);
+      frame.contentWindow?.focus();
+      frame.contentWindow?.print();
+      setTimeout(() => { document.title = before; frame.remove(); }, 1500);
+    };
+    frame.srcdoc = html;
+  };
+  const safeName = (s: string) => String(s ?? '').replace(/[\\/:*?"<>|]+/g, '-');
 
   const handleApprove = async (id: string) => {
     setActioning(id + '_approve');
@@ -443,12 +494,84 @@ export default function InvoicesPage() {
 
       {/* Detail Modal */}
       {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#0f172a] border border-white/10 rounded-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white text-lg">{selected.invoice_number}</h3>
-              <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-white text-xl">×</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4">
+          <div className="bg-[#0f172a] border border-white/10 rounded-2xl w-full max-w-[1400px] h-[96vh] flex flex-col overflow-hidden">
+            {/* Header: what it is, and the documents to take away */}
+            <div className="relative flex flex-wrap items-center gap-3 border-b border-white/10 py-3 pl-5 pr-14">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-white text-lg">{selected.invoice_number}</h3>
+                  <StatusBadge status={selected.status} />
+                </div>
+                <p className="text-xs text-slate-400 truncate">
+                  {selected.client_name ?? selected.client_id} · {fmtRs(selected.total_amount)}
+                </p>
+              </div>
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <button
+                  id={`btn-modal-invoice-pdf-${selected.id}`}
+                  onClick={() => saveAsPdf(previewHtml.invoice, `Invoice ${safeName(selected.invoice_number)}`)}
+                  disabled={!previewHtml.invoice}
+                  className="rounded-xl bg-blue-600 hover:bg-blue-500 px-3 py-1.5 text-sm font-semibold text-white transition disabled:opacity-50"
+                >
+                  Invoice PDF
+                </button>
+                {proof && (
+                  <button
+                    id={`btn-modal-muster-pdf-${selected.id}`}
+                    onClick={() => saveAsPdf(previewHtml.muster, `Muster roll ${safeName(selected.client_name ?? '')} ${proof.period_month}-${proof.period_year}`)}
+                    disabled={!previewHtml.muster}
+                    className="rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 px-3 py-1.5 text-sm font-semibold text-slate-100 transition disabled:opacity-50"
+                  >
+                    Muster roll PDF
+                  </button>
+                )}
+                {selected.is_consolidated && (
+                  <button
+                    id={`btn-modal-salary-slips-${selected.id}`}
+                    onClick={() => handleSalarySlips(selected.id, selected.invoice_number)}
+                    disabled={actioning === selected.id + '_slips'}
+                    className="rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 text-sm font-semibold text-slate-200 transition disabled:opacity-50"
+                  >
+                    {actioning === selected.id + '_slips' ? 'Preparing…' : 'Salary slips'}
+                  </button>
+                )}
+                <button onClick={() => setSelected(null)} aria-label="Close" className="absolute right-4 top-3 rounded-lg px-2 text-2xl leading-none text-slate-400 hover:text-white">×</button>
+              </div>
             </div>
+
+            <div className="flex-1 min-h-0 grid lg:grid-cols-[minmax(0,1fr)_420px]">
+              {/* Preview: the documents exactly as they print */}
+              <div className="flex min-h-[50vh] flex-col bg-slate-800/40 lg:min-h-0">
+                <div className="flex gap-1 px-4 pt-3">
+                  {(['invoice', 'muster'] as const).filter((t) => t === 'invoice' || proof).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setPreviewTab(t)}
+                      className={`rounded-t-lg px-4 py-1.5 text-sm font-semibold ${previewTab === t ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      {t === 'invoice' ? 'Invoice' : `Muster roll${proof?.muster_roll ? ` · signed v${proof.muster_roll.version}` : ' · not signed'}`}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex-1 min-h-0 px-4 pb-4">
+                  {previewHtml[previewTab] === undefined ? (
+                    <div className="flex h-full items-center justify-center rounded-b-lg rounded-tr-lg bg-white text-sm text-slate-500">Loading preview…</div>
+                  ) : previewHtml[previewTab] === null ? (
+                    <div className="flex h-full items-center justify-center rounded-b-lg rounded-tr-lg bg-white text-sm text-rose-600">Could not load this document</div>
+                  ) : (
+                    <iframe
+                      title={previewTab === 'invoice' ? 'Invoice preview' : 'Muster roll preview'}
+                      srcDoc={previewHtml[previewTab] as string}
+                      sandbox=""
+                      className="h-full w-full rounded-b-lg rounded-tr-lg bg-white"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Side panel: checks and every action */}
+              <div className="min-h-0 overflow-y-auto border-t border-white/10 p-5 space-y-4 lg:border-l lg:border-t-0">
             <div className="space-y-1 text-sm">
               <div className="flex justify-between py-2 border-b border-white/5">
                 <span className="text-slate-400">Client</span>
@@ -465,7 +588,7 @@ export default function InvoicesPage() {
                 <span className="text-slate-400">Period</span>
                 <span className="text-white">
                   {selected.period_from && selected.period_to
-                    ? `${String(selected.period_from).slice(0, 10).split('-').reverse().join('/')} – ${String(selected.period_to).slice(0, 10).split('-').reverse().join('/')}`
+                    ? `${istDay(selected.period_from)} – ${istDay(selected.period_to)}`
                     : `${MONTHS_SHORT[selected.period_month - 1]} ${selected.period_year}`}
                 </span>
               </div>
@@ -481,17 +604,23 @@ export default function InvoicesPage() {
                   </span>
                 </div>
               )}
-              {selected.line_items?.map((li: LineItem) => (
-                <div key={li.description} className="flex justify-between py-2 border-b border-white/5 last:border-0">
-                  <div>
-                    <span className="text-slate-300">{li.description}</span>
-                    {li.gst_applicable && (
-                      <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded">GST</span>
-                    )}
+              <details className="border-b border-white/5 py-2">
+                <summary className="flex cursor-pointer justify-between text-slate-400">
+                  <span>Line items ({selected.line_items?.length ?? 0})</span>
+                  <span className="text-white font-semibold">{fmtRs(selected.total_amount)}</span>
+                </summary>
+                {selected.line_items?.map((li: LineItem) => (
+                  <div key={li.description} className="flex justify-between gap-3 py-1.5 text-xs border-b border-white/5 last:border-0">
+                    <div>
+                      <span className="text-slate-300">{li.description}</span>
+                      {li.gst_applicable && (
+                        <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded">GST</span>
+                      )}
+                    </div>
+                    <span className="text-white font-medium whitespace-nowrap">{fmtRs(li.amount)}</span>
                   </div>
-                  <span className="text-white font-medium">{fmtRs(li.amount)}</span>
-                </div>
-              ))}
+                ))}
+              </details>
               {selected.document_type === 'TAX_INVOICE' && (
                 <div className="pt-2 space-y-1 text-xs">
                   <div className="flex justify-between text-slate-400">
@@ -514,16 +643,6 @@ export default function InvoicesPage() {
                 </div>
               )}
             </div>
-            {selected.is_consolidated && (
-              <button
-                id={`btn-modal-salary-slips-${selected.id}`}
-                onClick={() => handleSalarySlips(selected.id, selected.invoice_number)}
-                disabled={actioning === selected.id + '_slips'}
-                className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm font-semibold transition disabled:opacity-50"
-              >
-                {actioning === selected.id + '_slips' ? 'Preparing…' : 'Download salary slips (one per staff)'}
-              </button>
-            )}
             {selected.is_consolidated && ['DRAFT', 'APPROVED'].includes(selected.status) && (
               <button
                 id={`btn-modal-recalc-${selected.id}`}
@@ -576,8 +695,11 @@ export default function InvoicesPage() {
                   </p>
                   {(ap.warnings ?? []).map((w: string, i: number) => <p key={i} className="text-amber-300">⚠ {w}</p>)}
                   <div className="flex flex-wrap gap-2 pt-1">
+                    <button onClick={() => setPreviewTab('muster')} className="rounded-lg border border-white/15 px-2 py-0.5 font-semibold hover:bg-white/5">
+                      View muster roll
+                    </button>
                     <button onClick={() => openRoll(roll ? { version: roll.version } : {})} className="rounded-lg border border-white/15 px-2 py-0.5 font-semibold hover:bg-white/5">
-                      {roll ? 'Signed muster roll (annexure)' : 'Muster roll (annexure)'}
+                      With proof page
                     </button>
                     {roll?.has_scan && (
                       <button onClick={openScan} className="rounded-lg border border-white/15 px-2 py-0.5 font-semibold hover:bg-white/5">Signed paper copy</button>
@@ -764,12 +886,26 @@ export default function InvoicesPage() {
                 salary slips to the staff app and makes them payable.
               </p>
             )}
-            <div className="flex gap-3 pt-2">
+              </div>
+            </div>
+
+            {/* Footer: the decisions, always in view */}
+            {['PAID', 'APPROVED', 'SENT', 'CREDIT_NOTE'].some((to) => canGo(selected.status, to)) && (
+            <div className="flex flex-wrap gap-2 border-t border-white/10 bg-[#0b1222] px-5 py-3">
+              {canGo(selected.status, 'PAID') && (
+                <button
+                  id={`btn-modal-settle-${selected.id}`}
+                  onClick={() => { setSettleFor(selected); setSelected(null); }}
+                  className="flex-1 min-w-[140px] py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold transition"
+                >
+                  Record payment
+                </button>
+              )}
               {canGo(selected.status, 'APPROVED') && (
                 <button
                   id={`btn-modal-approve-${selected.id}`}
                   onClick={() => { handleApprove(selected.id); setSelected(null); }}
-                  className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition"
+                  className="flex-1 min-w-[140px] py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition"
                 >
                   Approve
                 </button>
@@ -778,7 +914,7 @@ export default function InvoicesPage() {
                 <button
                   id={`btn-modal-send-${selected.id}`}
                   onClick={() => { handleSend(selected.id); setSelected(null); }}
-                  className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition"
+                  className="flex-1 min-w-[140px] py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition"
                 >
                   Send to Client
                 </button>
@@ -805,6 +941,7 @@ export default function InvoicesPage() {
                 </button>
               )}
             </div>
+            )}
           </div>
         </div>
       )}
@@ -1196,8 +1333,8 @@ export default function InvoicesPage() {
                       </td>
                       <td className="px-4 py-3 text-center text-slate-400">
                         {/* An invoice can cover part of a month — show its own dates. */}
-                        {inv.period_from && inv.period_to && !(String(inv.period_from).slice(8, 10) === '01' && new Date(String(inv.period_to).slice(0, 10) + 'T00:00:00Z').getUTCDate() === new Date(Date.UTC(inv.period_year, inv.period_month, 0)).getUTCDate())
-                          ? <span className="text-xs">{String(inv.period_from).slice(8, 10)}–{String(inv.period_to).slice(8, 10)} {MONTHS_SHORT[inv.period_month - 1]} {inv.period_year}</span>
+                        {inv.period_from && inv.period_to && !(istDay(inv.period_from).slice(0, 2) === '01' && Number(istDay(inv.period_to).slice(0, 2)) === new Date(Date.UTC(inv.period_year, inv.period_month, 0)).getUTCDate())
+                          ? <span className="text-xs">{istDay(inv.period_from).slice(0, 2)}–{istDay(inv.period_to).slice(0, 2)} {MONTHS_SHORT[inv.period_month - 1]} {inv.period_year}</span>
                           : <>{MONTHS_SHORT[inv.period_month - 1]} {inv.period_year}</>}
                       </td>
                       <td className="px-4 py-3 text-right text-slate-300">{fmtRs(inv.staff_salary_component)}</td>
