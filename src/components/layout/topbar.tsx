@@ -9,6 +9,7 @@ import { useAuthStore } from '@/lib/store/auth.store';
 import { useShell } from './shell-context';
 import { AttentionBell } from './attention-bell';
 import { ProfileMenu } from './profile-menu';
+import { roleLabel } from './sidebar';
 
 const BM_RM_DASHBOARD = new Set(['/bm/dashboard', '/rm/dashboard']);
 
@@ -21,12 +22,6 @@ export function Topbar() {
 
   const isDashboardHome = pathname != null && BM_RM_DASHBOARD.has(pathname);
   const isBmDashboard = pathname === '/bm/dashboard';
-
-  const displayName = useMemo(() => {
-    const raw = user?.full_name?.trim();
-    if (!raw) return 'there';
-    return raw.split(/\s+/)[0] ?? 'there';
-  }, [user?.full_name]);
 
   const dateLine = useMemo(() => format(new Date(), 'EEEE, d MMMM yyyy'), []);
 
@@ -62,21 +57,18 @@ export function Topbar() {
         </button>
 
         <div className="flex min-w-0 flex-col justify-center">
+          {/* Which portal this is — the role, large. Who is signed in is in the profile menu. */}
           <h2
             className={cn(
-              'truncate font-bold tracking-tight text-white',
-              isDashboardHome ? 'text-lg sm:text-2xl' : 'text-base sm:text-lg'
+              'truncate font-bold uppercase tracking-wide text-white',
+              isDashboardHome ? 'text-xl sm:text-2xl' : 'text-lg sm:text-xl'
             )}
           >
-            Namaskar, {displayName} ji 🙏
+            {roleLabel(user?.role)}
           </h2>
-          {isDashboardHome ? (
+          {isDashboardHome && (
             <p className="mt-0.5 hidden text-[11px] font-medium text-secondary-foreground sm:block">
               {dateLine}
-            </p>
-          ) : (
-            <p className="mt-0.5 truncate text-[10px] font-medium text-secondary-foreground">
-              {user?.role?.replace('_', ' ') ?? 'HomeGenny'}
             </p>
           )}
         </div>

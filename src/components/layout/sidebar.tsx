@@ -19,7 +19,6 @@ import {
   ShieldCheck,
   Users,
   ClipboardCheck,
-  GraduationCap,
   Clock,
   MapPin,
   PauseCircle,
@@ -60,7 +59,7 @@ export function roleLabel(role?: string | null): string {
     SUPPORT: 'Support',
     HR: 'HR Admin',
   };
-  return map[role ?? ''] ?? role ?? 'User';
+  return map[role ?? ''] ?? role?.replace(/_/g, ' ') ?? 'User';
 }
 
 // ─── nav config ─────────────────────────────────────────────────────────────
@@ -483,49 +482,6 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
         {onToggleCollapse && <CollapseButton collapsed={collapsed} onToggle={onToggleCollapse} />}
       </div>
 
-      {/* Role badge */}
-      {isRm && (
-        <div title={collapsed ? 'RM Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-[#FF5A1F]/10 border border-[#FF5A1F]/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
-          <Users className="w-3.5 h-3.5 text-[#FF5A1F] shrink-0" />
-          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-[#FF5A1F] uppercase tracking-wider')}>RM Portal</span>
-        </div>
-      )}
-      {isTrainer && (
-        <div title={collapsed ? 'Trainer Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-blue-500/10 border border-blue-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
-          <GraduationCap className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-blue-500 uppercase tracking-wider')}>Trainer Portal</span>
-        </div>
-      )}
-      {isAssessor && (
-        <div title={collapsed ? 'Assessor Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-violet-500/10 border border-violet-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
-          <ClipboardCheck className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-violet-400 uppercase tracking-wider')}>Assessor Portal</span>
-        </div>
-      )}
-      {isAdmin && (
-        <div title={collapsed ? 'Admin Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-red-500/10 border border-red-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
-          <ShieldCheck className="w-3.5 h-3.5 text-red-400 shrink-0" />
-          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-red-400 uppercase tracking-wider')}>Admin Portal</span>
-        </div>
-      )}
-      {isSupport && (
-        <div title={collapsed ? 'Support Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-sky-500/10 border border-sky-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
-          <Bell className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-sky-400 uppercase tracking-wider')}>Support Portal</span>
-        </div>
-      )}
-      {isHr && (
-        <div title={collapsed ? 'HR Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-pink-500/10 border border-pink-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
-          <Users className="w-3.5 h-3.5 text-pink-400 shrink-0" />
-          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-pink-400 uppercase tracking-wider')}>HR Portal</span>
-        </div>
-      )}
-      {!isRm && !isTrainer && !isAssessor && !isAdmin && !isFinance && !isSupport && !isHr && (
-        <div title={collapsed ? 'BM Portal' : undefined} className={cn('mx-4 mb-4 flex items-center rounded-lg px-3 py-2 bg-amber-500/10 border border-amber-500/20 px-3 py-2', collapsed ? 'gap-2 lg:justify-center lg:gap-0' : 'gap-2')}>
-          <LayoutDashboard className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <span className={foldLabel(collapsed, 'text-[11px] font-semibold text-amber-400 uppercase tracking-wider')}>BM Portal</span>
-        </div>
-      )}
 
       {/* Navigation */}
       <nav className="flex-1 px-4 overflow-y-auto overflow-x-hidden scrollbar-hide space-y-6 pb-6">

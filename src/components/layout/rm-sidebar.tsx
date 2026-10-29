@@ -32,7 +32,6 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
-import { useAuthStore } from '@/lib/store/auth.store';
 import { useSeriesCatalog } from '@/lib/series';
 import { CollapseButton, EASE, SectionHeading, foldGap, foldLabel } from './sidebar-collapse';
 
@@ -100,12 +99,6 @@ const NAV: { section: string; items: NavItem[] }[] = [
   },
 ];
 
-function userInitials(name?: string | null): string {
-  if (!name?.trim()) return 'RM';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase();
-}
 
 interface RmSidebarProps {
   open?: boolean;
@@ -117,7 +110,6 @@ interface RmSidebarProps {
 
 export function RmSidebar({ open = false, onClose, collapsed = false, onToggleCollapse }: RmSidebarProps) {
   const pathname = usePathname();
-  const user = useAuthStore((s) => s.user);
   // The Driver practical test is Stage 2.5, which runs only while the Driver series does.
   const { stage25Enabled } = useSeriesCatalog();
 
@@ -148,25 +140,7 @@ export function RmSidebar({ open = false, onClose, collapsed = false, onToggleCo
           </div>
         ))}
       </nav>
-      <div className="border-t border-white/5 p-3">
-        <div
-          title={collapsed ? `${user?.full_name ?? 'RM User'} · ${user?.role ?? 'RM'}` : undefined}
-          className={cn(
-            'flex items-center rounded-xl border transition-[padding,background-color,border-color] duration-300 motion-reduce:transition-none',
-            EASE,
-            foldGap(collapsed),
-            collapsed ? 'border-white/5 bg-white/5 p-3 lg:justify-center lg:border-transparent lg:bg-transparent lg:p-0' : 'border-white/5 bg-white/5 p-3',
-          )}
-        >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FF5A1F]/20 text-xs font-bold text-[#FF5A1F]">
-            {userInitials(user?.full_name)}
-          </div>
-          <div className={foldLabel(collapsed, 'flex-1')}>
-            <p className="truncate text-sm font-semibold text-white">{user?.full_name ?? 'RM User'}</p>
-            <p className="truncate text-[10px] text-slate-500">{user?.role ?? 'RM'} · Branch scoped</p>
-          </div>
-        </div>
-      </div>
+      {/* Who is signed in, and Logout, live in the top bar's profile menu. */}
     </aside>
   );
 }
@@ -191,9 +165,6 @@ function MotionHeader({
       <Link href="/rm/dashboard" className={foldLabel(collapsed, 'block')} onClick={onClose}>
         <span className="font-syne text-lg font-bold tracking-tight text-white sm:text-xl">
           Home<span className="text-[#FF5A1F]">Genny</span>
-        </span>
-        <span className="mt-1 block text-[9px] font-bold uppercase tracking-widest text-slate-500">
-          RM Operations Portal
         </span>
       </Link>
       <button
