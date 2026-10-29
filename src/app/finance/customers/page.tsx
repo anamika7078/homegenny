@@ -696,14 +696,14 @@ export default function FinanceCustomersPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[960px] text-sm">
               <thead>
                 <tr className="border-b border-white/8">
                   {['Customer Name', 'Unit Code', 'PAN Card', 'Address', 'Primary GSTN', 'Bill Prefix', 'Status', ''].map(
                     (h) => (
                       <th
                         key={h}
-                        className="px-4 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-widest"
+                        className="whitespace-nowrap px-4 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-widest"
                       >
                         {h}
                       </th>
@@ -722,19 +722,19 @@ export default function FinanceCustomersPage() {
                       {c.customer_name}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 rounded-md border border-indigo-500/30 bg-indigo-500/10 text-[11px] font-bold text-indigo-300 font-mono">
+                      <span className="inline-block whitespace-nowrap px-2 py-0.5 rounded-md border border-indigo-500/30 bg-indigo-500/10 text-[11px] font-bold text-indigo-300 font-mono">
                         {c.unit_code}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-mono text-slate-300">{c.pan_card}</td>
+                    <td className="whitespace-nowrap px-4 py-3 font-mono text-slate-300">{c.pan_card}</td>
                     <td className="px-4 py-3 text-slate-300 max-w-[200px] truncate text-xs">
                       {c.address}
                     </td>
-                    <td className="px-4 py-3 font-mono text-slate-400 text-xs">
+                    <td className="whitespace-nowrap px-4 py-3 font-mono text-slate-400 text-xs">
                       {c.gstn || <span className="text-slate-600">—</span>}
                     </td>
-                    <td className="px-4 py-3 font-mono text-emerald-400 text-xs">
-                      {c.bill_no_prefix}/{String(c.bill_seq).padStart(4, '0')}
+                    <td className="whitespace-nowrap px-4 py-3 font-mono text-emerald-400 text-xs">
+                      {String(c.bill_no_prefix ?? '').replace(/\/+$/, '')}/{String(c.bill_seq).padStart(4, '0')}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={c.status} />
