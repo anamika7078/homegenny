@@ -612,6 +612,12 @@ export default function InvoicesPage() {
                   </div>
                 ))}
               </details>
+              {Number(selected.management_fee) > 0 && (
+                <div className="flex justify-between py-2 border-b border-white/5">
+                  <span className="text-slate-400">Total management fee</span>
+                  <span className="text-white font-semibold">{fmtRs(selected.management_fee)}</span>
+                </div>
+              )}
               {selected.document_type === 'TAX_INVOICE' && (
                 <div className="pt-2 space-y-1 text-xs">
                   <div className="flex justify-between text-slate-400">
