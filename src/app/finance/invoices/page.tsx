@@ -538,6 +538,54 @@ export default function InvoicesPage() {
                     : 'Recalculate with current settings'}
               </button>
             )}
+            {/* The proof behind the billed days: client confirmation of the
+                staff-app days and the signed muster roll. Warnings, not a gate. */}
+            {selected.attendance_proof && (() => {
+              const ap = selected.attendance_proof;
+              const days = ap.staff_app_days ?? {};
+              const roll = ap.muster_roll;
+              const openRoll = async (opts: { version?: number } = {}) => {
+                try {
+                  const blob = await api.printMusterRoll(ap.client_id, ap.period_month, ap.period_year, { ...opts, audit: true });
+                  const url = URL.createObjectURL(blob);
+                  window.open(url, '_blank', 'noopener');
+                  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                } catch (e: any) { setToast({ type: 'error', msg: e.message ?? 'Could not open the muster roll' }); }
+              };
+              const openScan = async () => {
+                try {
+                  const url = URL.createObjectURL(await api.downloadMusterRollScan(roll.scan_id));
+                  window.open(url, '_blank', 'noopener');
+                  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                } catch (e: any) { setToast({ type: 'error', msg: e.message ?? 'Could not open the signed copy' }); }
+              };
+              return (
+                <div className={`space-y-1.5 rounded-xl border px-3 py-2 text-xs ${ap.warnings?.length ? 'border-amber-500/30 bg-amber-500/10 text-amber-100' : 'border-emerald-500/30 bg-emerald-500/5 text-emerald-100'}`}>
+                  <p className="font-semibold">Attendance proof · {ap.period_from} to {ap.period_to}</p>
+                  <p className="text-slate-300">
+                    Staff app: {days.APPROVED ?? 0} confirmed by client · {days.DEEMED ?? 0} deemed (no reply in 48 h) ·{' '}
+                    {days.APPROVED_PAPER ?? 0} on signed paper · {days.PENDING ?? 0} waiting · {days.DISPUTED ?? 0} disputed
+                    {ap.days_by_source?.RM ? ` · ${ap.days_by_source.RM} marked by RM` : ''}
+                    {ap.days_by_source?.HR ? ` · ${ap.days_by_source.HR} by HR` : ''}
+                  </p>
+                  <p className="text-slate-300">
+                    Muster roll:{' '}
+                    {roll
+                      ? `v${roll.version}, ${roll.sign_method === 'CLIENT_APP' ? `signed in the app by ${roll.signed_name}` : 'signed on paper'} on ${new Date(roll.signed_at).toLocaleDateString('en-IN')}${roll.locked ? ' · locked with an approved invoice' : ''}`
+                      : 'not signed'}
+                  </p>
+                  {(ap.warnings ?? []).map((w: string, i: number) => <p key={i} className="text-amber-300">⚠ {w}</p>)}
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button onClick={() => openRoll(roll ? { version: roll.version } : {})} className="rounded-lg border border-white/15 px-2 py-0.5 font-semibold hover:bg-white/5">
+                      {roll ? 'Signed muster roll (annexure)' : 'Muster roll (annexure)'}
+                    </button>
+                    {roll?.has_scan && (
+                      <button onClick={openScan} className="rounded-lg border border-white/15 px-2 py-0.5 font-semibold hover:bg-white/5">Signed paper copy</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
             {/* What is new since Finance last approved: a first invoice for a
                 placement, or a rate changed after the last approval. Approving
                 is the rate check, so this is what to look at. */}
@@ -899,9 +947,32 @@ export default function InvoicesPage() {
               attention.counts.sent_invoices_needing_correction && `${attention.counts.sent_invoices_needing_correction} sent invoice(s) to correct`,
               attention.counts.arrears_pending && `${attention.counts.arrears_pending} arrears pending`,
               attention.counts.ready_to_reinvoice && `${attention.counts.ready_to_reinvoice} ready to re-invoice`,
+              attention.counts.disputes_unresolved && `${attention.counts.disputes_unresolved} disputed day(s) over 48 h`,
+              attention.counts.muster_rolls_unsigned && `${attention.counts.muster_rolls_unsigned} muster roll(s) unsigned`,
             ].filter(Boolean).join(' · ')}
           </summary>
           <div className="mt-3 grid gap-3 text-xs md:grid-cols-2">
+            {(attention.disputes_unresolved ?? []).length > 0 && (
+              <div>
+                <p className="font-semibold text-rose-300">Disputed days the RM has not resolved (48 h+) — not billed or paid</p>
+                {attention.disputes_unresolved.map((x: any) => (
+                  <p key={x.id} className="py-0.5">
+                    {x.date} · {x.staff_name} at {x.customer_name}{x.rm_name ? ` · RM ${x.rm_name}` : ''} · {x.days_waiting} day(s)
+                  </p>
+                ))}
+              </div>
+            )}
+            {(attention.muster_rolls_unsigned ?? []).length > 0 && (
+              <div>
+                <p className="font-semibold text-amber-200">Last month&apos;s muster roll not signed</p>
+                {attention.muster_rolls_unsigned.map((x: any) => (
+                  <p key={x.client_id} className="py-0.5">
+                    {x.customer_name} · {x.period_month}/{x.period_year} · {x.days} day(s){x.rm_days ? `, ${x.rm_days} marked by RM` : ''}
+                  </p>
+                ))}
+                <a href="/finance/muster-rolls" className="underline">Open muster rolls</a>
+              </div>
+            )}
             {(attention.ready_to_reinvoice ?? []).length > 0 && (
               <div className="md:col-span-2">
                 <p className="font-semibold text-emerald-300">Ready to re-invoice — the RM has corrected or confirmed the rate</p>
