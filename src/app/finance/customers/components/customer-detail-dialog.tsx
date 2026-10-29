@@ -74,14 +74,18 @@ const CYCLES: { id: string; label: string; hint: string }[] = [
 function BillingSettings({ customer, onSaved }: { customer: any; onSaved: () => void }) {
   const [cycle, setCycle] = useState<string>(customer?.billing_cycle ?? 'MONTHLY');
   const [state, setState] = useState<string>(customer?.state ?? '');
+  // How this client confirms attendance: in the app, on the signed paper
+  // muster roll, or both.
+  const [proof, setProof] = useState<string>(customer?.attendance_proof_mode ?? 'APP');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const changed = cycle !== (customer?.billing_cycle ?? 'MONTHLY') || state !== (customer?.state ?? '');
+  const changed = cycle !== (customer?.billing_cycle ?? 'MONTHLY') || state !== (customer?.state ?? '')
+    || proof !== (customer?.attendance_proof_mode ?? 'APP');
 
   const save = async () => {
     setSaving(true); setMsg(null);
     try {
-      await api.updateFinanceCustomer(customer.id, { billing_cycle: cycle, state });
+      await api.updateFinanceCustomer(customer.id, { billing_cycle: cycle, state, attendance_proof_mode: proof });
       setMsg({ ok: true, text: 'Saved' });
       onSaved();
     } catch (e: any) {
@@ -103,6 +107,14 @@ function BillingSettings({ customer, onSaved }: { customer: any; onSaved: () => 
       <div>
         <label htmlFor="input-customer-state" className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">State</label>
         <input id="input-customer-state" value={state} onChange={(e) => setState(e.target.value)} placeholder="e.g. Uttarakhand" className={`${field} w-40`} />
+      </div>
+      <div>
+        <label htmlFor="select-attendance-proof" className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Attendance proof</label>
+        <select id="select-attendance-proof" value={proof} onChange={(e) => setProof(e.target.value)} className={field}>
+          <option value="APP">Client app</option>
+          <option value="PAPER">Signed paper muster roll</option>
+          <option value="BOTH">Both</option>
+        </select>
       </div>
       <button
         type="button"
@@ -293,7 +305,7 @@ export function CustomerDetailDialog({
                     <span className="font-mono text-[11px] text-emerald-400">{lastBill}</span>
                   )}
                 </div>
-                {c?.id && <BillingSettings key={`${c.id}-${c.billing_cycle}-${c.state}`} customer={c} onSaved={() => load(month, year)} />}
+                {c?.id && <BillingSettings key={`${c.id}-${c.billing_cycle}-${c.state}-${c.attendance_proof_mode}`} customer={c} onSaved={() => load(month, year)} />}
               </>
             )}
           </div>

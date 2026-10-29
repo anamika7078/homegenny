@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { ShieldCheck, ClipboardCheck, GraduationCap, FileText, MapPin, Lock, CheckCircle2, ArrowRight } from 'lucide-react';
 import { api } from '@/lib/api/client';
@@ -110,6 +112,11 @@ export function CandidateDetail({ backHref, backLabel }: CandidateDetailProps) {
         <InfoCard label="Scenario" value={s?.current_scenario_code ?? '—'} />
         <InfoCard label="RM" value={s?.assigned_rm_id ?? 'Unassigned'} />
       </div>
+
+      <MusterDetails
+        staffId={id}
+        metadata={(s as unknown as { metadata?: Record<string, unknown> })?.metadata ?? {}}
+      />
 
       <div>
         <h3 className="mb-3 font-semibold">Onboarding Progress</h3>
@@ -232,6 +239,53 @@ function TrainingQuizSummary({ staffId }: { staffId: string }) {
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * The two columns of the Form XVI muster roll that nothing else asks for:
+ * father's/husband's name and sex. Staff who registered on the app may not
+ * have filled them, so the RM can.
+ */
+function MusterDetails({ staffId, metadata }: { staffId: string; metadata: Record<string, unknown> }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState(String(metadata.father_or_husband_name ?? ''));
+  const [gender, setGender] = useState(String(metadata.gender ?? ''));
+  const save = useMutation({
+    mutationFn: () => api.updateStaff(staffId, { father_or_husband_name: name.trim(), gender }),
+    onSuccess: () => {
+      toast.success('Saved — it will print on the muster roll.');
+      qc.invalidateQueries({ queryKey: ['staff', staffId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const changed = name.trim() !== String(metadata.father_or_husband_name ?? '') || gender !== String(metadata.gender ?? '');
+  const field = 'rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground';
+  return (
+    <div className="rounded-xl border border-white/10 p-4 space-y-3">
+      <div>
+        <h3 className="font-semibold">Muster roll details</h3>
+        <p className="text-xs text-muted-foreground">Printed on the client&apos;s Form XVI muster roll.</p>
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-[220px]">
+          <label htmlFor="muster-guardian" className="mb-1 block text-xs text-muted-foreground">Father&apos;s / Husband&apos;s name</label>
+          <input id="muster-guardian" value={name} onChange={(e) => setName(e.target.value)} className={`${field} w-full`} placeholder="e.g. Ramesh Kumar" />
+        </div>
+        <div>
+          <label htmlFor="muster-sex" className="mb-1 block text-xs text-muted-foreground">Sex</label>
+          <select id="muster-sex" value={gender} onChange={(e) => setGender(e.target.value)} className={field}>
+            <option value="">—</option>
+            <option value="FEMALE">Female</option>
+            <option value="MALE">Male</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+        <Button disabled={!changed || save.isPending} onClick={() => save.mutate()}>
+          {save.isPending ? 'Saving…' : 'Save'}
+        </Button>
+      </div>
     </div>
   );
 }

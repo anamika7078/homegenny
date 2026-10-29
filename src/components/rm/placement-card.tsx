@@ -47,6 +47,8 @@ export interface Placement {
   shift_hours?: number | null;
   /** HH:MM (IST) the shift starts — what "late" on the Staff Snapshot is measured from. */
   shift_start?: string | null;
+  /** 0 = Sunday … 6 = Saturday; the muster roll marks it WO. */
+  weekly_off_day?: number | null;
   wage_breakup?: Partial<WageBreakup> | null;
   trial_start_date: string | null;
   trial_end_date: string | null;
@@ -287,6 +289,47 @@ function PayFigures({ p }: { p: Placement }) {
  * placement without one is never marked late. Filled from the booking when
  * the placement came from a staff request.
  */
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** The weekly off, so the muster roll shows WO on that day instead of absent. */
+function WeeklyOffEditor({ p }: { p: Placement }) {
+  const qc = useQueryClient();
+  const current = p.weekly_off_day == null ? '' : String(p.weekly_off_day);
+  const [value, setValue] = useState(current);
+  const save = useMutation({
+    mutationFn: (v: string) => api.updatePlacementTerms(p.id, { weekly_off_day: v }),
+    onSuccess: (_r, v) => {
+      toast.success(v === '' ? 'Weekly off cleared' : `Weekly off: ${WEEKDAY_NAMES[Number(v)]}`);
+      qc.invalidateQueries({ queryKey: ['placements'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <div className="flex flex-wrap items-end gap-2 text-xs">
+      <div>
+        <label htmlFor={`weekly-off-${p.id}`} className="mb-1 block text-muted-foreground">Weekly off</label>
+        <select
+          id={`weekly-off-${p.id}`}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-foreground focus:border-[#FF5A1F]/50 focus:outline-none"
+        >
+          <option value="">None fixed</option>
+          {WEEKDAY_NAMES.map((d, i) => <option key={d} value={String(i)}>{d}</option>)}
+        </select>
+      </div>
+      <button
+        type="button"
+        disabled={value === current || save.isPending}
+        onClick={() => save.mutate(value)}
+        className="rounded-lg border border-white/15 px-3 py-1.5 font-semibold text-foreground hover:bg-white/5 disabled:opacity-40"
+      >
+        {save.isPending ? 'Saving…' : 'Save'}
+      </button>
+    </div>
+  );
+}
+
 function ShiftStartEditor({ p }: { p: Placement }) {
   const qc = useQueryClient();
   const [value, setValue] = useState(p.shift_start ?? '');
@@ -694,6 +737,7 @@ export function PlacementCard({
 
               <RateReviewBanner p={p} />
               {(p.status === 'TRIAL' || p.status === 'CONFIRMED') && <ShiftStartEditor p={p} />}
+              {(p.status === 'TRIAL' || p.status === 'CONFIRMED') && <WeeklyOffEditor p={p} />}
               {(p.status === 'TRIAL' || p.status === 'CONFIRMED') && <RatesEditor p={p} />}
 
               {p.status === 'TRIAL' && (
