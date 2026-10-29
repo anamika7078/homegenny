@@ -492,6 +492,11 @@ export interface ApiClient {
   generateConsolidatedInvoice(customerId: string, month: number, year: number, toDate?: string): Promise<any>;
   /** Salary slip per staff member on an invoice, as printable HTML. */
   downloadInvoiceSalarySlips(id: string): Promise<Blob>;
+  getMusterRollClients(search?: string): Promise<any>;
+  getMusterRoll(clientId: string, month: number, year: number): Promise<any>;
+  printMusterRoll(clientId: string, month: number, year: number, opts?: { version?: number; audit?: boolean }): Promise<Blob>;
+  uploadSignedMusterRoll(formData: FormData): Promise<any>;
+  downloadMusterRollScan(rollId: string): Promise<Blob>;
   saveStaffBankAccount(staffId: string, body: {
     account_holder_name: string; account_number: string; ifsc: string; bank_name?: string;
   }): Promise<any>;
@@ -1128,6 +1133,29 @@ export const api: ApiClient = {
     apiClient.post('/finance/invoices/consolidated/generate', {
       customer_id: customerId, month, year, ...(toDate ? { to_date: toDate } : {}),
     }),
+  getMusterRollClients: (search?: string) =>
+    apiClient.get('/muster-rolls/clients', { params: search ? { search } : {} }),
+  getMusterRoll: (clientId: string, month: number, year: number) =>
+    apiClient.get('/muster-rolls', { params: { client_id: clientId, month, year } }),
+  printMusterRoll: async (clientId: string, month: number, year: number, opts: { version?: number; audit?: boolean } = {}): Promise<Blob> => {
+    const token = tokenStore.getAccess();
+    const res = await axios.get(`${BASE_URL}/muster-rolls/print`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      params: { client_id: clientId, month, year, ...(opts.version ? { version: opts.version } : {}), ...(opts.audit ? { audit: 1 } : {}) },
+      responseType: 'blob',
+    });
+    return res.data as Blob;
+  },
+  uploadSignedMusterRoll: (formData: FormData) =>
+    apiClient.post('/muster-rolls/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  downloadMusterRollScan: async (rollId: string): Promise<Blob> => {
+    const token = tokenStore.getAccess();
+    const res = await axios.get(`${BASE_URL}/muster-rolls/${rollId}/scan`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      responseType: 'blob',
+    });
+    return res.data as Blob;
+  },
   downloadInvoiceSalarySlips: async (id: string): Promise<Blob> => {
     const token = tokenStore.getAccess();
     const res = await axios.get(`${BASE_URL}/finance/invoices/${id}/salary-slips`, {

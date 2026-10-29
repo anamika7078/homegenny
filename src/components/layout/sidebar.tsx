@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   Calendar,
   CheckCircle2,
+  ClipboardList,
   BarChart2,
   TrendingUp,
   Layers,
@@ -111,6 +112,7 @@ const RM_NAV: NavSection[] = [
       { href: '/rm/incidents', label: 'Incidents', icon: AlertTriangle },
       { href: '/rm/shifts', label: 'Shift Logs', icon: Calendar },
       { href: '/rm/attendance-approvals', label: 'Attendance approvals', icon: CheckCircle2 },
+      { href: '/rm/muster-rolls', label: 'Muster roll', icon: ClipboardList },
     ],
   },
   {
@@ -225,6 +227,7 @@ const HR_NAV: NavSection[] = [
     section: 'Attendance',
     items: [
       { href: '/hr/attendance', label: 'Attendance', icon: Calendar },
+      { href: '/hr/muster-rolls', label: 'Muster roll', icon: ClipboardList },
     ],
   },
   {
@@ -330,6 +333,7 @@ const FINANCE_NAV: NavSection[] = [
       */
       { href: '/finance/payroll', label: 'Payroll', icon: DollarSign },
       { href: '/finance/invoices', label: 'Invoices', icon: FileText },
+      { href: '/finance/muster-rolls', label: 'Muster roll', icon: ClipboardList },
       { href: '/finance/deposits', label: 'Deposits', icon: TrendingUp },
       { href: '/finance/settlements', label: 'Settlements', icon: DollarSign },
       { href: '/finance/exit-settlements', label: 'Exit Settlements', icon: LogOut },
