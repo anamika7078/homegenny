@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils/cn';
-import { LogOut, Plus, Menu } from 'lucide-react';
+import { Plus, Menu } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth.store';
-import { api } from '@/lib/api/client';
-import { disconnectSocket } from '@/lib/api/socket';
 import { useShell } from './shell-context';
+import { AttentionBell } from './attention-bell';
+import { ProfileMenu } from './profile-menu';
 
 const BM_RM_DASHBOARD = new Set(['/bm/dashboard', '/rm/dashboard']);
 
@@ -16,10 +16,8 @@ export function Topbar() {
   const router = useRouter();
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
   const { toggleSidebar } = useShell();
   const [isScrolled, setIsScrolled] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
 
   const isDashboardHome = pathname != null && BM_RM_DASHBOARD.has(pathname);
   const isBmDashboard = pathname === '/bm/dashboard';
@@ -31,21 +29,6 @@ export function Topbar() {
   }, [user?.full_name]);
 
   const dateLine = useMemo(() => format(new Date(), 'EEEE, d MMMM yyyy'), []);
-
-  const handleLogout = useCallback(() => {
-    if (loggingOut) return;
-    setLoggingOut(true);
-    // The server call goes out in the background and the UI does not wait for
-    // it. Signing out used to sit on this request for seconds: an expired
-    // access token made it 401, which triggered a token refresh, which the
-    // server answered with a bcrypt comparison, and only then did the logout
-    // run. api.logout() already carries the token it needs, and this is a
-    // client-side navigation, so the request survives the redirect.
-    void api.logout();
-    disconnectSocket();
-    logout();
-    router.replace('/auth/login');
-  }, [loggingOut, logout, router]);
 
   useEffect(() => {
     const main = document.querySelector('[data-app-main-scroll]');
@@ -113,20 +96,8 @@ export function Topbar() {
           </>
         )}
 
-        <button
-          type="button"
-          onClick={handleLogout}
-          disabled={loggingOut}
-          title="Sign out"
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-[#151c2c] px-3 py-1.5 text-xs font-semibold text-secondary-foreground transition-colors',
-            'hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-300',
-            'disabled:pointer-events-none disabled:opacity-50'
-          )}
-        >
-          <LogOut className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{loggingOut ? 'Signing out…' : 'Logout'}</span>
-        </button>
+        {(user?.role === 'FINANCE' || user?.role === 'ADMIN') && <AttentionBell />}
+        <ProfileMenu />
       </div>
     </header>
   );

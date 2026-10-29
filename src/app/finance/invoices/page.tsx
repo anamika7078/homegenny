@@ -11,6 +11,7 @@ import axios from 'axios';
 import { BASE_URL, tokenStore } from '@/lib/api/client';
 import { SelectMenu, SelectMenuItem } from '@/components/ui/select-menu';
 import ClientLookup from './components/client-lookup';
+import { ATTENTION_REFRESH_EVENT } from '@/components/layout/attention-bell';
 
 function fmt(n: number | string) {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(Number(n));
@@ -199,30 +200,16 @@ export default function InvoicesPage() {
 
   useEffect(() => { load(); }, [status]);
 
-  // What is stuck — drafts holding salary, held slips, rate reviews, sent
-  // invoices to correct, arrears. Refreshed with the list.
-  const [attention, setAttention] = useState<any | null>(null);
+  // What is stuck lives behind the bell in the top bar. It is told when this
+  // list changes, and tells the list when it raises an invoice itself.
   useEffect(() => {
-    api.getFinanceAttention()
-      .then((res: any) => setAttention(res?.data ?? res))
-      .catch(() => setAttention(null));
+    window.dispatchEvent(new Event(ATTENTION_REFRESH_EVENT));
   }, [invoices]);
-
-  // Raises a rejected invoice again — same client, same days, at the rate the
-  // RM has now corrected or confirmed. Lands as a DRAFT like any other.
-  const handleReinvoice = async (x: any) => {
-    setActioning(x.id + '_reinvoice');
-    try {
-      const res: any = await api.generateConsolidatedInvoice(x.client_id, x.period_month, x.period_year, x.period_to);
-      const inv = res?.invoice ?? res?.data?.invoice;
-      showToast('success', `${inv?.invoice_number ?? 'Invoice'} raised as a draft — check it and approve`);
-      load();
-    } catch (e: any) {
-      showToast('error', e.message ?? 'Could not raise the invoice');
-    } finally {
-      setActioning(null);
-    }
-  };
+  useEffect(() => {
+    const reload = () => load();
+    window.addEventListener('finance-invoices:refresh', reload);
+    return () => window.removeEventListener('finance-invoices:refresh', reload);
+  }, [status]);
 
   // An invoice's story, loaded when the detail opens.
   const [history, setHistory] = useState<any[]>([]);
@@ -1093,109 +1080,6 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      {/* What needs Finance today. Salary waits on a draft invoice, a client
-          waits on an RM's rate check — this is where either gets noticed. */}
-      {attention && Object.values(attention.counts ?? {}).some((n: any) => n > 0) && (
-        <details className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-100">
-          <summary className="cursor-pointer font-semibold">
-            Needs attention —{' '}
-            {[
-              attention.counts.draft_invoices_waiting && `${attention.counts.draft_invoices_waiting} draft invoice(s) holding salary`,
-              attention.counts.slips_held && `${attention.counts.slips_held} slip(s) held`,
-              attention.counts.rate_reviews_open && `${attention.counts.rate_reviews_open} rate review(s) with RMs`,
-              attention.counts.sent_invoices_needing_correction && `${attention.counts.sent_invoices_needing_correction} sent invoice(s) to correct`,
-              attention.counts.arrears_pending && `${attention.counts.arrears_pending} arrears pending`,
-              attention.counts.ready_to_reinvoice && `${attention.counts.ready_to_reinvoice} ready to re-invoice`,
-              attention.counts.disputes_unresolved && `${attention.counts.disputes_unresolved} disputed day(s) over 48 h`,
-              attention.counts.muster_rolls_unsigned && `${attention.counts.muster_rolls_unsigned} muster roll(s) unsigned`,
-            ].filter(Boolean).join(' · ')}
-          </summary>
-          <div className="mt-3 grid gap-3 text-xs md:grid-cols-2">
-            {(attention.disputes_unresolved ?? []).length > 0 && (
-              <div>
-                <p className="font-semibold text-rose-300">Disputed days the RM has not resolved (48 h+) — not billed or paid</p>
-                {attention.disputes_unresolved.map((x: any) => (
-                  <p key={x.id} className="py-0.5">
-                    {x.date} · {x.staff_name} at {x.customer_name}{x.rm_name ? ` · RM ${x.rm_name}` : ''} · {x.days_waiting} day(s)
-                  </p>
-                ))}
-              </div>
-            )}
-            {(attention.muster_rolls_unsigned ?? []).length > 0 && (
-              <div>
-                <p className="font-semibold text-amber-200">Last month&apos;s muster roll not signed</p>
-                {attention.muster_rolls_unsigned.map((x: any) => (
-                  <p key={x.client_id} className="py-0.5">
-                    {x.customer_name} · {x.period_month}/{x.period_year} · {x.days} day(s){x.rm_days ? `, ${x.rm_days} marked by RM` : ''}
-                  </p>
-                ))}
-                <a href="/finance/muster-rolls" className="underline">Open muster rolls</a>
-              </div>
-            )}
-            {(attention.ready_to_reinvoice ?? []).length > 0 && (
-              <div className="md:col-span-2">
-                <p className="font-semibold text-emerald-300">Ready to re-invoice — the RM has corrected or confirmed the rate</p>
-                {attention.ready_to_reinvoice.map((x: any) => (
-                  <div key={x.id} className="flex flex-wrap items-center gap-2 py-0.5">
-                    <span>
-                      {x.invoice_number} · {x.customer_name} · {x.period_from} to {x.period_to}
-                      <span className="text-amber-200/70"> — rejected: “{x.reject_reason}”</span>
-                    </span>
-                    <button
-                      id={`btn-reinvoice-${x.id}`}
-                      onClick={() => handleReinvoice(x)}
-                      disabled={actioning === x.id + '_reinvoice'}
-                      className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
-                    >
-                      {actioning === x.id + '_reinvoice' ? 'Raising…' : 'Re-invoice'}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {(attention.draft_invoices_waiting ?? []).length > 0 && (
-              <div>
-                <p className="font-semibold text-amber-200">Drafts waiting for approval</p>
-                {attention.draft_invoices_waiting.map((x: any) => (
-                  <p key={x.id}>{x.invoice_number} · {x.customer_name} · {x.days_waiting} days</p>
-                ))}
-              </div>
-            )}
-            {(attention.rate_reviews_open ?? []).length > 0 && (
-              <div>
-                <p className="font-semibold text-amber-200">Waiting for the RM to check the rate</p>
-                {attention.rate_reviews_open.map((x: any) => (
-                  <p key={x.placement_id}>{x.staff_name} · {x.customer_name} · {x.rm_name ?? 'RM'} · {x.days_waiting} days</p>
-                ))}
-              </div>
-            )}
-            {(attention.sent_invoices_needing_correction ?? []).length > 0 && (
-              <div>
-                <p className="font-semibold text-amber-200">Sent, then the rate changed — open and correct</p>
-                {attention.sent_invoices_needing_correction.map((x: any) => (
-                  <p key={x.id}>{x.invoice_number} · {x.staff_name} · from {x.effective_from}</p>
-                ))}
-              </div>
-            )}
-            {(attention.arrears_pending ?? []).length > 0 && (
-              <div>
-                <p className="font-semibold text-amber-200">Arrears waiting for the next payroll</p>
-                {attention.arrears_pending.map((x: any) => (
-                  <p key={x.id}>{x.staff_name} · {fmtRs(x.amount)} · {x.days_waiting} days</p>
-                ))}
-              </div>
-            )}
-            {(attention.slips_held ?? []).length > 0 && (
-              <div>
-                <p className="font-semibold text-amber-200">Salary slips held (Admin can release with a reason)</p>
-                {attention.slips_held.map((x: any) => (
-                  <p key={x.payroll_id}>{x.staff_name} · {x.invoice_number ?? 'no invoice'} · {x.days_waiting} days</p>
-                ))}
-              </div>
-            )}
-          </div>
-        </details>
-      )}
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">

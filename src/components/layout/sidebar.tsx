@@ -42,14 +42,14 @@ import {
 } from 'lucide-react';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
-function initials(name?: string | null): string {
+export function initials(name?: string | null): string {
   if (!name?.trim()) return 'HG';
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase();
 }
 
-function roleLabel(role?: string | null): string {
+export function roleLabel(role?: string | null): string {
   const map: Record<string, string> = {
     BM: 'Branch Manager',
     RM: 'Relationship Manager',
@@ -597,30 +597,7 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggleColl
         ))}
       </nav>
 
-      {/* User block */}
-      <div className={cn('mt-auto p-4 transition-[padding] duration-300 motion-reduce:transition-none', EASE, collapsed && 'lg:px-3')}>
-        <div
-          title={collapsed ? `${user?.full_name ?? 'HomeGenny User'} · ${roleLabel(user?.role)}` : undefined}
-          className={cn(
-            'flex items-center rounded-2xl border transition-[padding,background-color,border-color] duration-300 motion-reduce:transition-none',
-            EASE,
-            foldGap(collapsed),
-            collapsed
-              ? 'bg-[#151c2c] border-border/50 p-3 lg:justify-center lg:border-transparent lg:bg-transparent lg:p-0'
-              : 'bg-[#151c2c] border-border/50 p-3',
-          )}
-        >
-          <div className="w-10 h-10 shrink-0 rounded-full bg-[#FF5A1F]/20 flex items-center justify-center text-sm font-bold text-[#FF5A1F]">
-            {initials(user?.full_name)}
-          </div>
-          <div className={foldLabel(collapsed, 'flex-1')}>
-            <p className="text-sm font-bold text-white truncate">{user?.full_name ?? 'HomeGenny User'}</p>
-            <p className="text-[10px] text-secondary-foreground truncate">
-              {roleLabel(user?.role)} · Delhi NCR
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Who is signed in, and Logout, live in the top bar's profile menu. */}
     </aside>
   );
 }
