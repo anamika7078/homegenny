@@ -278,6 +278,10 @@ export default function InvoicesPage() {
     frame.srcdoc = html;
   };
   const safeName = (s: string) => String(s ?? '').replace(/[\\/:*?"<>|]+/g, '-');
+  // The reject reason and the correction open in the side panel; bring them into view.
+  const revealInSide = (id: string) =>
+    setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+  const btnGhost = 'px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm font-semibold transition disabled:opacity-50';
 
   const handleApprove = async (id: string) => {
     setActioning(id + '_approve');
@@ -643,19 +647,10 @@ export default function InvoicesPage() {
                 </div>
               )}
             </div>
-            {selected.is_consolidated && ['DRAFT', 'APPROVED'].includes(selected.status) && (
-              <button
-                id={`btn-modal-recalc-${selected.id}`}
-                onClick={() => handleRecalculate(selected.id)}
-                disabled={actioning === selected.id + '_recalc'}
-                className="w-full py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm font-semibold transition disabled:opacity-50"
-              >
-                {actioning === selected.id + '_recalc'
-                  ? 'Recalculating…'
-                  : selected.document_type === 'BILL_OF_SUPPLY'
-                    ? 'Recalculate with GST (current Company & GST settings)'
-                    : 'Recalculate with current settings'}
-              </button>
+            {selected.is_consolidated && ['DRAFT', 'APPROVED'].includes(selected.status) && selected.document_type === 'BILL_OF_SUPPLY' && (
+              <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                Raised without GST. Use <b>Recalculate with GST</b> below to make it a Tax Invoice with the current Company &amp; GST settings.
+              </p>
             )}
             {/* The proof behind the billed days: client confirmation of the
                 staff-app days and the signed muster roll. Warnings, not a gate. */}
@@ -730,18 +725,9 @@ export default function InvoicesPage() {
                 ))}
               </div>
             )}
-            {selected.is_consolidated && ['SENT', 'PARTIALLY_PAID', 'OVERDUE', 'PAID'].includes(selected.status) && (
-              <div className="space-y-2 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3 text-xs">
-                {!correction ? (
-                  <button
-                    id={`btn-modal-correct-${selected.id}`}
-                    onClick={() => loadCorrection(selected.id)}
-                    disabled={actioning === selected.id + '_corr'}
-                    className="w-full py-2 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 text-sm font-semibold transition disabled:opacity-50"
-                  >
-                    {actioning === selected.id + '_corr' ? 'Working it out…' : 'Correct this invoice (rate changed after it was sent)'}
-                  </button>
-                ) : correction.nothing_to_correct ? (
+            {selected.is_consolidated && ['SENT', 'PARTIALLY_PAID', 'OVERDUE', 'PAID'].includes(selected.status) && correction && (
+              <div id="invoice-correction-box" className="space-y-2 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3 text-xs">
+                {correction.nothing_to_correct ? (
                   <p className="text-slate-300">
                     This invoice already matches the rates and attendance on record. Change the rate on the placement
                     first (back-dated to these days), then correct it here.
@@ -840,7 +826,7 @@ export default function InvoicesPage() {
             )}
             {selected.is_consolidated && ['DRAFT', 'APPROVED'].includes(selected.status) && (
               rejecting ? (
-                <div className="space-y-2 rounded-xl border border-rose-500/30 bg-rose-500/5 p-3">
+                <div id="invoice-reject-box" className="space-y-2 rounded-xl border border-rose-500/30 bg-rose-500/5 p-3">
                   <p className="text-xs text-slate-300">
                     Why is this invoice wrong? The RM is told, its payroll is voided, and this client cannot be
                     invoiced again until the RM corrects or confirms the rate.
@@ -870,15 +856,7 @@ export default function InvoicesPage() {
                     </button>
                   </div>
                 </div>
-              ) : (
-                <button
-                  id={`btn-modal-reject-${selected.id}`}
-                  onClick={() => setRejecting(true)}
-                  className="w-full py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-sm font-semibold transition"
-                >
-                  Reject — wrong rate, days or anything else
-                </button>
-              )
+              ) : null
             )}
             {canGo(selected.status, 'APPROVED') && (
               <p className="text-xs text-slate-400">
@@ -889,14 +867,54 @@ export default function InvoicesPage() {
               </div>
             </div>
 
-            {/* Footer: the decisions, always in view */}
-            {['PAID', 'APPROVED', 'SENT', 'CREDIT_NOTE'].some((to) => canGo(selected.status, to)) && (
-            <div className="flex flex-wrap gap-2 border-t border-white/10 bg-[#0b1222] px-5 py-3">
+            {/* Footer: every action on the invoice, always in view. Secondary
+                ones on the left, the next step in its life on the right. */}
+            <div className="flex flex-wrap items-center gap-2 border-t border-white/10 bg-[#0b1222] px-5 py-3">
+              <button
+                id={`btn-modal-download-${selected.id}`}
+                onClick={() => handleDownload(selected.id, selected.invoice_number)}
+                disabled={downloading === selected.id}
+                className={btnGhost}
+              >
+                {downloading === selected.id ? 'Downloading…' : 'Download (HTML)'}
+              </button>
+              {selected.is_consolidated && ['DRAFT', 'APPROVED'].includes(selected.status) && (
+                <button
+                  id={`btn-modal-recalc-${selected.id}`}
+                  onClick={() => handleRecalculate(selected.id)}
+                  disabled={actioning === selected.id + '_recalc'}
+                  className={`${btnGhost} border-amber-500/30 text-amber-300 hover:bg-amber-500/10`}
+                >
+                  {actioning === selected.id + '_recalc'
+                    ? 'Recalculating…'
+                    : selected.document_type === 'BILL_OF_SUPPLY' ? 'Recalculate with GST' : 'Recalculate'}
+                </button>
+              )}
+              {selected.is_consolidated && ['DRAFT', 'APPROVED'].includes(selected.status) && !rejecting && (
+                <button
+                  id={`btn-modal-reject-${selected.id}`}
+                  onClick={() => { setRejecting(true); revealInSide('invoice-reject-box'); }}
+                  className={`${btnGhost} border-rose-500/30 text-rose-300 hover:bg-rose-500/10`}
+                >
+                  Reject
+                </button>
+              )}
+              {selected.is_consolidated && ['SENT', 'PARTIALLY_PAID', 'OVERDUE', 'PAID'].includes(selected.status) && !correction && (
+                <button
+                  id={`btn-modal-correct-${selected.id}`}
+                  onClick={async () => { await loadCorrection(selected.id); revealInSide('invoice-correction-box'); }}
+                  disabled={actioning === selected.id + '_corr'}
+                  className={`${btnGhost} border-sky-500/30 text-sky-300 hover:bg-sky-500/10`}
+                >
+                  {actioning === selected.id + '_corr' ? 'Working it out…' : 'Correct invoice'}
+                </button>
+              )}
+              <div className="hidden flex-1 sm:block" />
               {canGo(selected.status, 'PAID') && (
                 <button
                   id={`btn-modal-settle-${selected.id}`}
                   onClick={() => { setSettleFor(selected); setSelected(null); }}
-                  className="flex-1 min-w-[140px] py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold transition"
+                  className="min-w-[140px] px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold transition"
                 >
                   Record payment
                 </button>
@@ -905,7 +923,7 @@ export default function InvoicesPage() {
                 <button
                   id={`btn-modal-approve-${selected.id}`}
                   onClick={() => { handleApprove(selected.id); setSelected(null); }}
-                  className="flex-1 min-w-[140px] py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition"
+                  className="min-w-[140px] px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition"
                 >
                   Approve
                 </button>
@@ -914,7 +932,7 @@ export default function InvoicesPage() {
                 <button
                   id={`btn-modal-send-${selected.id}`}
                   onClick={() => { handleSend(selected.id); setSelected(null); }}
-                  className="flex-1 min-w-[140px] py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition"
+                  className="min-w-[140px] px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition"
                 >
                   Send to Client
                 </button>
@@ -925,7 +943,7 @@ export default function InvoicesPage() {
                 <button
                   id={`btn-modal-credit-note-${selected.id}`}
                   onClick={() => { setCreditFor(selected); setSelected(null); }}
-                  className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm font-semibold transition"
+                  className="min-w-[120px] px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm font-semibold transition"
                 >
                   Credit Note
                 </button>
@@ -935,13 +953,17 @@ export default function InvoicesPage() {
                   id={`btn-modal-payment-link-${selected.id}`}
                   onClick={() => handleGeneratePaymentLink(selected.id, selected.total_amount)}
                   disabled={actioning === selected.id + '_payment_link'}
-                  className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition disabled:opacity-50"
+                  className="min-w-[140px] px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition disabled:opacity-50"
                 >
                   {actioning === selected.id + '_payment_link' ? 'Generating…' : 'Generate Payment Link'}
                 </button>
               )}
+              {!['PAID', 'APPROVED', 'SENT', 'CREDIT_NOTE'].some((to) => canGo(selected.status, to)) && (
+                <span className="text-xs text-slate-500">
+                  {selected.status === 'CANCELLED' ? 'Cancelled — nothing more to do on this invoice.' : 'Settled — nothing more to do on this invoice.'}
+                </span>
+              )}
             </div>
-            )}
           </div>
         </div>
       )}
