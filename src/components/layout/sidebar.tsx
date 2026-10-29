@@ -25,6 +25,7 @@ import {
   PauseCircle,
   AlertTriangle,
   Calendar,
+  CheckCircle2,
   BarChart2,
   TrendingUp,
   Layers,
@@ -109,6 +110,7 @@ const RM_NAV: NavSection[] = [
     items: [
       { href: '/rm/incidents', label: 'Incidents', icon: AlertTriangle },
       { href: '/rm/shifts', label: 'Shift Logs', icon: Calendar },
+      { href: '/rm/attendance-approvals', label: 'Attendance approvals', icon: CheckCircle2 },
     ],
   },
   {

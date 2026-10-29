@@ -315,6 +315,10 @@ export interface ApiClient {
   exitPlacement(id: string, body: Record<string, unknown>): Promise<any>;
   updatePlacementTerms(id: string, body: Record<string, unknown>): Promise<any>;
   getPlacementRateHistory(id: string): Promise<any>;
+  getRmAttendanceDisputes(): Promise<any>;
+  resolveAttendanceDispute(id: string, body: { status: string; note: string }): Promise<any>;
+  getRmAwaitingClient(clientId?: string): Promise<any>;
+  approveAttendanceOnBehalf(body: { ids: string[]; note: string }): Promise<any>;
   calculateWage(body: Record<string, unknown>): Promise<any>;
 
   getStaffTimeline(id: string): Promise<any>;
@@ -887,6 +891,14 @@ export const api: ApiClient = {
     apiClient.post(`/placements/${id}/exit`, body),
   updatePlacementTerms: (id: string, body: Record<string, unknown>) =>
     apiClient.patch(`/placements/${id}/terms`, body),
+  getRmAttendanceDisputes: () =>
+    apiClient.get('/rm/attendance/disputes'),
+  resolveAttendanceDispute: (id: string, body: { status: string; note: string }) =>
+    apiClient.post(`/rm/attendance/${id}/resolve`, body),
+  getRmAwaitingClient: (clientId?: string) =>
+    apiClient.get('/rm/attendance/awaiting-client', { params: clientId ? { client_id: clientId } : {} }),
+  approveAttendanceOnBehalf: (body: { ids: string[]; note: string }) =>
+    apiClient.post('/rm/attendance/approve-on-behalf', body),
   getPlacementRateHistory: (id: string) =>
     apiClient.get(`/placements/${id}/rate-history`),
   calculateWage: (body: Record<string, unknown>) =>
